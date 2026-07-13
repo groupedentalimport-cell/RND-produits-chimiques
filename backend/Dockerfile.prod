@@ -1,0 +1,70 @@
+# ══════════════════════════════════════════════════════════════════════
+# ChemStab Industrial v5.2 — Production Dockerfile
+# Multi-stage build for minimal image size and security
+# ══════════════════════════════════════════════════════════════════════
+
+# ── Stage 1: Build dependencies ──────────────────────────────────────
+FROM python:3.12-slim AS builder
+
+WORKDIR /build
+
+# Install system dependencies for compilation
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements and install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+# ── Stage 2: Production image ────────────────────────────────────────
+FROM python:3.12-slim AS production
+
+# Security: non-root user
+RUN groupadd -r chemstab && useradd -r -g chemstab -d /app -s /sbin/nologin chemstab
+
+# Install runtime dependencies only
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy installed Python packages from builder
+COPY --from=builder /install /usr/local
+
+# Copy application code
+WORKDIR /app
+COPY backend/app ./app
+COPY backend/requirements.txt .
+
+# Create necessary directories
+RUN mkdir -p uploads exports ml_models data_cache/benchmarks /tmp/dft_scratch \
+    && chown -R chemstab:chemstab /app
+
+# Switch to non-root user
+USER chemstab
+
+# Environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    APP_NAME="ChemStab Industrial" \
+    APP_VERSION="5.2.0" \
+    DEBUG="false" \
+    PORT=8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:${PORT}/health || exit 1
+
+# Expose port
+EXPOSE ${PORT}
+
+# Run with uvicorn (production settings)
+CMD ["uvicorn", "app.main:app", \
+     "--host", "0.0.0.0", \
+     "--port", "8000", \
+     "--workers", "4", \
+     "--access-log", \
+     "--log-level", "info", \
+     "--no-server-header"]

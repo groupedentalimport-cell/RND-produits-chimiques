@@ -1,0 +1,71 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# Virtual environments
+venv/
+.venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment
+.env
+.env.local
+.env.production
+
+# Database
+*.db
+*.sqlite3
+
+# ML Models (generated, not source)
+ml_models/*.joblib
+ml_models/*.pkl
+ml_models/*.h5
+!ml_models/.gitkeep
+
+# Data cache
+data_cache/
+uploads/
+exports/
+
+# Docker
+docker-compose.override.yml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Node.js (frontend)
+node_modules/
+frontend/dist/
+frontend/build/
+.npm
+.eslintcache
+
+# Coverage
+htmlcov/
+.coverage
+coverage.xml
+
+# Testing
+.pytest_cache/
+.tox/
+.mypy_cache/
