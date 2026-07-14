@@ -1,7 +1,8 @@
 """
-ChemStab Industrial v5.2 — FastAPI Application
+ChemStab Industrial v5.3 — FastAPI Application
 Professional chemical stability assessment with QSPR/ML, multi-tenant, GxP audit.
 Now with real experimental data from ChEMBL, PubChem, NIST, and MoleculeNet benchmarks.
+NEW in v5.3: ICH Q1A-Q1F stability simulation module (time-dependent molecular degradation).
 """
 
 from fastapi import FastAPI, Request
@@ -28,6 +29,7 @@ from app.api.experimental import router as experimental_router
 from app.api.predictions import router as predictions_router
 from app.api.advanced import router as advanced_router
 from app.api.regulatory import router as regulatory_router
+from app.api.stability_study import router as stability_study_router  # 🆕 v5.3
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +113,8 @@ app = FastAPI(
     description=(
         "Industrial-grade chemical stability assessment platform. "
         "QSPR predictions with real experimental data from ChEMBL, PubChem, NIST, "
-        "and MoleculeNet benchmarks. Multi-tenant, GxP audit trail, ICH/FDA/EMA reports."
+        "and MoleculeNet benchmarks. Multi-tenant, GxP audit trail, ICH/FDA/EMA reports. "
+        "ICH Q1A-Q1F stability simulation with time-dependent molecular degradation."
     ),
     lifespan=lifespan,
     docs_url="/docs",
@@ -186,6 +189,7 @@ app.include_router(experimental_router, prefix="/api/v1")
 app.include_router(predictions_router, prefix="/api/v1")
 app.include_router(advanced_router, prefix="/api/v1")
 app.include_router(regulatory_router, prefix="/api/v1")
+app.include_router(stability_study_router, prefix="/api/v1")  # 🆕 v5.3
 
 
 # ── Root endpoints ────────────────────────────────────────────────────
@@ -223,6 +227,9 @@ def root():
             "21 CFR Part 11 electronic signatures & audit trail",
             "CTD Module 3.2.P.8 regulatory reports",
             "IQ/OQ/PQ validation protocols",
+            "ICH Q1A-Q1F stability simulation (time-dependent degradation)",  # 🆕 v5.3
+            "Monte Carlo uncertainty propagation for shelf-life prediction",  # 🆕 v5.3
+            "Molecular structure-based degradation risk assessment (SMARTS)",  # 🆕 v5.3
         ],
     }
 
@@ -253,6 +260,7 @@ def version():
             "nist_webbook": True,
             "benchmark_datasets": True,
             "experimental_data_enrichment": True,
+            "stability_simulation": True,  # 🆕 v5.3
         },
     }
 
