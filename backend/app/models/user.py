@@ -49,10 +49,15 @@ class User(Base):
 
     @property
     def is_locked(self) -> bool:
+        """
+        FIX #2: Use timezone-aware datetime comparison.
+        Previously used datetime.utcnow() (naive) which crashed when compared
+        with timezone-aware locked_until from PostgreSQL.
+        """
         if self.locked_until is None:
             return False
-        from datetime import datetime
-        return datetime.utcnow() < self.locked_until
+        from datetime import datetime, timezone
+        return datetime.now(timezone.utc) < self.locked_until
 
     @property
     def is_superuser(self) -> bool:
