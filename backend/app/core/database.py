@@ -9,6 +9,7 @@ from sqlalchemy.pool import QueuePool
 from contextlib import contextmanager
 from typing import Generator
 import logging
+import secrets
 
 from app.core.config import settings
 
@@ -52,9 +53,16 @@ def get_db_context() -> Generator[Session, None, None]:
 
 
 def set_tenant_context(db: Session, org_id: int, user_id: int):
-    """Set PostgreSQL session variables for RLS and audit."""
-    db.execute(text(f"SET app.current_org_id = '{org_id}'"))
-    db.execute(text(f"SET app.current_user_id = '{user_id}'"))
+    """
+    Set PostgreSQL session variables for RLS and audit.
+
+    FIX #3: Use parameterized queries instead of f-string interpolation.
+    Previously: db.execute(text(f"SET app.current_org_id = '{org_id}'"))
+    This was vulnerable to SQL injection if org_id or user_id were ever
+    non-integer (e.g., from a compromised upstream).
+    """
+    db.execute(text("SET app.current_org_id = :org_id"), {"org_id": str(org_id)})
+    db.execute(text("SET app.current_user_id = :user_id"), {"user_id": str(user_id)})
 
 
 def init_db():
@@ -82,18 +90,31 @@ def init_db():
             db.add(org)
             db.flush()
 
+            # FIX #4: Generate a random admin password instead of hardcoding it.
+            # The password is logged ONCE at startup — the operator must save it
+            # and change it immediately via /api/v1/auth/change-password.
+            admin_password = secret…_urlsafe(16) + "!A1"
             admin = User(
                 org_id=org.id,
                 username="admin",
                 email="admin@chemstab.local",
-                hashed_password=get_password_hash("Admin@ChemStab1!"),
+                hashed_password=get_password_hash(admin_password),
                 full_name="System Administrator",
                 role="super_admin",
                 is_active=True,
+                must_change_password=True,  # Force password change on first login
             )
             db.add(admin)
             db.commit()
-            logger.info("Seeded default admin user (admin / Admin@ChemStab1!)")
+            logger.warning(
+                "=" * 60 + "\n"
+                "🔑 DEFAULT ADMIN CREATED — SAVE THIS PASSWORD NOW!\n"
+                f"   Username: admin\n"
+                f"   Password: {admin_password}\n"
+                "   ⚠️  Change this password immediately after first login!\n"
+                "   Endpoint: POST /api/v1/auth/change-password\n" +
+                "=" * 60
+            )
     except Exception as e:
         db.rollback()
         logger.warning(f"Seed skipped: {e}")
