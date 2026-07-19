@@ -258,8 +258,12 @@ class DFTEngine:
         basis_set: str = "6-31G*",
     ) -> TransitionStateResult:
         """
-        Compute activation energy from transition state search.
-        Ea = E_TS - E_reactant (from DFT, not empirical estimation).
+        Estimate activation energy from reactant/product energies.
+        
+        WARNING: This is an ESTIMATION, not a real transition state search.
+        A proper TS search requires NEB, QST2, or eigenvector following.
+        This method provides a rough estimate for screening purposes only.
+        For production use, implement proper TS search with Psi4/ORCA.
         """
         if not self.is_available:
             return self._mock_ts_result(reactant_smiles, product_smiles, method, basis_set)
@@ -267,22 +271,34 @@ class DFTEngine:
         # Compute reactant and product energies
         reactant = self.compute_single_point(reactant_smiles, method, basis_set)
         product = self.compute_single_point(product_smiles, method, basis_set)
+        
+        if not reactant.convergence or not product.convergence:
+            logger.warning("DFT calculations did not converge — TS estimate unreliable")
 
-        # TS search (simplified — real implementation would use NEB or QST2)
-        ts_energy = (reactant.total_energy_hartree + product.total_energy_hartree) / 2
-        # Add barrier estimate (this would be a real TS search in production)
-        barrier_estimate = 0.05  # ~130 kJ/mol rough estimate
-        ts_energy += barrier_estimate
+        # ESTIMATION: Use Hammond's postulate approximation
+        # For exothermic reactions, TS resembles reactant (lower barrier)
+        # For endothermic reactions, TS resembles product (higher barrier)
+        delta_e = (product.total_energy_hartree - reactant.total_energy_hartree) if product.total_energy_hartree and reactant.total_energy_hartree else 0.0
+        
+        # Rough barrier estimate based on reaction energy
+        # This is a VERY rough approximation — real TS search needed for accuracy
+        if delta_e < 0:
+            # Exothermic: barrier ~ 10-30% of |ΔE| (Evans-Polanyi)
+            barrier_estimate = abs(delta_e) * 0.2
+        else:
+            # Endothermic: barrier ~ ΔE + small extra
+            barrier_estimate = delta_e + 0.01  # ~26 kJ/mol minimum
+        
+        ts_energy = reactant.total_energy_hartree + barrier_estimate
 
-        ea = (ts_energy - reactant.total_energy_hartree) * HARTREE_TO_KJ_MOL
-        delta_e = (product.total_energy_hartree - reactant.total_energy_hartree) * HARTREE_TO_KJ_MOL
+        ea = barrier_estimate * HARTREE_TO_KJ_MOL
 
         return TransitionStateResult(
             reactant_energy=reactant.total_energy_hartree,
             product_energy=product.total_energy_hartree,
             ts_energy=ts_energy,
-            activation_energy_kj_mol=ea,
-            reaction_energy_kj_mol=delta_e,
+            activation_energy_kj_mol=round(ea, 2),
+            reaction_energy_kj_mol=round(delta_e * HARTREE_TO_KJ_MOL, 2),
             method=method,
             basis_set=basis_set,
         )

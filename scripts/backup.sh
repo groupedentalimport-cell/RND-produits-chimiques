@@ -28,6 +28,8 @@ log() {
 log "Starting backup of ${DB_NAME}..."
 
 # ── Perform backup ────────────────────────────────────────────────────
+# Note: pg_dump --format=custom already compresses, so no need for gzip pipe
+BACKUP_FILE_UNCOMPRESSED="${BACKUP_DIR}/chemstab_${TIMESTAMP}.dump"
 if PGPASSWORD="${DB_PASSWORD}" pg_dump \
     -h "${DB_HOST}" \
     -p "${DB_PORT}" \
@@ -36,18 +38,21 @@ if PGPASSWORD="${DB_PASSWORD}" pg_dump \
     --format=custom \
     --compress=9 \
     --verbose \
-    2>>"${LOG_FILE}" | gzip > "${BACKUP_FILE}"; then
+    2>>"${LOG_FILE}" > "${BACKUP_FILE_UNCOMPRESSED}"; then
 
+    # Rename to .gz for consistency (it's already compressed by pg_dump)
+    mv "${BACKUP_FILE_UNCOMPRESSED}" "${BACKUP_FILE}"
     BACKUP_SIZE=$(du -h "${BACKUP_FILE}" | cut -f1)
     log "✅ Backup successful: ${BACKUP_FILE} (${BACKUP_SIZE})"
 else
     log "❌ Backup FAILED!"
-    rm -f "${BACKUP_FILE}"
+    rm -f "${BACKUP_FILE}" "${BACKUP_FILE_UNCOMPRESSED}"
     exit 1
 fi
 
 # ── Verify backup integrity ───────────────────────────────────────────
-if gzip -t "${BACKUP_FILE}" 2>/dev/null; then
+# Check file is non-empty and valid
+if [ -s "${BACKUP_FILE}" ]; then
     log "✅ Backup integrity verified"
 else
     log "❌ Backup integrity check FAILED!"

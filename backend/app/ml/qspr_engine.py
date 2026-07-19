@@ -399,9 +399,40 @@ class QSPRPipeline:
         )
 
     def _check_applicability(self, X: np.ndarray, property_name: str) -> str:
-        """Check if prediction is within the model's applicability domain."""
-        # Simple approach: check if features are within training range
-        # A more robust approach would use leverage or Mahalanobis distance
+        """
+        Check if prediction is within the model's applicability domain.
+        Uses feature range check: if any feature is outside the training range,
+        the prediction is flagged as extrapolation or out_of_domain.
+        """
+        meta = self.metadata.get(property_name, {})
+        training_ranges = meta.get("feature_ranges", {})
+        
+        if not training_ranges:
+            # No range data available — cannot assess
+            return "unknown"
+        
+        # Flatten X if needed
+        x_flat = X.flatten() if X.ndim > 1 else X
+        
+        out_of_range_count = 0
+        total_features = min(len(x_flat), len(training_ranges))
+        
+        for i in range(total_features):
+            feat_name = f"feature_{i}"
+            if feat_name in training_ranges:
+                fmin, fmax = training_ranges[feat_name]
+                if x_flat[i] < fmin * 0.9 or x_flat[i] > fmax * 1.1:
+                    out_of_range_count += 1
+        
+        if total_features == 0:
+            return "unknown"
+        
+        out_ratio = out_of_range_count / total_features
+        
+        if out_ratio > 0.3:
+            return "out_of_domain"
+        elif out_ratio > 0.1:
+            return "extrapolation"
         return "within_domain"
 
     def _save_model(
