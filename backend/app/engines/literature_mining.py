@@ -13,6 +13,7 @@ Automatically populates the database with literature-sourced experimental data.
 
 import re
 import json
+import os
 import logging
 import hashlib
 from typing import Dict, Any, List, Optional, Tuple
@@ -392,7 +393,7 @@ class LiteratureMiningEngine:
         return min(quality, 1.0)
 
 
-import os  # noqa: E402
+# os already imported at top of file
 
 # Global singleton
 lit_mining = LiteratureMiningEngine()

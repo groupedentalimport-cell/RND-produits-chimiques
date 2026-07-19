@@ -234,19 +234,31 @@ class MDEngine:
             AllChem.MMFFOptimizeMolecule(mol)
 
             # Create OpenMM system
-            # Use MMFF force field from RDKit
-            ff = app.ForceField()
-
-            # Simplified: use vacuum simulation
+            # Load appropriate force field
             topology = self._rdkit_to_openmm_topology(mol)
             if topology is None:
                 return self._mock_md_result(smiles, temperature, pressure, time_ns, force_field, solvent)
 
-            system = ff.createSystem(
-                topology,
-                nonbondedMethod=app.NoCutoff,
-                constraints=app.HBonds,
-            )
+            # Try to load a real force field
+            try:
+                ff = app.ForceField('amber14-all.xml', 'amber14/tip3pfb.xml')
+            except Exception:
+                try:
+                    ff = app.ForceField('charmm36.xml')
+                except Exception:
+                    logger.warning("No OpenMM force field files found — using vacuum simulation")
+                    # Fallback: use vacuum with no nonbonded interactions
+                    ff = app.ForceField()
+
+            try:
+                system = ff.createSystem(
+                    topology,
+                    nonbondedMethod=app.NoCutoff,
+                    constraints=app.HBonds,
+                )
+            except Exception as e:
+                logger.error(f"Failed to create OpenMM system: {e}")
+                return self._mock_md_result(smiles, temperature, pressure, time_ns, force_field, solvent)
 
             # Integrator
             integrator = openmm.LangevinMiddleIntegrator(

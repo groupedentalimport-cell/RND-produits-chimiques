@@ -446,12 +446,10 @@ def create_study(
     If run_simulation=True, automatically generates simulation data
     and computes predicted shelf life.
     """
-    # Generate unique study code
+    # Generate unique study code (UUID-based to avoid race conditions)
+    import uuid
     year = datetime.now().year
-    count = db.query(StabilityStudy).filter(
-        StabilityStudy.study_code.like(f"STB-{year}-%")
-    ).count()
-    study_code = f"STB-{year}-{count + 1:04d}"
+    study_code = f"STB-{year}-{uuid.uuid4().hex[:8].upper()}"
 
     # Parse enums
     try:

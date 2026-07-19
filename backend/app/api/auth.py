@@ -5,7 +5,7 @@ Authentication API — JWT auth with GxP login tracking.
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pydantic import BaseModel
 from typing import Optional
 
@@ -57,7 +57,7 @@ def login(
         if user:
             user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
             if user.failed_login_attempts >= settings.MAX_LOGIN_ATTEMPTS:
-                user.locked_until = datetime.utcnow() + timedelta(minutes=settings.LOCKOUT_MINUTES)
+                user.locked_until = datetime.now(timezone.utc) + timedelta(minutes=settings.LOCKOUT_MINUTES)
             db.commit()
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
@@ -68,7 +68,7 @@ def login(
         raise HTTPException(status_code=403, detail="Account locked")
 
     # Update login tracking
-    user.last_login_at = datetime.utcnow()
+    user.last_login_at = datetime.now(timezone.utc)
     user.last_login_ip = request.client.host if request.client else "unknown"
     user.failed_login_attempts = 0
     db.commit()
@@ -181,7 +181,7 @@ def change_password(
         raise HTTPException(status_code=400, detail=msg)
 
     current_user.hashed_password = get_password_hash(req.new_password)
-    current_user.password_changed_at = datetime.utcnow()
+    current_user.password_changed_at = datetime.now(timezone.utc)
     current_user.must_change_password = False
 
     log_event(

@@ -34,36 +34,71 @@ from app.api.stability_study import router as stability_study_router  # 🆕 v5.
 logger = logging.getLogger(__name__)
 
 
-# ── Rate Limiter (in-memory, per-IP) ──────────────────────────────────
+# ── Rate Limiter (Redis-backed with in-memory fallback) ──────────────
 
 class RateLimiter:
-    """Simple in-memory rate limiter using sliding window."""
+    """
+    Rate limiter using Redis for distributed counting.
+    Falls back to in-memory if Redis is unavailable.
+    """
 
     def __init__(self, requests_per_minute: int = 60, burst: int = 10):
         self.rpm = requests_per_minute
         self.burst = burst
         self.requests: dict[str, list[float]] = defaultdict(list)
-        self._cleanup_interval = 60  # seconds
+        self._cleanup_interval = 60
         self._last_cleanup = time.time()
+        self._redis = None
+        self._try_connect_redis()
+
+    def _try_connect_redis(self):
+        """Try to connect to Redis for distributed rate limiting."""
+        try:
+            import redis
+            self._redis = redis.from_url(settings.REDIS_URL, socket_timeout=2)
+            self._redis.ping()
+            logger.info("Rate limiter using Redis backend")
+        except Exception:
+            self._redis = None
+            logger.info("Rate limiter using in-memory backend (Redis unavailable)")
 
     def is_allowed(self, client_ip: str) -> bool:
-        now = time.time()
+        if self._redis:
+            return self._is_allowed_redis(client_ip)
+        return self._is_allowed_memory(client_ip)
 
-        # Periodic cleanup
+    def _is_allowed_redis(self, client_ip: str) -> bool:
+        """Redis-based sliding window rate limiting."""
+        try:
+            key = f"rate_limit:{client_ip}"
+            now = time.time()
+            pipe = self._redis.pipeline()
+            # Remove old entries
+            pipe.zremrangebyscore(key, 0, now - 60)
+            # Count current entries
+            pipe.zcard(key)
+            # Add current request
+            pipe.zadd(key, {str(now): now})
+            # Set expiry
+            pipe.expire(key, 60)
+            results = pipe.execute()
+            count = results[1]
+            return count < self.rpm
+        except Exception:
+            return self._is_allowed_memory(client_ip)
+
+    def _is_allowed_memory(self, client_ip: str) -> bool:
+        """In-memory sliding window rate limiting (fallback)."""
+        now = time.time()
         if now - self._last_cleanup > self._cleanup_interval:
             self._cleanup(now)
             self._last_cleanup = now
-
-        # Check burst limit (last 10 seconds)
         recent = [t for t in self.requests[client_ip] if now - t < 10]
         if len(recent) >= self.burst:
             return False
-
-        # Check RPM limit (last 60 seconds)
         window = [t for t in self.requests[client_ip] if now - t < 60]
         if len(window) >= self.rpm:
             return False
-
         self.requests[client_ip].append(now)
         return True
 
