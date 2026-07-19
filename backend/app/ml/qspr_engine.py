@@ -291,6 +291,19 @@ class QSPRPipeline:
             training_source=data_source,
         )
 
+        # Compute training statistics for Applicability Domain
+        feature_ranges = {}
+        for i, name in enumerate(selected_names):
+            col = X_selected[:, i]
+            feature_ranges[name] = (float(np.min(col)), float(np.max(col)))
+        
+        # Store mean and covariance for Mahalanobis distance
+        training_mean = np.mean(X_selected, axis=0)
+        try:
+            training_cov_inv = np.linalg.inv(np.cov(X_selected.T) + np.eye(X_selected.shape[1]) * 1e-6)
+        except np.linalg.LinAlgError:
+            training_cov_inv = np.eye(X_selected.shape[1])
+
         self.metadata[property_name] = {
             "model_type": best_name,
             "metrics": {
@@ -302,6 +315,9 @@ class QSPRPipeline:
             "n_samples": len(y),
             "n_features": X_selected.shape[1],
             "training_source": data_source,
+            "feature_ranges": feature_ranges,
+            "training_mean": training_mean.tolist(),
+            "training_cov_inv": training_cov_inv.tolist(),
         }
 
         logger.info(
@@ -401,39 +417,84 @@ class QSPRPipeline:
     def _check_applicability(self, X: np.ndarray, property_name: str) -> str:
         """
         Check if prediction is within the model's applicability domain.
-        Uses feature range check: if any feature is outside the training range,
-        the prediction is flagged as extrapolation or out_of_domain.
+        Uses two complementary methods:
+        1. Feature range check (simple, fast)
+        2. Mahalanobis distance (accounts for feature correlations)
         """
         meta = self.metadata.get(property_name, {})
+        
+        # Method 1: Feature range check
         training_ranges = meta.get("feature_ranges", {})
+        range_result = "unknown"
         
-        if not training_ranges:
-            # No range data available — cannot assess
+        if training_ranges:
+            x_flat = X.flatten() if X.ndim > 1 else X
+            out_of_range_count = 0
+            total_features = min(len(x_flat), len(training_ranges))
+            
+            for i in range(total_features):
+                feat_name = f"feature_{i}"
+                if feat_name in training_ranges:
+                    fmin, fmax = training_ranges[feat_name]
+                    if x_flat[i] < fmin * 0.9 or x_flat[i] > fmax * 1.1:
+                        out_of_range_count += 1
+            
+            if total_features > 0:
+                out_ratio = out_of_range_count / total_features
+                if out_ratio > 0.3:
+                    range_result = "out_of_domain"
+                elif out_ratio > 0.1:
+                    range_result = "extrapolation"
+                else:
+                    range_result = "within_domain"
+        
+        # Method 2: Mahalanobis distance
+        mahal_result = "unknown"
+        training_mean = meta.get("training_mean")
+        training_cov_inv = meta.get("training_cov_inv")
+        
+        if training_mean is not None and training_cov_inv is not None:
+            try:
+                x_flat = X.flatten() if X.ndim > 1 else X
+                mean = np.array(training_mean)
+                cov_inv = np.array(training_cov_inv)
+                
+                # Truncate to match dimensions
+                n = min(len(x_flat), len(mean))
+                diff = x_flat[:n] - mean[:n]
+                cov_inv_n = cov_inv[:n, :n]
+                
+                # Mahalanobis distance: sqrt((x-μ)ᵀ Σ⁻¹ (x-μ))
+                mahal_dist = float(np.sqrt(np.abs(diff @ cov_inv_n @ diff)))
+                
+                # Thresholds based on chi-squared distribution
+                # For 50 features: chi2(0.95) ≈ 67.5, chi2(0.99) ≈ 76.2
+                # Use sqrt(chi2/p) as per-feature threshold
+                p = max(n, 1)
+                threshold_out = np.sqrt(76.2 / p) * 3  # ~99.7% confidence
+                threshold_ext = np.sqrt(67.5 / p) * 2  # ~95% confidence
+                
+                if mahal_dist > threshold_out:
+                    mahal_result = "out_of_domain"
+                elif mahal_dist > threshold_ext:
+                    mahal_result = "extrapolation"
+                else:
+                    mahal_result = "within_domain"
+            except Exception:
+                pass
+        
+        # Combine results: take the more conservative assessment
+        priority = {"out_of_domain": 3, "extrapolation": 2, "within_domain": 1, "unknown": 0}
+        
+        if range_result == "unknown" and mahal_result == "unknown":
             return "unknown"
-        
-        # Flatten X if needed
-        x_flat = X.flatten() if X.ndim > 1 else X
-        
-        out_of_range_count = 0
-        total_features = min(len(x_flat), len(training_ranges))
-        
-        for i in range(total_features):
-            feat_name = f"feature_{i}"
-            if feat_name in training_ranges:
-                fmin, fmax = training_ranges[feat_name]
-                if x_flat[i] < fmin * 0.9 or x_flat[i] > fmax * 1.1:
-                    out_of_range_count += 1
-        
-        if total_features == 0:
-            return "unknown"
-        
-        out_ratio = out_of_range_count / total_features
-        
-        if out_ratio > 0.3:
-            return "out_of_domain"
-        elif out_ratio > 0.1:
-            return "extrapolation"
-        return "within_domain"
+        elif range_result == "unknown":
+            return mahal_result
+        elif mahal_result == "unknown":
+            return range_result
+        else:
+            # Take the more conservative (higher priority)
+            return range_result if priority.get(range_result, 0) >= priority.get(mahal_result, 0) else mahal_result
 
     def _save_model(
         self,
