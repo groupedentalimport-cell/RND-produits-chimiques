@@ -2,7 +2,7 @@ import {
   LayoutDashboard, Atom, Beaker, Microscope, FlaskConical, FileText, BarChart3, ShieldCheck,
   FileCheck, BookOpen, AlertTriangle, GraduationCap, Scale,
   Plus, RefreshCw, Trash2, CheckCircle2, Shield, XCircle,
-  Cpu, ClipboardCheck,
+  Cpu, ClipboardCheck, GitCompareArrows,
 } from 'lucide-react'
 import type { PageId, MoleculeData, StudyData, ReportData, UserData, AuditEntry } from '@/lib/types'
 
@@ -205,6 +205,7 @@ export const NAV_ITEMS: { id: PageId; label: string; icon: React.ElementType }[]
   { id: 'simulator', label: 'Simulator', icon: Beaker },
   { id: 'studies', label: 'Studies', icon: Microscope },
   { id: 'degradation', label: 'Degradation', icon: FlaskConical },
+  { id: 'interactions', label: 'Interactions', icon: GitCompareArrows },
   { id: 'compliance', label: 'Compliance', icon: ClipboardCheck },
   { id: 'reports', label: 'Reports', icon: FileText },
   { id: 'analytics', label: 'Analytics', icon: BarChart3 },

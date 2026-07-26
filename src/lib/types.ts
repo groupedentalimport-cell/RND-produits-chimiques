@@ -1,6 +1,6 @@
 // ── Types ──────────────────────────────────────────────────────────────────
 
-export type PageId = 'dashboard' | 'molecules' | 'simulator' | 'studies' | 'reports' | 'analytics' | 'degradation' | 'admin' | 'compliance'
+export type PageId = 'dashboard' | 'molecules' | 'simulator' | 'studies' | 'reports' | 'analytics' | 'degradation' | 'admin' | 'compliance' | 'interactions'
 
 export interface MoleculeData {
   id: string

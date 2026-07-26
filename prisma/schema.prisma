@@ -61,6 +61,7 @@ model Molecule {
   updatedAt            DateTime      @updatedAt
   studies              StabilityStudy[]
   degradationProducts  DegradationProduct[]
+  batches              Batch[]
 }
 
 model DegradationProduct {
@@ -100,6 +101,7 @@ model StabilityStudy {
   org                  Organization?  @relation(fields: [orgId], references: [id])
   timePoints           TimePoint[]
   signatures           ElectronicSignature[]
+  batches              Batch[]
   createdAt            DateTime      @default(now())
   updatedAt            DateTime      @updatedAt
 }
@@ -127,6 +129,25 @@ model ElectronicSignature {
   signedAt     DateTime       @default(now())
   studyId      String
   study        StabilityStudy @relation(fields: [studyId], references: [id])
+}
+
+// ── Batches (for ICH Q1A primary batch requirements) ───────────────────
+
+model Batch {
+  id             String   @id @default(cuid())
+  batchNumber    String   @unique
+  scale          String   @default("pilot") // lab, pilot, commercial
+  manufactureDate DateTime @default(now())
+  expiryDate     DateTime?
+  containerClosure String? // e.g., "HDPE bottle", "Blister pack"
+  batchSize      String?  // e.g., "100 kg", "100000 tablets"
+  status         String   @default("active") // active, quarantined, rejected, expired
+  studyId        String?
+  study          StabilityStudy? @relation(fields: [studyId], references: [id])
+  moleculeId     String?
+  molecule       Molecule?       @relation(fields: [moleculeId], references: [id])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }
 
 // ── Audit Trail ────────────────────────────────────────────────────────

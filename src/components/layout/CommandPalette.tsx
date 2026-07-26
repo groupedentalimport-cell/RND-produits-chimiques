@@ -6,7 +6,7 @@ import { useTheme } from 'next-themes'
 import {
   Search, LayoutDashboard, Atom, Beaker, Microscope, FlaskConical,
   FileText, BarChart3, ShieldCheck, Plus, Play, FileCheck, Moon, Sun,
-  SearchX, CornerDownLeft,
+  SearchX, CornerDownLeft, ClipboardCheck, GitCompareArrows,
 } from 'lucide-react'
 import {
   Command, CommandInput, CommandList, CommandEmpty,
@@ -37,6 +37,8 @@ const NAV_ICONS: Record<string, React.ElementType> = {
   simulator: Beaker,
   studies: Microscope,
   degradation: FlaskConical,
+  interactions: GitCompareArrows,
+  compliance: ClipboardCheck,
   reports: FileText,
   analytics: BarChart3,
   admin: ShieldCheck,

@@ -32,9 +32,30 @@ export function Sidebar() {
   const { theme, setTheme } = useTheme()
   const { favorites, refreshFavorites } = useFavoriteStore()
   const [favCollapsed, setFavCollapsed] = useState(false)
+  const [quickStats, setQuickStats] = useState<{ molecules: number; studies: number; alerts: number } | null>(null)
 
   useEffect(() => {
     refreshFavorites()
+    // Fetch live stats for the Quick Stats mini-card
+    const loadStats = async () => {
+      try {
+        const res = await fetch('/api/stats')
+        if (res.ok) {
+          const data = await res.json()
+          setQuickStats({
+            molecules: data.totalMolecules ?? 0,
+            studies: data.activeStudies ?? 0,
+            alerts: (data.riskDistribution?.high || 0) + (data.riskDistribution?.critical || 0),
+          })
+        }
+      } catch {
+        // keep null — fallback to placeholder
+      }
+    }
+    loadStats()
+    // Refresh stats every 60s for live feel
+    const interval = setInterval(loadStats, 60_000)
+    return () => clearInterval(interval)
   }, [refreshFavorites])
 
   return (
@@ -228,19 +249,37 @@ export function Sidebar() {
             animate={{ opacity: 1, y: 0 }}
             className="px-2 pb-1"
           >
-            <div className="rounded-lg border border-emerald-500/20 bg-gradient-to-br from-emerald-50/80 to-teal-50/60 dark:from-emerald-950/60 dark:to-teal-950/40 p-2.5">
-              <div className="flex items-center justify-between mb-1">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">Quick Stats</p>
+            <div className="rounded-lg border border-emerald-500/20 bg-gradient-to-br from-emerald-50/80 to-teal-50/60 dark:from-emerald-950/60 dark:to-teal-950/40 p-2.5 relative overflow-hidden">
+              {/* Subtle animated shimmer sweep */}
+              <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-transparent via-emerald-500/5 to-transparent shimmer-bg" />
+              <div className="flex items-center justify-between mb-1 relative">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
+                  <span className="relative flex size-1.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full size-1.5 bg-emerald-500" />
+                  </span>
+                  Live Stats
+                </p>
                 <TrendingUp className="size-3 text-emerald-500" />
               </div>
-              <p className="text-xs text-muted-foreground">
-                <span className="font-bold text-foreground">12</span> molecules ·{' '}
-                <span className="font-bold text-foreground">3</span> active studies
-              </p>
-              <div className="mt-1.5 flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400">
-                <TrendingUp className="size-2.5" />
-                <span>+2 this week</span>
-              </div>
+              {quickStats ? (
+                <>
+                  <p className="text-xs text-muted-foreground relative">
+                    <span className="font-bold text-foreground tabular-nums">{quickStats.molecules}</span> molecules ·{' '}
+                    <span className="font-bold text-foreground tabular-nums">{quickStats.studies}</span> studies
+                  </p>
+                  <div className="mt-1.5 flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 relative">
+                    <TrendingUp className="size-2.5" />
+                    <span className="tabular-nums">{quickStats.alerts}</span>
+                    <span>risk alert{quickStats.alerts !== 1 ? 's' : ''}</span>
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-1.5 relative">
+                  <div className="h-3 w-32 rounded shimmer" />
+                  <div className="h-2.5 w-20 rounded shimmer" />
+                </div>
+              )}
             </div>
           </motion.div>
         )}

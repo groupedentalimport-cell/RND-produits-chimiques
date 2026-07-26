@@ -346,6 +346,7 @@ export function SettingsDialog() {
                 { value: 'simulator', label: 'Simulator' },
                 { value: 'studies', label: 'Studies' },
                 { value: 'degradation', label: 'Degradation' },
+                { value: 'interactions', label: 'Interactions' },
                 { value: 'reports', label: 'Reports' },
                 { value: 'analytics', label: 'Analytics' },
                 { value: 'compliance', label: 'Compliance' },

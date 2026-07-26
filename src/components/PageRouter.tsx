@@ -13,6 +13,7 @@ import { ReportsPage } from '@/components/pages/ReportsPage'
 import { AnalyticsPage } from '@/components/pages/AnalyticsPage'
 import { AdminPage } from '@/components/pages/AdminPage'
 import { CompliancePage } from '@/components/pages/CompliancePage'
+import { InteractionsPage } from '@/components/pages/InteractionsPage'
 import { PageSkeleton } from '@/components/shared/PageSkeleton'
 
 export function PageRouter() {
@@ -26,6 +27,7 @@ export function PageRouter() {
     simulator: <SimulatorPage />,
     studies: <StudiesPage />,
     degradation: <DegradationPage />,
+    interactions: <InteractionsPage />,
     reports: <ReportsPage />,
     analytics: <AnalyticsPage />,
     admin: <AdminPage />,

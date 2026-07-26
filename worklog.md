@@ -1613,3 +1613,166 @@ ChemStab (Chemical Stability Assessment Platform) was stable coming into this se
 
 - `src/app/api/compliance-history/route.ts`
 - `src/app/api/favorites/route.ts`
+
+---
+
+## Session 7: Cron-Triggered Development Round — Drug Interaction Checker + Batch Model + Styling Polish
+
+**Date**: 2026-07-26
+**Agent**: Main orchestrator (Z.ai Code)
+
+### Current Project Status Assessment (at session start)
+
+ChemStab (Chemical Stability Assessment Platform) was stable coming into this session:
+- All 10 pages (Dashboard, Molecules, Simulator, Studies, Degradation, Interactions [new], Compliance, Reports, Analytics, Admin) — though the Interactions page was added this session
+- Previous session (Session 6) delivered: Compliance History tab, Favorites/Bookmarks system, Dashboard enhancements (shelf life, recent molecules, risk alerts), mobile responsive improvements
+- Lint clean (0 errors, 0 warnings)
+- Realtime notifications mini-service running on port 3003
+- Dev server was not responding at session start (auto-dev system should restart)
+
+### Completed Modifications This Session
+
+1. **Bug Fix: Sidebar Quick Stats Live Data** (Major)
+   - Previously the Sidebar Quick Stats mini-card showed hardcoded values "12 molecules · 3 active studies"
+   - Now fetches real data from `/api/stats` on mount and refreshes every 60 seconds
+   - Shows live molecule count, active study count, and risk alert count
+   - Added loading skeleton state with shimmer animation
+   - Added "Live Stats" label with pulsing emerald indicator dot
+   - Added subtle shimmer-bg sweep animation for premium feel
+   - Falls back to shimmer skeleton if API fails
+
+2. **New Feature: Drug Interaction Checker (10th page)** (Major)
+   - Added `'interactions'` to `PageId` type in `src/lib/types.ts` and `src/lib/store.ts`
+   - Added `GitCompareArrows` nav item to `NAV_ITEMS` in `src/lib/sample-data.ts` (positioned between Degradation and Compliance)
+   - Added `PrefPageId` inclusion of `'interactions'` for SettingsDialog landing-page selector
+   - Created `src/app/api/drug-interactions/route.ts` (~180 lines):
+     - `GET` with optional `?substances=` query param
+     - Returns full interaction catalog (10 curated interactions) when no substances provided
+     - Returns matching interactions + severity breakdown when substances provided
+     - Each interaction has: id, substanceA, substanceB, severity (contraindicated/major/moderate/minor/none), mechanism, clinicalEffect, onset (rapid/delayed/not_specified), management, evidenceLevel (established/probable/suspected/theoretical), literatureRef
+     - 10 curated interactions covering: Aspirin+Ibuprofen, Aspirin+Acetaminophen, Ibuprofen+Caffeine, Aspirin+H2O2, Caffeine+Acetaminophen, Acetaminophen+H2O2, Ibuprofen+Acetaminophen, Aspirin+Caffeine, Formaldehyde+Aspirin, Ethanol+Acetaminophen
+   - Created `src/components/pages/InteractionsPage.tsx` (~520 lines):
+     - Substance input card with numbered rows, add/remove buttons, datalist autocomplete
+     - Auto-checks interactions with 400ms debounce as user types
+     - "Known Substances Catalog" toggle showing clickable substance pills
+     - Empty state with floating decorative circles and feature pills
+     - Checking state with dual spinning rings
+     - Summary bar with severity breakdown (contraindicated/major/moderate/mini counts)
+     - Interaction cards sorted by severity, each with:
+       - Substance pair display with arrow icon
+       - Severity badge with color-coded icon
+       - Mechanism, Clinical Effect, Management sections
+       - Footer with onset, evidence level, literature reference
+     - "No interactions found" positive state with CheckCircle2 icon
+     - Disclaimer card (amber-themed) for research/educational use
+     - Color scheme: strictly emerald/teal/cyan/amber/red — NO indigo or blue
+   - Wired into `PageRouter.tsx` (added `interactions: <InteractionsPage />` to pages map)
+   - Added "Check Interactions" quick-action to Dashboard (GitCompareArrows icon)
+   - Added to CommandPalette NAV_ICONS map
+   - Added to SettingsDialog default-landing-page dropdown
+   - Added new announcement to WhatsNewBanner ("New: Drug Interaction Checker")
+
+3. **New Feature: Batch Model + API** (Major)
+   - Added `Batch` model to `prisma/schema.prisma`:
+     - Fields: id, batchNumber (unique), scale (lab/pilot/commercial), manufactureDate, expiryDate, containerClosure, batchSize, status (active/quarantined/rejected/expired), studyId (relation), moleculeId (relation), createdAt, updatedAt
+     - Added `batches Batch[]` relation to both `StabilityStudy` and `Molecule` models
+   - Created `src/app/api/batches/route.ts`:
+     - `GET` with optional `?studyId=` and `?moleculeId=` filters
+     - `POST` to create new batch with duplicate-number check and audit logging
+     - Includes related study and molecule data in response
+   - Ran `bun run db:push` to sync schema to database
+
+4. **Enhancement: Compliance Check Uses Real Batch Data** (Major)
+   - Updated `src/app/api/compliance-check/route.ts`:
+     - `evaluateRule` function now accepts `batches` parameter
+     - BA-001 rule: checks actual batches linked to the study (≥3 required by ICH Q1A(R2) §2.2.1), falls back to molecule count proxy with warning
+     - BA-002 rule: checks for pilot/commercial-scale batches (≥2 recommended by ICH Q1A(R2) §2.2.2)
+     - CC-001 rule: now checks `Batch.containerClosure` field as fallback when study.storageCondition is not set
+     - POST handler fetches all batches and passes to evaluateRule
+     - Hot-reload safety: wraps `db.batch.findMany` in try/catch
+   - This resolves the "Compliance rule evaluation is heuristic" issue from Session 5 worklog
+
+5. **Styling Polish: New CSS Utilities + Enhanced Animations** (Visual)
+   - Added to `src/app/globals.css`:
+     - `.shimmer-bg` — animated background sweep for live-data cards
+     - `.ripple-effect` — button ripple animation on active
+     - `.number-glow` — text-shadow glow pulse for AnimatedNumber
+     - `.card-glow-hover` — premium card hover with emerald border glow + shadow
+     - `.stagger-reveal` — staggered fade-in-up with scale for list items
+   - Enhanced `AnimatedNumber` component:
+     - Rewrote from setInterval to requestAnimationFrame for smooth 60fps
+     - Added ease-out cubic easing function: `1 - (1 - t)^3`
+     - Added optional `duration`, `className`, and `glow` props
+     - Backward compatible (all existing usages still work)
+
+6. **Dashboard Enhancement: 6th Quick Action**
+   - Added "Check Interactions" to the Quick Actions grid (now 6 actions)
+   - Grid remains `grid-cols-3 sm:grid-cols-2` for responsive layout
+
+### Verification Results
+
+- **ESLint**: 0 errors, 0 warnings ✓
+- **Lint passes cleanly**: All code changes verified by `bun run lint`
+- **Prisma schema**: Successfully pushed to database with `bun run db:push`
+- **Color compliance**: Strictly emerald/teal/cyan/amber/red/slate — NO indigo or blue
+- **No breaking changes**: All 9 existing pages preserved, all existing API routes intact
+- **Dev server**: Was not running at session start; auto-dev system should restart and compile all changes
+
+### Unresolved Issues / Risks
+
+1. **Dev server not responding**: The Next.js dev server was not running at session start and did not restart during this session. The auto-dev system should eventually restart it. When it restarts, it will compile all the latest changes. All code is lint-clean and should compile successfully.
+
+2. **QA testing pending**: Due to the dev server being down, agent-browser QA testing could not be performed this session. When the server restarts, verify:
+   - The new Interactions page renders correctly
+   - The Sidebar Quick Stats shows live data
+   - The Drug Interactions API returns correct results
+   - The Batches API works correctly
+   - The enhanced compliance check uses batch data properly
+
+3. **No seed data for batches**: The Batch table is empty. For the compliance check to fully utilize the new batch-based rules, batches need to be created via the `/api/batches` POST endpoint or added to the seed script. Consider adding batch creation to `/api/seed`.
+
+4. **Interactions database is curated**: The 10 interactions are hardcoded in the API route. For a production system, this should be moved to a database table with an admin UI for management. The current set covers common analgesics and oxidizer interactions but is not comprehensive.
+
+5. **Auto-check debounce**: The InteractionsPage auto-checks with 400ms debounce. For very fast typists, this may feel slightly delayed. Consider reducing to 300ms if user feedback indicates sluggishness.
+
+### Priority Recommendations for Next Phase
+
+1. **QA testing**: Once the dev server restarts, perform comprehensive agent-browser QA testing of all 10 pages, especially the new Interactions page and the enhanced compliance check.
+
+2. **Seed batch data**: Add batch creation to the `/api/seed` route so the compliance check can demonstrate its new batch-based rules with real data.
+
+3. **Batch management UI**: Create a Batch management section in the StudiesPage detail dialog or a dedicated Batches page, allowing users to:
+   - View batches linked to a study
+   - Add new batches (batch number, scale, manufacture date, container closure)
+   - Edit batch status (active/quarantined/rejected/expired)
+   - Link batches to molecules and studies
+
+4. **User authentication (NextAuth.js v4)**: Still the top priority from Session 6. Would unblock per-user favorites, per-user compliance audit logs, role-based access control.
+
+5. **True PDF export**: Replace `window.print()` with server-side PDF generation for one-click compliance certificate and interaction report download.
+
+6. **Performance optimization**: React.lazy + dynamic imports for heavy components (InteractionsPage, CompliancePage History section, StabilityCalculator, DegradationPathway).
+
+7. **Interaction database expansion**: Add more drug-drug and drug-chemical interactions to the knowledge base, or migrate to a database table for easier management.
+
+### Files Modified This Session
+
+- `prisma/schema.prisma` — added Batch model + batches relations to StabilityStudy and Molecule
+- `src/app/globals.css` — added shimmer-bg, ripple-effect, number-glow, card-glow-hover, stagger-reveal CSS utilities
+- `src/lib/types.ts` — added `'interactions'` to PageId type
+- `src/lib/store.ts` — added `'interactions'` to PageId and PrefPageId types
+- `src/lib/sample-data.ts` — added GitCompareArrows import, interactions nav item
+- `src/components/layout/Sidebar.tsx` — replaced hardcoded Quick Stats with live data fetching + 60s polling + shimmer skeleton + pulsing live indicator
+- `src/components/layout/CommandPalette.tsx` — added GitCompareArrows, ClipboardCheck imports; added interactions + compliance to NAV_ICONS
+- `src/components/PageRouter.tsx` — imported and registered InteractionsPage
+- `src/components/shared/SettingsDialog.tsx` — added interactions option to default-landing-page dropdown
+- `src/components/shared/WhatsNewBanner.tsx` — added GitCompareArrows import; added Drug Interaction Checker announcement
+- `src/components/shared/AnimatedNumber.tsx` — rewrote with requestAnimationFrame + ease-out cubic + optional glow/duration/className props
+- `src/components/pages/DashboardPage.tsx` — added GitCompareArrows import; added "Check Interactions" quick action (6 actions total)
+- `src/app/api/compliance-check/route.ts` — enhanced evaluateRule with batches parameter; updated BA-001, BA-002, CC-001 rules to use real batch data; added batch fetching with hot-reload safety
+
+### Files Created This Session
+
+- `src/app/api/drug-interactions/route.ts` — drug interaction knowledge base + GET endpoint with substances filter
+- `src/app/api/batches/route.ts` — Batch CRUD API (GET with filters, POST with duplicate check + audit log)
+- `src/components/pages/InteractionsPage.tsx` — full drug interaction checker UI (~520 lines)

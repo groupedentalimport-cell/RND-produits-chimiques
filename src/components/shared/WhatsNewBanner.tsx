@@ -15,7 +15,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Sparkles, X, ChevronRight, ChevronLeft, ClipboardCheck, Zap, Shield } from 'lucide-react'
+import { Sparkles, X, ChevronRight, ChevronLeft, ClipboardCheck, Zap, Shield, GitCompareArrows } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/lib/store'
 import type { PageId } from '@/lib/types'
@@ -32,6 +32,16 @@ interface Announcement {
 }
 
 const ANNOUNCEMENTS: Announcement[] = [
+  {
+    id: '2026-07-drug-interaction-checker',
+    icon: GitCompareArrows,
+    iconBg: 'from-emerald-500 to-teal-600',
+    title: 'New: Drug Interaction Checker',
+    body: 'Check drug-drug and drug-chemical interactions with a curated knowledge base. Auto-checks as you type, with severity tiers, mechanisms, clinical effects, and management recommendations.',
+    ctaLabel: 'Check now',
+    ctaPage: 'interactions',
+    badge: 'NEW',
+  },
   {
     id: '2026-03-compliance-checker',
     icon: ClipboardCheck,

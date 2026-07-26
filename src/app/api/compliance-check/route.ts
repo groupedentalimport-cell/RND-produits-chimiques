@@ -47,6 +47,7 @@ function evaluateRule(
   timePoints: any[],
   signatures: any[],
   moleculeCount: number,
+  batches: any[],
 ): { status: ComplianceStatus; evidence: string; recommendation?: string } {
   switch (ruleId) {
     // ── Study design ────────────────────────────────────────────────────
@@ -137,29 +138,67 @@ function evaluateRule(
       return { status: 'fail', evidence: `Missing critical timepoints: ${missing.join(', ')} months.`, recommendation: 'Study cannot be submitted without required timepoints.' }
     }
 
-    // ── Batch requirements ──────────────────────────────────────────────
+    // ── Batch requirements (now uses actual Batch model) ────────────────
     case 'BA-001': {
+      // ICH Q1A(R2) requires ≥3 primary batches per study
+      const studyBatches = batches.filter((b) => b.studyId === study.id)
+      const batchCount = studyBatches.length
+      if (batchCount >= 3) {
+        return { status: 'pass', evidence: `${batchCount} primary batches registered for this study (≥3 required by ICH Q1A(R2) §2.2.1). Batches: ${studyBatches.map((b) => b.batchNumber).join(', ')}.` }
+      }
+      if (batchCount >= 1) {
+        return {
+          status: 'warning',
+          evidence: `Only ${batchCount} batch(es) registered for this study; ICH Q1A(R2) requires ≥3 primary batches.`,
+          recommendation: `Add ${3 - batchCount} more primary batch(es) to meet ICH requirements. Use the Batches API to register additional batches.`,
+        }
+      }
+      // Fallback: check molecule count as proxy if no batches linked to study
       if (moleculeCount >= 3) {
-        return { status: 'pass', evidence: `${moleculeCount} molecules in the stability program (≥3 required as batch proxy).` }
+        return {
+          status: 'warning',
+          evidence: `No batches linked to this study, but ${moleculeCount} molecules in the program (used as batch proxy). Link batches to the study for accurate compliance.`,
+          recommendation: 'Register and link primary batches to this study for proper ICH Q1A compliance.',
+        }
       }
-      if (moleculeCount >= 1) {
-        return { status: 'warning', evidence: `Only ${moleculeCount} molecule(s) in program; ICH requires ≥3 primary batches.`, recommendation: 'Add additional batches to the stability program.' }
-      }
-      return { status: 'fail', evidence: 'No batch data available.', recommendation: 'Register primary batches before submission.' }
+      return { status: 'fail', evidence: 'No batch data available for this study.', recommendation: 'Register ≥3 primary batches before submission.' }
     }
     case 'BA-002': {
-      if (moleculeCount >= 2) {
-        return { status: 'pass', evidence: `${moleculeCount} molecules registered (≥2 pilot-scale proxy).` }
+      // Check for pilot/commercial scale batches (ICH Q1A(R2) §2.2.2)
+      const studyBatches = batches.filter((b) => b.studyId === study.id)
+      const pilotOrCommercial = studyBatches.filter((b) => b.scale === 'pilot' || b.scale === 'commercial')
+      if (pilotOrCommercial.length >= 2) {
+        return {
+          status: 'pass',
+          evidence: `${pilotOrCommercial.length} pilot/commercial-scale batch(es) registered (${pilotOrCommercial.map((b) => `${b.batchNumber} (${b.scale})`).join(', ')}). ICH Q1A(R2) §2.2.2 requires ≥2 batches at pilot or commercial scale.`,
+        }
       }
-      return { status: 'warning', evidence: 'Insufficient data to confirm pilot-scale batch representation.', recommendation: 'Document batch scale in molecule record.' }
+      if (pilotOrCommercial.length >= 1) {
+        return {
+          status: 'warning',
+          evidence: `Only ${pilotOrCommercial.length} pilot/commercial-scale batch(es); ICH Q1A(R2) recommends ≥2.`,
+          recommendation: 'Add an additional pilot or commercial-scale batch.',
+        }
+      }
+      // Fallback heuristic
+      if (moleculeCount >= 2) {
+        return { status: 'warning', evidence: 'No batch scale data linked to study; using molecule count as proxy.', recommendation: 'Register batches with scale information (lab/pilot/commercial).' }
+      }
+      return { status: 'warning', evidence: 'Insufficient data to confirm pilot-scale batch representation.', recommendation: 'Document batch scale in batch records.' }
     }
 
-    // ── Container closure ───────────────────────────────────────────────
+    // ── Container closure (now checks Batch.containerClosure) ───────────
     case 'CC-001': {
+      // First check study storageCondition, then fall back to batch containerClosure
       if (study.storageCondition) {
         return { status: 'pass', evidence: `Storage condition "${study.storageCondition}" recorded on study.` }
       }
-      return { status: 'warning', evidence: 'No container-closure system documented.', recommendation: 'Record the container-closure system in the study metadata.' }
+      const studyBatches = batches.filter((b) => b.studyId === study.id && b.containerClosure)
+      if (studyBatches.length > 0) {
+        const closures = Array.from(new Set(studyBatches.map((b) => b.containerClosure)))
+        return { status: 'pass', evidence: `Container-closure system(s) documented on batches: ${closures.join(', ')}.` }
+      }
+      return { status: 'warning', evidence: 'No container-closure system documented.', recommendation: 'Record the container-closure system in the study metadata or batch records.' }
     }
 
     // ── Testing frequency ───────────────────────────────────────────────
@@ -257,8 +296,17 @@ export async function POST(request: NextRequest) {
 
     const moleculeCount = await db.molecule.count()
 
+    // Fetch all batches (filtering by studyId happens inside evaluateRule)
+    let batches: any[] = []
+    try {
+      batches = await db.batch.findMany({})
+    } catch {
+      // Batch table may not exist during dev hot-reload; fallback to empty array
+      batches = []
+    }
+
     const results: ComplianceCheckResult[] = ICH_Q1A_RULES.map((rule) => {
-      const evalResult = evaluateRule(rule.id, study, study.timePoints, study.signatures, moleculeCount)
+      const evalResult = evaluateRule(rule.id, study, study.timePoints, study.signatures, moleculeCount, batches)
       return {
         ruleId: rule.id,
         ruleTitle: rule.title,
