@@ -4,7 +4,7 @@ import { SAMPLE_NOTIFICATIONS, type AppNotification } from '@/lib/sample-data'
 
 // ── Navigation State ────────────────────────────────────────────────────
 
-type PageId = 'dashboard' | 'molecules' | 'simulator' | 'studies' | 'reports' | 'analytics' | 'degradation' | 'admin'
+type PageId = 'dashboard' | 'molecules' | 'simulator' | 'studies' | 'reports' | 'analytics' | 'degradation' | 'admin' | 'compliance'
 
 interface AppState {
   currentPage: PageId
@@ -205,7 +205,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
 
 // ── Preferences State (persisted to localStorage) ───────────────────────
 
-export type PrefPageId = 'dashboard' | 'molecules' | 'simulator' | 'studies' | 'degradation' | 'reports' | 'analytics' | 'admin'
+export type PrefPageId = 'dashboard' | 'molecules' | 'simulator' | 'studies' | 'degradation' | 'reports' | 'analytics' | 'admin' | 'compliance'
 export type MoleculeView = 'table' | 'grid'
 export type StudyView = 'list' | 'timeline'
 export type RefreshInterval = '30s' | '1min' | '5min' | '15min' | 'never'

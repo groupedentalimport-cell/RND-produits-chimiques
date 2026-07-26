@@ -5,7 +5,7 @@ import { motion } from 'framer-motion'
 import {
   Plus, Play, ClipboardList, Download, Database, Microscope, Cpu,
   AlertTriangle, RefreshCw, FileText, CheckCircle2, Activity,
-  ArrowRight, ArrowUpRight, ArrowDownRight, XCircle,
+  ArrowRight, ArrowUpRight, ArrowDownRight, XCircle, ShieldCheck,
 } from 'lucide-react'
 import {
   Card, CardHeader, CardTitle, CardDescription, CardContent, CardAction,
@@ -43,6 +43,7 @@ export function DashboardPage() {
     { label: 'Add Molecule', icon: Plus, page: 'molecules' as PageId },
     { label: 'Run Simulation', icon: Play, page: 'simulator' as PageId },
     { label: 'Create Study', icon: ClipboardList, page: 'studies' as PageId },
+    { label: 'Compliance Check', icon: ShieldCheck, page: 'compliance' as PageId },
     { label: 'Generate Report', icon: Download, page: 'reports' as PageId },
   ]
 

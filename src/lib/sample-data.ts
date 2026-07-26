@@ -2,7 +2,7 @@ import {
   LayoutDashboard, Atom, Beaker, Microscope, FlaskConical, FileText, BarChart3, ShieldCheck,
   FileCheck, BookOpen, AlertTriangle, GraduationCap, Scale,
   Plus, RefreshCw, Trash2, CheckCircle2, Shield, XCircle,
-  Cpu,
+  Cpu, ClipboardCheck,
 } from 'lucide-react'
 import type { PageId, MoleculeData, StudyData, ReportData, UserData, AuditEntry } from '@/lib/types'
 
@@ -205,6 +205,7 @@ export const NAV_ITEMS: { id: PageId; label: string; icon: React.ElementType }[]
   { id: 'simulator', label: 'Simulator', icon: Beaker },
   { id: 'studies', label: 'Studies', icon: Microscope },
   { id: 'degradation', label: 'Degradation', icon: FlaskConical },
+  { id: 'compliance', label: 'Compliance', icon: ClipboardCheck },
   { id: 'reports', label: 'Reports', icon: FileText },
   { id: 'analytics', label: 'Analytics', icon: BarChart3 },
   { id: 'admin', label: 'Admin', icon: ShieldCheck },
@@ -664,5 +665,183 @@ export function findPathwayForMolecule(name: string): DegradationPathway | undef
   if (!name) return undefined
   const q = name.trim().toLowerCase()
   return DEGRADATION_PATHWAYS.find((p) => p.moleculeName.toLowerCase() === q)
+}
+
+// ── ICH Q1A (R2) Compliance Rule Definitions ──────────────────────────────
+
+export type ComplianceStatus = 'pass' | 'warning' | 'fail' | 'not_applicable'
+export type ComplianceCategory =
+  | 'study_design'
+  | 'storage_conditions'
+  | 'duration'
+  | 'batch_requirements'
+  | 'container_closure'
+  | 'testing_frequency'
+  | 'statistical_evaluation'
+  | 'documentation'
+  | 'risk_management'
+
+export interface ComplianceRule {
+  id: string
+  category: ComplianceCategory
+  title: string
+  description: string
+  guideline: string // e.g. "ICH Q1A(R2) §2.1"
+  weight: number // 1-10, importance for overall score
+}
+
+export const ICH_Q1A_RULES: ComplianceRule[] = [
+  {
+    id: 'LT-001',
+    category: 'study_design',
+    title: 'Long-term study duration',
+    description: 'Long-term studies should cover a minimum of 12 months at the time of submission, and continue for enough time to cover the proposed shelf life.',
+    guideline: 'ICH Q1A(R2) §2.1.1',
+    weight: 10,
+  },
+  {
+    id: 'AC-001',
+    category: 'study_design',
+    title: 'Accelerated study conditions',
+    description: 'Accelerated studies must be conducted at 40°C ± 2°C / 75% RH ± 5% RH for 6 months.',
+    guideline: 'ICH Q1A(R2) §2.1.3',
+    weight: 9,
+  },
+  {
+    id: 'IN-001',
+    category: 'study_design',
+    title: 'Intermediate study conditions',
+    description: 'Intermediate studies should be conducted at 30°C ± 2°C / 65% RH ± 5% RH for 12 months (required when significant change at accelerated).',
+    guideline: 'ICH Q1A(R2) §2.1.2',
+    weight: 8,
+  },
+  {
+    id: 'ST-001',
+    category: 'storage_conditions',
+    title: 'Temperature tolerance',
+    description: 'Storage temperature must remain within ±2°C of the specified set point throughout the study.',
+    guideline: 'ICH Q1A(R2) §2.4',
+    weight: 8,
+  },
+  {
+    id: 'ST-002',
+    category: 'storage_conditions',
+    title: 'Humidity tolerance',
+    description: 'Relative humidity must remain within ±5% RH of the set point throughout the study.',
+    guideline: 'ICH Q1A(R2) §2.4',
+    weight: 7,
+  },
+  {
+    id: 'DU-001',
+    category: 'duration',
+    title: 'Timepoint coverage',
+    description: 'Studies must include timepoints at 0, 3, 6, 9, 12 months (long-term) and 0, 3, 6 months (accelerated).',
+    guideline: 'ICH Q1A(R2) §2.2.1',
+    weight: 9,
+  },
+  {
+    id: 'BA-001',
+    category: 'batch_requirements',
+    title: 'Minimum batch count',
+    description: 'Stability data must be generated on at least 3 primary batches of the drug substance/product.',
+    guideline: 'ICH Q1A(R2) §2.2.3',
+    weight: 10,
+  },
+  {
+    id: 'BA-002',
+    category: 'batch_requirements',
+    title: 'Batch size representative',
+    description: 'At least 2 of the 3 batches should be at pilot scale (minimum 1/10 of commercial scale).',
+    guideline: 'ICH Q1A(R2) §2.2.3',
+    weight: 7,
+  },
+  {
+    id: 'CC-001',
+    category: 'container_closure',
+    title: 'Container closure simulation',
+    description: 'Stability studies must use the same container-closure system proposed for storage and distribution.',
+    guideline: 'ICH Q1A(R2) §2.2.4',
+    weight: 7,
+  },
+  {
+    id: 'TF-001',
+    category: 'testing_frequency',
+    title: 'Long-term testing frequency',
+    description: 'Long-term testing at 0, 3, 6, 9, 12, 18, 24, 36 months and annually thereafter.',
+    guideline: 'ICH Q1A(R2) §2.2.1',
+    weight: 8,
+  },
+  {
+    id: 'SE-001',
+    category: 'statistical_evaluation',
+    title: 'Statistical analysis of data',
+    description: 'Quantitative data should be evaluated by statistical methods to determine the stability profile and shelf life.',
+    guideline: 'ICH Q1A(R2) §2.4',
+    weight: 8,
+  },
+  {
+    id: 'SE-002',
+    category: 'statistical_evaluation',
+    title: 'Out-of-specification handling',
+    description: 'Any OOS result must be investigated and the impact on stability assessed per 21 CFR Part 211.192.',
+    guideline: 'ICH Q1A(R2) §2.4 / 21 CFR 211.192',
+    weight: 9,
+  },
+  {
+    id: 'DO-001',
+    category: 'documentation',
+    title: 'Electronic signatures (21 CFR Part 11)',
+    description: 'All stability data must be signed electronically by qualified personnel per 21 CFR Part 11.',
+    guideline: '21 CFR Part 11',
+    weight: 9,
+  },
+  {
+    id: 'DO-002',
+    category: 'documentation',
+    title: 'Audit trail integrity',
+    description: 'An audit trail capturing all data modifications must be maintained for at least 7 years.',
+    guideline: '21 CFR Part 11.10(e)',
+    weight: 7,
+  },
+  {
+    id: 'RM-001',
+    category: 'risk_management',
+    title: 'ICH Q9 risk assessment',
+    description: 'A formal risk assessment (ICH Q9) should be performed for any significant deviation or OOS event.',
+    guideline: 'ICH Q9',
+    weight: 6,
+  },
+  {
+    id: 'RM-002',
+    category: 'risk_management',
+    title: 'Photostability testing (ICH Q1B)',
+    description: 'Photostability testing per ICH Q1B Option 1 or Option 2 must be completed before submission.',
+    guideline: 'ICH Q1B',
+    weight: 7,
+  },
+]
+
+export const COMPLIANCE_CATEGORY_LABELS: Record<ComplianceCategory, string> = {
+  study_design: 'Study Design',
+  storage_conditions: 'Storage Conditions',
+  duration: 'Duration & Timepoints',
+  batch_requirements: 'Batch Requirements',
+  container_closure: 'Container Closure',
+  testing_frequency: 'Testing Frequency',
+  statistical_evaluation: 'Statistical Evaluation',
+  documentation: 'Documentation & Signatures',
+  risk_management: 'Risk Management',
+}
+
+export const COMPLIANCE_CATEGORY_COLORS: Record<ComplianceCategory, string> = {
+  study_design: '#10b981',
+  storage_conditions: '#14b8a6',
+  duration: '#06b6d4',
+  batch_requirements: '#0d9488',
+  container_closure: '#0891b2',
+  testing_frequency: '#059669',
+  statistical_evaluation: '#0d9488',
+  documentation: '#14b8a6',
+  risk_management: '#06b6d4',
 }
 

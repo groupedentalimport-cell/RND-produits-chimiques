@@ -348,6 +348,7 @@ export function SettingsDialog() {
                 { value: 'degradation', label: 'Degradation' },
                 { value: 'reports', label: 'Reports' },
                 { value: 'analytics', label: 'Analytics' },
+                { value: 'compliance', label: 'Compliance' },
                 { value: 'admin', label: 'Admin' },
               ]}
             />

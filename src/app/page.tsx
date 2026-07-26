@@ -12,6 +12,7 @@ import { CommandPalette, useOpenCommandPalette } from '@/components/layout/Comma
 import { LiveClock } from '@/components/layout/LiveClock'
 import { PageRouter } from '@/components/PageRouter'
 import { SettingsDialog } from '@/components/shared/SettingsDialog'
+import { WhatsNewBanner } from '@/components/shared/WhatsNewBanner'
 import { useRealtimeNotifications } from '@/hooks/use-realtime-notifications'
 
 export default function Home() {
@@ -141,6 +142,7 @@ export default function Home() {
       <div className="flex flex-1 overflow-hidden">
         <Sidebar />
         <main className="flex-1 p-4 lg:p-6 overflow-y-auto">
+          <WhatsNewBanner />
           <PageRouter />
         </main>
       </div>

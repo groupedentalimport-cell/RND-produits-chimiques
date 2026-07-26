@@ -12,6 +12,7 @@ import { DegradationPage } from '@/components/pages/DegradationPage'
 import { ReportsPage } from '@/components/pages/ReportsPage'
 import { AnalyticsPage } from '@/components/pages/AnalyticsPage'
 import { AdminPage } from '@/components/pages/AdminPage'
+import { CompliancePage } from '@/components/pages/CompliancePage'
 import { PageSkeleton } from '@/components/shared/PageSkeleton'
 
 export function PageRouter() {
@@ -28,6 +29,7 @@ export function PageRouter() {
     reports: <ReportsPage />,
     analytics: <AnalyticsPage />,
     admin: <AdminPage />,
+    compliance: <CompliancePage />,
   }
 
   // Scroll to top when page changes + brief skeleton flash for polish.
