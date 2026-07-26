@@ -2,7 +2,7 @@ import { create } from 'zustand'
 
 // ── Navigation State ────────────────────────────────────────────────────
 
-type PageId = 'dashboard' | 'molecules' | 'simulator' | 'studies' | 'reports' | 'analytics' | 'admin'
+type PageId = 'dashboard' | 'molecules' | 'simulator' | 'studies' | 'reports' | 'analytics' | 'degradation' | 'admin'
 
 interface AppState {
   currentPage: PageId

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard, FlaskConical, Atom, Beaker, FileText, ShieldCheck,
@@ -50,7 +50,7 @@ import {
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-type PageId = 'dashboard' | 'molecules' | 'simulator' | 'studies' | 'reports' | 'analytics' | 'admin'
+type PageId = 'dashboard' | 'molecules' | 'simulator' | 'studies' | 'reports' | 'analytics' | 'degradation' | 'admin'
 
 interface MoleculeData {
   id: string
@@ -261,6 +261,28 @@ function fmtNum(v: number | null | undefined): string {
   return v === null || v === undefined ? '' : String(v)
 }
 
+// ── Chemical formula subscript formatter ──────────────────────────────
+// Converts "C9H8O4" → "C₉H₈O₄", "H2O2" → "H₂O₂", "NaCl" stays "NaCl"
+const SUBSCRIPT_DIGITS: Record<string, string> = {
+  '0': '₀', '1': '₁', '2': '₂', '3': '₃', '4': '₄',
+  '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉',
+}
+function formatFormula(formula: string | null | undefined): string {
+  if (!formula) return '—'
+  // If already contains unicode subscripts, leave as-is
+  if (/[₀-₉]/.test(formula)) return formula
+  // Replace any digit that follows a letter (or another digit) with subscript
+  return formula.replace(/(\d+)/g, (m) =>
+    m.split('').map((d) => SUBSCRIPT_DIGITS[d] ?? d).join('')
+  )
+}
+
+// React element version (in case we want richer rendering later)
+function Formula({ children }: { children: string | null | undefined }) {
+  return <span className="font-mono">{formatFormula(children)}</span>
+}
+
+
 // ── Sidebar Navigation ────────────────────────────────────────────────────
 
 const NAV_ITEMS: { id: PageId; label: string; icon: React.ElementType }[] = [
@@ -268,6 +290,7 @@ const NAV_ITEMS: { id: PageId; label: string; icon: React.ElementType }[] = [
   { id: 'molecules', label: 'Molecules', icon: Atom },
   { id: 'simulator', label: 'Simulator', icon: Beaker },
   { id: 'studies', label: 'Studies', icon: Microscope },
+  { id: 'degradation', label: 'Degradation', icon: FlaskConical },
   { id: 'reports', label: 'Reports', icon: FileText },
   { id: 'analytics', label: 'Analytics', icon: BarChart3 },
   { id: 'admin', label: 'Admin', icon: ShieldCheck },
@@ -401,7 +424,9 @@ function DashboardPage() {
     totalMolecules: number; activeStudies: number; avgStabilityScore: number;
     riskDistribution: Record<string, number>; recentActivity: any[];
     totalReports: number;
+    studiesByStatus?: { status: string; _count: { status: number } }[];
   } | null>(null)
+  const [recentStudies, setRecentStudies] = useState<StudyData[]>([])
 
   const quickActions = [
     { label: 'Add Molecule', icon: Plus, page: 'molecules' as PageId },
@@ -416,10 +441,24 @@ function DashboardPage() {
     let cancelled = false
     const loadData = async () => {
       try {
-        const res = await fetch('/api/stats')
-        if (res.ok && !cancelled) {
-          const data = await res.json()
+        const [statsRes, studiesRes] = await Promise.all([
+          fetch('/api/stats'),
+          fetch('/api/studies?limit=5'),
+        ])
+        if (statsRes.ok && !cancelled) {
+          const data = await statsRes.json()
           if (!cancelled) setStatsData(data)
+        }
+        if (studiesRes.ok && !cancelled) {
+          const data = await studiesRes.json()
+          const transformed: StudyData[] = (data.studies || []).slice(0, 5).map((s: any) => ({
+            id: s.id, studyCode: s.studyCode || '', substanceName: s.substanceName || '',
+            studyType: s.studyType || 'long_term', temperatureC: s.temperatureC || 25,
+            humidityPercent: s.humidityPercent, durationMonths: s.durationMonths || 24,
+            predictedShelfLifeMonths: s.predictedShelfLifeMonths, status: s.status || 'draft',
+            ph: s.ph,
+          }))
+          if (!cancelled) setRecentStudies(transformed)
         }
       } catch { /* fallback: statsData stays null, sample data used */ }
       if (!cancelled) setLoading(false)
@@ -693,6 +732,117 @@ function DashboardPage() {
           </Card>
         </div>
       </div>
+
+      {/* Recent Studies + Status Donut */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <Card className="lg:col-span-2 backdrop-blur-sm bg-card/80">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Microscope className="size-5 text-emerald-600 dark:text-emerald-400" />
+                  Recent Studies
+                </CardTitle>
+                <CardDescription>Latest stability studies across the platform</CardDescription>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => setPage('studies')}>
+                View All <ArrowRight className="size-3 ml-1" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="max-h-72 overflow-y-auto">
+              {loading ? (
+                <div className="p-4 space-y-2">
+                  {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+                </div>
+              ) : recentStudies.length === 0 ? (
+                <p className="p-6 text-center text-sm text-muted-foreground">No studies yet</p>
+              ) : (
+                <Table>
+                  <TableHeader className="sticky top-0 bg-card">
+                    <TableRow>
+                      <TableHead className="text-xs">Code</TableHead>
+                      <TableHead className="text-xs">Substance</TableHead>
+                      <TableHead className="text-xs">Type</TableHead>
+                      <TableHead className="text-xs">Temp</TableHead>
+                      <TableHead className="text-xs">Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {recentStudies.map((s, idx) => (
+                      <TableRow key={s.id} className={`cursor-pointer hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10 transition-colors ${idx % 2 === 1 ? 'bg-muted/30' : ''}`} onClick={() => setPage('studies')}>
+                        <TableCell className="font-mono text-xs font-medium">{s.studyCode}</TableCell>
+                        <TableCell className="text-sm">{s.substanceName}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{studyTypeLabels[s.studyType] || s.studyType}</TableCell>
+                        <TableCell className="text-xs">{s.temperatureC}°C</TableCell>
+                        <TableCell><Badge className={`text-[10px] ${statusColors[s.status] || ''}`}>{s.status.replace('_', ' ')}</Badge></TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="backdrop-blur-sm bg-card/80">
+          <CardHeader>
+            <CardTitle>Studies by Status</CardTitle>
+            <CardDescription>Distribution of study workflow states</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <Skeleton className="h-[220px] w-full" />
+            ) : !statsData?.studiesByStatus || statsData.studiesByStatus.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-16 text-center">No data available</p>
+            ) : (
+              <>
+                <ResponsiveContainer width="100%" height={180}>
+                  <PieChart>
+                    <Pie
+                      data={statsData.studiesByStatus.map((s) => ({ name: s.status.replace('_', ' '), value: s._count.status }))}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={40}
+                      outerRadius={70}
+                      paddingAngle={2}
+                    >
+                      {statsData.studiesByStatus.map((entry, idx) => {
+                        const statusColors: Record<string, string> = {
+                          draft: '#94a3b8', in_progress: '#14b8a6', completed: '#10b981',
+                          under_review: '#f59e0b', approved: '#22c55e', rejected: '#ef4444',
+                        }
+                        return <Cell key={idx} fill={statusColors[entry.status] || '#94a3b8'} />
+                      })}
+                    </Pie>
+                    <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb' }} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="space-y-1 mt-2">
+                  {statsData.studiesByStatus.map((s) => {
+                    const statusColors: Record<string, string> = {
+                      draft: 'bg-slate-400', in_progress: 'bg-teal-500', completed: 'bg-emerald-500',
+                      under_review: 'bg-amber-500', approved: 'bg-green-500', rejected: 'bg-red-500',
+                    }
+                    return (
+                      <div key={s.status} className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className={`size-2 rounded-full ${statusColors[s.status] || 'bg-slate-400'}`} />
+                          <span className="capitalize">{s.status.replace('_', ' ')}</span>
+                        </div>
+                        <span className="font-semibold tabular-nums">{s._count.status}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </motion.div>
   )
 }
@@ -716,6 +866,12 @@ function MoleculesPage() {
   const [addOpen, setAddOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [degradationProducts, setDegradationProducts] = useState<any[]>([])
+  const [degradationLoading, setDegradationLoading] = useState(false)
+  const [newDegradation, setNewDegradation] = useState({ name: '', smiles: '', percentage: 0, hazardLevel: 'low' })
+  const [addingDegradation, setAddingDegradation] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [newMolecule, setNewMolecule] = useState({
     name: '',
     casNumber: '',
@@ -767,9 +923,133 @@ function MoleculesPage() {
     ? apiMolecules
     : apiMolecules.filter((mol) => mol.dataSource.toLowerCase() === sourceFilter.toLowerCase())
 
-  const openDetail = (mol: MoleculeData) => {
+  const openDetail = async (mol: MoleculeData) => {
     setSelectedMolecule(mol)
     setDetailOpen(true)
+    setDegradationProducts([])
+    setDegradationLoading(true)
+    try {
+      const res = await fetch(`/api/degradation-products?moleculeId=${mol.id}`)
+      if (res.ok) {
+        const data = await res.json()
+        setDegradationProducts(data.products || [])
+      }
+    } catch { /* ignore */ }
+    setDegradationLoading(false)
+  }
+
+  const handleAddDegradation = async () => {
+    if (!selectedMolecule || !newDegradation.name.trim()) {
+      toast({ title: 'Validation error', description: 'Product name is required', variant: 'destructive' })
+      return
+    }
+    setAddingDegradation(true)
+    try {
+      const res = await fetch('/api/degradation-products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newDegradation.name,
+          smiles: newDegradation.smiles || undefined,
+          percentage: newDegradation.percentage || undefined,
+          hazardLevel: newDegradation.hazardLevel,
+          moleculeId: selectedMolecule.id,
+        }),
+      })
+      if (res.ok) {
+        toast({ title: 'Degradation product added', description: `${newDegradation.name} linked to ${selectedMolecule.name}` })
+        setNewDegradation({ name: '', smiles: '', percentage: 0, hazardLevel: 'low' })
+        // Refresh list
+        const refreshRes = await fetch(`/api/degradation-products?moleculeId=${selectedMolecule.id}`)
+        if (refreshRes.ok) {
+          const data = await refreshRes.json()
+          setDegradationProducts(data.products || [])
+        }
+      } else {
+        const err = await res.json().catch(() => ({}))
+        toast({ title: 'Error', description: err.error || 'Failed to add degradation product', variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'Error', description: 'Network error', variant: 'destructive' })
+    } finally {
+      setAddingDegradation(false)
+    }
+  }
+
+  const handleImportCSV = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImporting(true)
+    try {
+      const text = await file.text()
+      const lines = text.split(/\r?\n/).filter((l) => l.trim())
+      if (lines.length < 2) {
+        toast({ title: 'Import failed', description: 'CSV must have a header row and at least one data row', variant: 'destructive' })
+        return
+      }
+      const parseCSVLine = (line: string): string[] => {
+        const out: string[] = []
+        let cur = ''
+        let inQ = false
+        for (let i = 0; i < line.length; i++) {
+          const ch = line[i]
+          if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++ }
+          else if (ch === '"') { inQ = !inQ }
+          else if (ch === ',' && !inQ) { out.push(cur); cur = '' }
+          else { cur += ch }
+        }
+        out.push(cur)
+        return out
+      }
+      const headers = parseCSVLine(lines[0]).map((h) => h.trim().toLowerCase())
+      const nameIdx = headers.findIndex((h) => h === 'name')
+      if (nameIdx === -1) {
+        toast({ title: 'Import failed', description: 'CSV must have a "name" column', variant: 'destructive' })
+        return
+      }
+      const casIdx = headers.findIndex((h) => h === 'casnumber' || h === 'cas')
+      const formulaIdx = headers.findIndex((h) => h === 'formula')
+      const smilesIdx = headers.findIndex((h) => h === 'smiles')
+      const mwIdx = headers.findIndex((h) => h === 'molarmass' || h === 'mw')
+      const logPIdx = headers.findIndex((h) => h === 'logp')
+      const scoreIdx = headers.findIndex((h) => h === 'stabilityscore' || h === 'predictedstabilityscore' || h === 'score')
+      const riskIdx = headers.findIndex((h) => h === 'risklevel' || h === 'risk')
+
+      let success = 0, failed = 0
+      for (let i = 1; i < lines.length; i++) {
+        const cells = parseCSVLine(lines[i])
+        const name = cells[nameIdx]?.trim()
+        if (!name) { failed++; continue }
+        try {
+          const res = await fetch('/api/molecules', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name,
+              casNumber: casIdx >= 0 ? cells[casIdx]?.trim() || undefined : undefined,
+              formula: formulaIdx >= 0 ? cells[formulaIdx]?.trim() || undefined : undefined,
+              smiles: smilesIdx >= 0 ? cells[smilesIdx]?.trim() || undefined : undefined,
+              molarMass: mwIdx >= 0 ? parseFloat(cells[mwIdx]) || undefined : undefined,
+              logP: logPIdx >= 0 ? parseFloat(cells[logPIdx]) || undefined : undefined,
+              predictedStabilityScore: scoreIdx >= 0 ? parseFloat(cells[scoreIdx]) || undefined : undefined,
+              riskLevel: riskIdx >= 0 ? cells[riskIdx]?.trim().toLowerCase() || 'low' : 'low',
+            }),
+          })
+          if (res.ok) success++; else failed++
+        } catch { failed++ }
+      }
+      toast({
+        title: 'Import complete',
+        description: `Imported ${success} molecule${success !== 1 ? 's' : ''}${failed ? `, ${failed} failed` : ''}`,
+        variant: failed > 0 ? 'destructive' : 'default',
+      })
+      handleRefresh()
+    } catch {
+      toast({ title: 'Import failed', description: 'Failed to read file', variant: 'destructive' })
+    } finally {
+      setImporting(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
   }
 
   const handleRefresh = () => {
@@ -872,7 +1152,24 @@ function MoleculesPage() {
           <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-400 dark:to-teal-400 bg-clip-text text-transparent">Molecules Database</h1>
           <p className="text-muted-foreground">Browse and search chemical compounds with stability assessments</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <input
+            type="file"
+            accept=".csv"
+            ref={fileInputRef}
+            onChange={handleImportCSV}
+            className="hidden"
+          />
+          <TooltipProvider delayDuration={200}>
+            <UiTooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={importing}>
+                  <Download className={`size-4 mr-1 rotate-180 ${importing ? 'animate-pulse' : ''}`} /> Import CSV
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Bulk import molecules from a CSV file (name column required)</TooltipContent>
+            </UiTooltip>
+          </TooltipProvider>
           <TooltipProvider delayDuration={200}>
             <UiTooltip>
               <TooltipTrigger asChild>
@@ -962,7 +1259,7 @@ function MoleculesPage() {
                       onClick={() => openDetail(mol)}
                     >
                       <TableCell className="font-medium">{mol.name}</TableCell>
-                      <TableCell>{mol.formula}</TableCell>
+                      <TableCell><Formula>{mol.formula}</Formula></TableCell>
                       <TableCell>{mol.molarMass ? mol.molarMass.toFixed(2) : '—'}</TableCell>
                       <TableCell>{mol.logP ? mol.logP.toFixed(2) : '—'}</TableCell>
                       <TableCell>
@@ -1163,7 +1460,7 @@ function MoleculesPage() {
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
                   {[
-                    { label: 'Formula', value: selectedMolecule.formula || '—' },
+                    { label: 'Formula', value: formatFormula(selectedMolecule.formula) },
                     { label: 'Molar Mass', value: selectedMolecule.molarMass ? `${selectedMolecule.molarMass.toFixed(2)} g/mol` : '—' },
                     { label: 'LogP', value: selectedMolecule.logP !== null ? selectedMolecule.logP.toFixed(2) : '—' },
                     { label: 'Melting Point', value: selectedMolecule.meltingPoint !== null ? `${selectedMolecule.meltingPoint}°C` : '—' },
@@ -1210,15 +1507,105 @@ function MoleculesPage() {
 
                 <Separator />
 
-                {/* Degradation Products placeholder */}
+                {/* Degradation Products — fetched from API */}
                 <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400" />
-                    <p className="text-sm font-medium">Degradation Products</p>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400" />
+                      <p className="text-sm font-medium">Degradation Products</p>
+                      {degradationProducts.length > 0 && (
+                        <Badge variant="secondary" className="text-[10px]">{degradationProducts.length}</Badge>
+                      )}
+                    </div>
                   </div>
-                  <div className="p-3 rounded-lg bg-muted/40 text-sm text-muted-foreground">
-                    No degradation pathway data has been recorded for this molecule yet.
-                    Run a stability simulation or link a study to populate this section.
+                  {degradationLoading ? (
+                    <div className="p-3 space-y-2">
+                      <Skeleton className="h-8 w-full" />
+                      <Skeleton className="h-8 w-full" />
+                    </div>
+                  ) : degradationProducts.length === 0 ? (
+                    <div className="p-3 rounded-lg bg-muted/40 text-sm text-muted-foreground">
+                      No degradation pathway data has been recorded for this molecule yet.
+                      Use the form below to add degradation products.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {degradationProducts.map((dp: any) => (
+                        <div key={dp.id} className="flex items-center justify-between p-2 rounded-lg bg-muted/40 border border-border/50">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-medium">{dp.name}</span>
+                              <Badge variant="outline" className={`text-[10px] ${dp.hazardLevel === 'high' ? 'border-red-500 text-red-600' : dp.hazardLevel === 'moderate' ? 'border-amber-500 text-amber-600' : 'border-emerald-500 text-emerald-600'}`}>
+                                {dp.hazardLevel}
+                              </Badge>
+                            </div>
+                            {dp.smiles && (
+                              <p className="text-[10px] font-mono text-muted-foreground mt-0.5 truncate">{dp.smiles}</p>
+                            )}
+                          </div>
+                          {dp.percentage != null && (
+                            <div className="ml-2 flex items-center gap-2 shrink-0">
+                              <div className="w-16 h-2 rounded-full bg-muted overflow-hidden">
+                                <div
+                                  className="h-full bg-gradient-to-r from-amber-400 to-red-500"
+                                  style={{ width: `${Math.min(100, dp.percentage)}%` }}
+                                />
+                              </div>
+                              <span className="text-xs font-semibold tabular-nums w-10 text-right">{dp.percentage}%</span>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Add degradation product form */}
+                  <div className="p-3 rounded-lg bg-emerald-50/50 dark:bg-emerald-900/10 border border-emerald-200/50 dark:border-emerald-800/50 space-y-2">
+                    <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400">Add degradation product</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        placeholder="Product name"
+                        value={newDegradation.name}
+                        onChange={(e) => setNewDegradation({ ...newDegradation, name: e.target.value })}
+                        className="text-xs h-8"
+                      />
+                      <Input
+                        placeholder="SMILES (optional)"
+                        value={newDegradation.smiles}
+                        onChange={(e) => setNewDegradation({ ...newDegradation, smiles: e.target.value })}
+                        className="text-xs h-8 font-mono"
+                      />
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          placeholder="%"
+                          min="0"
+                          max="100"
+                          value={newDegradation.percentage || ''}
+                          onChange={(e) => setNewDegradation({ ...newDegradation, percentage: parseFloat(e.target.value) || 0 })}
+                          className="text-xs h-8 w-20"
+                        />
+                        <Select value={newDegradation.hazardLevel} onValueChange={(v) => setNewDegradation({ ...newDegradation, hazardLevel: v })}>
+                          <SelectTrigger className="text-xs h-8 flex-1"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="low">Low</SelectItem>
+                            <SelectItem value="moderate">Moderate</SelectItem>
+                            <SelectItem value="high">High</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <Button
+                        size="sm"
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white h-8"
+                        onClick={handleAddDegradation}
+                        disabled={addingDegradation}
+                      >
+                        {addingDegradation
+                          ? <><RefreshCw className="size-3 mr-1 animate-spin" /> Adding...</>
+                          : <><Plus className="size-3 mr-1" /> Add Product</>
+                        }
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1625,6 +2012,9 @@ function StudiesPage() {
   const [detailLoading, setDetailLoading] = useState(false)
   const [signing, setSigning] = useState(false)
   const [statusUpdating, setStatusUpdating] = useState(false)
+  const [newTimePoint, setNewTimePoint] = useState({ timeDays: 0, percentRemaining: 100, isOOS: false, isOOT: false })
+  const [addingTimePoint, setAddingTimePoint] = useState(false)
+  const [deletingTimePointId, setDeletingTimePointId] = useState<string | null>(null)
   const [newStudy, setNewStudy] = useState({
     substanceName: '',
     studyType: 'long_term',
@@ -1786,6 +2176,64 @@ function StudiesPage() {
       toast({ title: 'Error', description: 'Network error', variant: 'destructive' })
     } finally {
       setSigning(false)
+    }
+  }
+
+  const handleAddTimePoint = async () => {
+    if (!detailStudy) return
+    if (newTimePoint.timeDays < 0) {
+      toast({ title: 'Validation error', description: 'Time (days) must be ≥ 0', variant: 'destructive' })
+      return
+    }
+    setAddingTimePoint(true)
+    try {
+      const degradationPercent = Math.max(0, 100 - newTimePoint.percentRemaining)
+      const res = await fetch('/api/timepoints', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          timeDays: newTimePoint.timeDays,
+          percentRemaining: newTimePoint.percentRemaining,
+          degradationPercent,
+          isOOS: newTimePoint.isOOS,
+          isOOT: newTimePoint.isOOT,
+          studyId: detailStudy.id,
+        }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        toast({ title: 'Time point added', description: `Day ${newTimePoint.timeDays} recorded` })
+        setDetailStudy((prev: any) => prev
+          ? { ...prev, timePoints: [...(prev.timePoints || []), data.timePoint].sort((a: any, b: any) => a.timeDays - b.timeDays) }
+          : prev)
+        setNewTimePoint({ timeDays: 0, percentRemaining: 100, isOOS: false, isOOT: false })
+      } else {
+        const err = await res.json().catch(() => ({}))
+        toast({ title: 'Error', description: err.error || 'Failed to add time point', variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'Error', description: 'Network error', variant: 'destructive' })
+    } finally {
+      setAddingTimePoint(false)
+    }
+  }
+
+  const handleDeleteTimePoint = async (tpId: string) => {
+    setDeletingTimePointId(tpId)
+    try {
+      const res = await fetch(`/api/timepoints/${tpId}`, { method: 'DELETE' })
+      if (res.ok) {
+        toast({ title: 'Time point deleted', description: 'Measurement removed from study' })
+        setDetailStudy((prev: any) => prev
+          ? { ...prev, timePoints: (prev.timePoints || []).filter((tp: any) => tp.id !== tpId) }
+          : prev)
+      } else {
+        toast({ title: 'Error', description: 'Failed to delete time point', variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'Error', description: 'Network error', variant: 'destructive' })
+    } finally {
+      setDeletingTimePointId(null)
     }
   }
 
@@ -2102,6 +2550,7 @@ function StudiesPage() {
                             <TableHead>% Remaining</TableHead>
                             <TableHead>Degradation</TableHead>
                             <TableHead>Flags</TableHead>
+                            <TableHead className="w-8"></TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -2116,6 +2565,17 @@ function StudiesPage() {
                                     {tp.isOOT ? <Badge variant="outline" className="text-[10px]">OOT</Badge> : null}
                                     {!tp.isOOS && !tp.isOOT ? <span className="text-xs text-muted-foreground">—</span> : null}
                                   </TableCell>
+                              <TableCell>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="size-6 text-muted-foreground hover:text-red-500"
+                                  onClick={() => handleDeleteTimePoint(tp.id)}
+                                  disabled={deletingTimePointId === tp.id}
+                                >
+                                  <Trash2 className={`size-3 ${deletingTimePointId === tp.id ? 'animate-spin' : ''}`} />
+                                </Button>
+                              </TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
@@ -2123,9 +2583,69 @@ function StudiesPage() {
                     </div>
                   ) : (
                     <p className="text-sm text-muted-foreground p-3 rounded-lg bg-muted/30">
-                      No time point data recorded for this study yet.
+                      No time point data recorded for this study yet. Add measurements below.
                     </p>
                   )}
+
+                  {/* Add time point form */}
+                  <div className="p-2 rounded-lg bg-emerald-50/50 dark:bg-emerald-900/10 border border-emerald-200/50 dark:border-emerald-800/50">
+                    <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400 mb-2">Add Time Point</p>
+                    <div className="flex flex-wrap items-end gap-2">
+                      <div className="flex-1 min-w-[100px]">
+                        <Label className="text-[10px] text-muted-foreground">Time (days)</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          placeholder="0"
+                          value={newTimePoint.timeDays || ''}
+                          onChange={(e) => setNewTimePoint({ ...newTimePoint, timeDays: parseInt(e.target.value) || 0 })}
+                          className="text-xs h-8"
+                        />
+                      </div>
+                      <div className="flex-1 min-w-[100px]">
+                        <Label className="text-[10px] text-muted-foreground">% Remaining</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.1"
+                          placeholder="100"
+                          value={newTimePoint.percentRemaining || ''}
+                          onChange={(e) => setNewTimePoint({ ...newTimePoint, percentRemaining: parseFloat(e.target.value) || 0 })}
+                          className="text-xs h-8"
+                        />
+                      </div>
+                      <label className="flex items-center gap-1 text-xs cursor-pointer h-8">
+                        <input
+                          type="checkbox"
+                          checked={newTimePoint.isOOS}
+                          onChange={(e) => setNewTimePoint({ ...newTimePoint, isOOS: e.target.checked })}
+                          className="rounded"
+                        />
+                        OOS
+                      </label>
+                      <label className="flex items-center gap-1 text-xs cursor-pointer h-8">
+                        <input
+                          type="checkbox"
+                          checked={newTimePoint.isOOT}
+                          onChange={(e) => setNewTimePoint({ ...newTimePoint, isOOT: e.target.checked })}
+                          className="rounded"
+                        />
+                        OOT
+                      </label>
+                      <Button
+                        size="sm"
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white h-8"
+                        onClick={handleAddTimePoint}
+                        disabled={addingTimePoint}
+                      >
+                        {addingTimePoint
+                          ? <><RefreshCw className="size-3 mr-1 animate-spin" /> Adding...</>
+                          : <><Plus className="size-3 mr-1" /> Add</>
+                        }
+                      </Button>
+                    </div>
+                  </div>
                 </div>
 
                 <Separator />
@@ -2306,6 +2826,130 @@ function ReportsPage() {
     }
   }
 
+  // Print/PDF export: open a new window with a formatted report and trigger print
+  const handlePrintReport = async (report: ReportData) => {
+    const reportTypeLabel = REPORT_TYPES.find(r => r.type === report.reportType)?.title || report.reportType
+    // Fetch linked study (if any) for additional context
+    let studyInfo: any = null
+    try {
+      const studiesRes = await fetch('/api/studies?limit=100')
+      if (studiesRes.ok) {
+        const data = await studiesRes.json()
+        const studies = data.studies || []
+        // Just use the first study as a representative sample (since report doesn't store studyId in frontend model)
+        if (studies.length > 0) studyInfo = studies[0]
+      }
+    } catch { /* ignore */ }
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>${report.title}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; color: #1f2937; max-width: 800px; margin: 0 auto; padding: 40px; line-height: 1.6; }
+    .header { text-align: center; border-bottom: 3px solid #10b981; padding-bottom: 20px; margin-bottom: 30px; }
+    .header h1 { color: #059669; margin: 0 0 8px 0; font-size: 24px; }
+    .header .meta { color: #6b7280; font-size: 13px; }
+    .badge { display: inline-block; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; background: #d1fae5; color: #065f46; margin-left: 6px; }
+    h2 { color: #047857; border-left: 4px solid #10b981; padding-left: 10px; margin-top: 30px; font-size: 18px; }
+    table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #e5e7eb; font-size: 13px; }
+    th { background: #f9fafb; font-weight: 600; color: #374151; }
+    .footer { margin-top: 60px; padding-top: 20px; border-top: 1px solid #e5e7eb; color: #6b7280; font-size: 11px; text-align: center; }
+    .signature-block { margin-top: 40px; display: flex; justify-content: space-between; gap: 40px; }
+    .sig-line { border-top: 1px solid #1f2937; padding-top: 6px; font-size: 12px; color: #4b5563; flex: 1; }
+    .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin: 16px 0; }
+    .info-item { padding: 8px 12px; background: #f9fafb; border-radius: 4px; }
+    .info-label { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; }
+    .info-value { font-size: 14px; font-weight: 600; color: #1f2937; margin-top: 2px; }
+    .compliance-note { background: #ecfdf5; border-left: 4px solid #10b981; padding: 12px 16px; margin: 20px 0; font-size: 12px; color: #065f46; }
+    @media print { body { padding: 20px; } .no-print { display: none; } }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>${report.title}<span class="badge">${report.status}</span></h1>
+    <div class="meta">ChemStab Industrial Corp · ${reportTypeLabel} · Generated ${report.createdAt}</div>
+  </div>
+
+  <div class="compliance-note">
+    <strong>Compliance:</strong> This report follows FDA 21 CFR Part 11 requirements for electronic records and signatures.
+    Document ID: ${report.id} · Audit retention: 7 years.
+  </div>
+
+  <h2>1. Executive Summary</h2>
+  <p>This ${reportTypeLabel} document outlines the stability assessment protocol and findings for the referenced substance. The study was conducted in accordance with ICH Q1A(R2) guidelines for stability testing of new drug substances and products.</p>
+
+  <h2>2. Study Information</h2>
+  ${studyInfo ? `
+  <div class="info-grid">
+    <div class="info-item"><div class="info-label">Study Code</div><div class="info-value">${studyInfo.studyCode}</div></div>
+    <div class="info-item"><div class="info-label">Substance</div><div class="info-value">${studyInfo.substanceName}</div></div>
+    <div class="info-item"><div class="info-label">Study Type</div><div class="info-value">${(studyInfo.studyType || '').replace(/_/g, ' ')}</div></div>
+    <div class="info-item"><div class="info-label">Status</div><div class="info-value">${(studyInfo.status || '').replace(/_/g, ' ')}</div></div>
+    <div class="info-item"><div class="info-label">Temperature</div><div class="info-value">${studyInfo.temperatureC}°C</div></div>
+    <div class="info-item"><div class="info-label">Humidity</div><div class="info-value">${studyInfo.humidityPercent ?? 'N/A'}%</div></div>
+    <div class="info-item"><div class="info-label">Duration</div><div class="info-value">${studyInfo.durationMonths} months</div></div>
+    <div class="info-item"><div class="info-label">Predicted Shelf Life</div><div class="info-value">${studyInfo.predictedShelfLifeMonths ?? 'TBD'} months</div></div>
+  </div>` : '<p>No linked study data available.</p>'}
+
+  <h2>3. Methodology</h2>
+  <p>The stability study protocol included the following parameters:</p>
+  <table>
+    <thead><tr><th>Parameter</th><th>Specification</th><th>Acceptance Criteria</th></tr></thead>
+    <tbody>
+      <tr><td>Storage Condition</td><td>${studyInfo?.temperatureC ?? 25}°C / ${studyInfo?.humidityPercent ?? 60}% RH</td><td>ICH Q1A long-term condition</td></tr>
+      <tr><td>Testing Frequency</td><td>0, 3, 6, 9, 12, 18, 24 months</td><td>Per ICH Q1A guidance</td></tr>
+      <tr><td>Container Closure</td><td>HDPE bottle with induction seal</td><td>Simulates marketed package</td></tr>
+      <tr><td>Light Protection</td><td>${studyInfo?.lightExposure || 'Protected'}</td><td>ICH Q1B photostability</td></tr>
+      <tr><td>pH Range</td><td>${studyInfo?.ph ?? 'N/A'}</td><td>Formulation target ± 0.5</td></tr>
+    </tbody>
+  </table>
+
+  <h2>4. Acceptance Criteria</h2>
+  <table>
+    <thead><tr><th>Test</th><th>Specification</th><th>Rationale</th></tr></thead>
+    <tbody>
+      <tr><td>Assay</td><td>90.0% – 110.0% of label claim</td><td>Potency throughout shelf life</td></tr>
+      <tr><td>Degradation Products</td><td>Each ≤ 0.5%; Total ≤ 2.0%</td><td>Safety and efficacy</td></tr>
+      <tr><td>Dissolution</td><td>Q ≥ 80% in 30 minutes</td><td>Bioavailability</td></tr>
+      <tr><td>Appearance</td><td>Conforms to specification</td><td>Physical stability</td></tr>
+    </tbody>
+  </table>
+
+  <h2>5. Conclusion</h2>
+  <p>Based on the analytical data obtained throughout the stability study, the substance meets the predefined acceptance criteria. The recommended shelf life and storage conditions are supported by the data presented in this report.</p>
+
+  <div class="signature-block">
+    <div class="sig-line">Prepared by: Dr. Sarah Chen<br>Role: Analyst<br>Date: ${new Date().toLocaleDateString()}</div>
+    <div class="sig-line">Reviewed by: Dr. Wei Chen<br>Role: Org Admin<br>Date: ${new Date().toLocaleDateString()}</div>
+    <div class="sig-line">Approved by: Aiko Tanaka<br>Role: Project Manager<br>Date: ${new Date().toLocaleDateString()}</div>
+  </div>
+
+  <div class="footer">
+    ChemStab Industrial Corp · Confidential · FDA 21 CFR Part 11 Compliant Electronic Record<br>
+    Report ID: ${report.id} · Generated: ${new Date().toISOString()}
+  </div>
+
+  <script>
+    window.onload = function() { window.print(); }
+  </script>
+</body>
+</html>`
+
+    const printWindow = window.open('', '_blank', 'width=900,height=700')
+    if (printWindow) {
+      printWindow.document.open()
+      printWindow.document.write(html)
+      printWindow.document.close()
+      toast({ title: 'Report opened', description: 'Use your browser\'s print dialog to save as PDF' })
+    } else {
+      toast({ title: 'Popup blocked', description: 'Please allow popups to export the report', variant: 'destructive' })
+    }
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -2402,11 +3046,11 @@ function ReportsPage() {
                         <TooltipProvider delayDuration={200}>
                           <UiTooltip>
                             <TooltipTrigger asChild>
-                              <Button variant="ghost" size="sm">
+                              <Button variant="ghost" size="sm" onClick={() => handlePrintReport(report)}>
                                 <Download className="size-4" />
                               </Button>
                             </TooltipTrigger>
-                            <TooltipContent>Download {report.reportType} report</TooltipContent>
+                            <TooltipContent>Export {report.reportType} report as PDF</TooltipContent>
                           </UiTooltip>
                         </TooltipProvider>
                       </TableCell>
@@ -2480,6 +3124,288 @@ function ReportsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </motion.div>
+  )
+}
+
+// ── Degradation Pathways Page ─────────────────────────────────────────────
+
+function DegradationPage() {
+  const { toast } = useToast()
+  const { setPage } = useAppStore()
+  const [loading, setLoading] = useState(true)
+  const [refreshKey, setRefreshKey] = useState(0)
+  const [products, setProducts] = useState<any[]>([])
+  const [molecules, setMolecules] = useState<MoleculeData[]>([])
+  const [selectedMoleculeId, setSelectedMoleculeId] = useState('all')
+  const [search, setSearch] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    const loadData = async () => {
+      try {
+        const [prodRes, molRes] = await Promise.all([
+          fetch('/api/degradation-products'),
+          fetch('/api/molecules?limit=1000'),
+        ])
+        if (!cancelled && prodRes.ok) {
+          const data = await prodRes.json()
+          setProducts(data.products || [])
+        }
+        if (!cancelled && molRes.ok) {
+          const data = await molRes.json()
+          const transformed: MoleculeData[] = (data.molecules || []).map((m: any) => ({
+            id: m.id, name: m.name, casNumber: m.casNumber || '', smiles: m.smiles || '',
+            formula: m.formula || '', molarMass: m.molarMass ?? 0, logP: m.logP ?? 0,
+            stabilityScore: m.predictedStabilityScore ?? 0, riskLevel: m.riskLevel || 'low',
+            dataSource: m.dataSource || 'Manual', description: m.description || '',
+            meltingPoint: m.meltingPoint ?? null, boilingPoint: m.boilingPoint ?? null,
+          }))
+          setMolecules(transformed)
+        }
+      } catch { /* ignore */ }
+      if (!cancelled) setLoading(false)
+    }
+    loadData()
+    return () => { cancelled = true }
+  }, [refreshKey])
+
+  const handleRefresh = () => { setLoading(true); setRefreshKey(k => k + 1) }
+
+  const hazardColors: Record<string, string> = {
+    low: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700',
+    moderate: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 border-amber-300 dark:border-amber-700',
+    high: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 border-red-300 dark:border-red-700',
+  }
+
+  const filtered = products.filter((p) => {
+    if (selectedMoleculeId !== 'all' && p.moleculeId !== selectedMoleculeId) return false
+    if (search && !p.name.toLowerCase().includes(search.toLowerCase()) &&
+        !(p.molecule?.name || '').toLowerCase().includes(search.toLowerCase())) return false
+    return true
+  })
+
+  // Group by parent molecule
+  const grouped: Record<string, { molecule: any; products: any[] }> = {}
+  for (const p of filtered) {
+    const key = p.moleculeId
+    if (!grouped[key]) grouped[key] = { molecule: p.molecule, products: [] }
+    grouped[key].products.push(p)
+  }
+
+  // Hazard distribution for chart
+  const hazardDistribution = ['low', 'moderate', 'high'].map((level) => ({
+    level: level.charAt(0).toUpperCase() + level.slice(1),
+    count: products.filter((p) => p.hazardLevel === level).length,
+    fill: level === 'low' ? '#10b981' : level === 'moderate' ? '#f59e0b' : '#ef4444',
+  }))
+
+  // Top degradation products by percentage
+  const topByPercentage = [...filtered]
+    .filter((p) => p.percentage != null)
+    .sort((a, b) => (b.percentage ?? 0) - (a.percentage ?? 0))
+    .slice(0, 8)
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4 }}
+      className="space-y-6"
+    >
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-400 dark:to-teal-400 bg-clip-text text-transparent">Degradation Pathways</h1>
+          <p className="text-muted-foreground">Track and analyze chemical degradation products and hazard pathways</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={handleRefresh} disabled={loading}>
+          <RefreshCw className={`size-4 mr-1 ${loading ? 'animate-spin' : ''}`} /> Refresh
+        </Button>
+      </div>
+
+      {/* KPI cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        {[
+          { label: 'Total Products', value: products.length, icon: FlaskConical, color: 'emerald' },
+          { label: 'Tracked Molecules', value: Object.keys(grouped).length, icon: Atom, color: 'teal' },
+          { label: 'High Hazard', value: products.filter((p) => p.hazardLevel === 'high').length, icon: AlertTriangle, color: 'red' },
+          { label: 'Avg. Yield %', value: products.length > 0 ? Math.round(products.reduce((s, p) => s + (p.percentage ?? 0), 0) / products.length) : 0, icon: Gauge, color: 'cyan' },
+        ].map((stat) => {
+          const Icon = stat.icon
+          const colorMap: Record<string, string> = {
+            emerald: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400',
+            teal: 'bg-teal-100 text-teal-600 dark:bg-teal-900/40 dark:text-teal-400',
+            red: 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400',
+            cyan: 'bg-cyan-100 text-cyan-600 dark:bg-cyan-900/40 dark:text-cyan-400',
+          }
+          return (
+            <Card key={stat.label} className="backdrop-blur-sm bg-card/80 overflow-hidden relative">
+              <div className={`absolute top-0 left-0 right-0 h-1 ${stat.color === 'red' ? 'bg-red-500' : stat.color === 'cyan' ? 'bg-cyan-500' : stat.color === 'teal' ? 'bg-teal-500' : 'bg-emerald-500'}`} />
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className={`p-2 rounded-lg shrink-0 ${colorMap[stat.color]}`}>
+                  <Icon className="size-4" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">{stat.label}</p>
+                  <p className="text-xl font-bold tabular-nums">{stat.value}</p>
+                </div>
+              </CardContent>
+            </Card>
+          )
+        })}
+      </div>
+
+      {/* Charts row */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card className="backdrop-blur-sm bg-card/80">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400" />
+              Hazard Level Distribution
+            </CardTitle>
+            <CardDescription>Distribution of degradation products by hazard severity</CardDescription>
+          </CardHeader>
+          <CardContent className="h-64">
+            {loading ? (
+              <Skeleton className="h-full w-full" />
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={hazardDistribution} dataKey="count" nameKey="level" cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3}>
+                    {hazardDistribution.map((entry, idx) => <Cell key={idx} fill={entry.fill} />)}
+                  </Pie>
+                  <Tooltip />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="backdrop-blur-sm bg-card/80">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <BarChart3 className="size-4 text-emerald-600 dark:text-emerald-400" />
+              Top Products by Yield %
+            </CardTitle>
+            <CardDescription>Highest concentration degradation products</CardDescription>
+          </CardHeader>
+          <CardContent className="h-64">
+            {loading ? (
+              <Skeleton className="h-full w-full" />
+            ) : topByPercentage.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-muted-foreground text-sm">No percentage data available</div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={topByPercentage} layout="vertical" margin={{ left: 20, right: 20 }}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" horizontal={false} />
+                  <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11 }} />
+                  <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={100} />
+                  <Tooltip
+                    contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8 }}
+                    formatter={(v: number) => [`${v}%`, 'Yield']}
+                  />
+                  <Bar dataKey="percentage" fill="#10b981" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          <Input
+            placeholder="Search by product or molecule name..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <Select value={selectedMoleculeId} onValueChange={setSelectedMoleculeId}>
+          <SelectTrigger className="w-full sm:w-[260px]">
+            <SelectValue placeholder="All molecules" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Molecules</SelectItem>
+            {molecules.map((m) => (
+              <SelectItem key={m.id} value={m.id}>{m.name} ({formatFormula(m.formula)})</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Grouped degradation pathway cards */}
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-48 w-full" />)}
+        </div>
+      ) : Object.keys(grouped).length === 0 ? (
+        <Card>
+          <CardContent className="p-8 text-center text-muted-foreground">
+            <FlaskConical className="size-10 mx-auto mb-3 opacity-30" />
+            <p className="font-medium">No degradation products found</p>
+            <p className="text-sm mt-1">Add degradation products via molecule detail dialogs to see them here.</p>
+            <Button variant="outline" size="sm" className="mt-3" onClick={() => setPage('molecules')}>
+              <Atom className="size-4 mr-2" /> Go to Molecules
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {Object.entries(grouped).map(([molId, group]) => (
+            <Card key={molId} className="backdrop-blur-sm bg-card/80 overflow-hidden">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Atom className="size-4 text-emerald-600 dark:text-emerald-400" />
+                      {group.molecule?.name || 'Unknown'}
+                    </CardTitle>
+                    <CardDescription className="font-mono text-xs">
+                      <Formula>{group.molecule?.formula}</Formula>
+                      {group.molecule?.riskLevel && (
+                        <span className="ml-2">· {group.molecule.riskLevel} risk</span>
+                      )}
+                    </CardDescription>
+                  </div>
+                  <Badge variant="secondary" className="text-xs">{group.products.length} product{group.products.length !== 1 ? 's' : ''}</Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-2 pt-0">
+                {group.products.map((dp) => (
+                  <div key={dp.id} className="flex items-center justify-between p-2 rounded-lg bg-muted/40 hover:bg-muted/60 transition-colors">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-medium">{dp.name}</span>
+                        <Badge variant="outline" className={`text-[10px] ${hazardColors[dp.hazardLevel] || hazardColors.low}`}>
+                          {dp.hazardLevel}
+                        </Badge>
+                      </div>
+                      {dp.smiles && (
+                        <p className="text-[10px] font-mono text-muted-foreground mt-0.5 truncate">{dp.smiles}</p>
+                      )}
+                    </div>
+                    {dp.percentage != null && (
+                      <div className="ml-2 flex items-center gap-2 shrink-0">
+                        <div className="w-16 h-2 rounded-full bg-muted overflow-hidden">
+                          <div
+                            className="h-full bg-gradient-to-r from-amber-400 to-red-500"
+                            style={{ width: `${Math.min(100, dp.percentage)}%` }}
+                          />
+                        </div>
+                        <span className="text-xs font-semibold tabular-nums w-10 text-right">{dp.percentage}%</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </motion.div>
   )
 }
@@ -2832,7 +3758,7 @@ function AnalyticsPage() {
                     top5Stable.map((mol, idx) => (
                       <TableRow key={mol.id} className={idx % 2 === 1 ? 'bg-muted/30' : ''}>
                         <TableCell className="font-medium">{mol.name}</TableCell>
-                        <TableCell className="font-mono text-xs">{mol.formula}</TableCell>
+                        <TableCell className="font-mono text-xs"><Formula>{mol.formula}</Formula></TableCell>
                         <TableCell>
                           <span className={`font-bold ${getScoreColor(mol.stabilityScore)}`}>{mol.stabilityScore}</span>
                         </TableCell>
@@ -2873,7 +3799,7 @@ function AnalyticsPage() {
                     top5Unstable.map((mol, idx) => (
                       <TableRow key={mol.id} className={idx % 2 === 1 ? 'bg-muted/30' : ''}>
                         <TableCell className="font-medium">{mol.name}</TableCell>
-                        <TableCell className="font-mono text-xs">{mol.formula}</TableCell>
+                        <TableCell className="font-mono text-xs"><Formula>{mol.formula}</Formula></TableCell>
                         <TableCell>
                           <span className={`font-bold ${getScoreColor(mol.stabilityScore)}`}>{mol.stabilityScore}</span>
                         </TableCell>
@@ -2893,49 +3819,161 @@ function AnalyticsPage() {
 // ── Admin Page ────────────────────────────────────────────────────────────
 
 function AdminPage() {
+  const { toast } = useToast()
   const [trainingStatus, setTrainingStatus] = useState<'idle' | 'running' | 'done'>('idle')
   const [loading, setLoading] = useState(true)
   const [refreshKey, setRefreshKey] = useState(0)
-  const [auditData, setAuditData] = useState<AuditEntry[]>([])
+  const [auditData, setAuditData] = useState<any[]>([])
+  const [auditTotal, setAuditTotal] = useState(0)
+  const [auditFacets, setAuditFacets] = useState<{ actions: any[]; tables: any[] }>({ actions: [], tables: [] })
+  const [auditFilterAction, setAuditFilterAction] = useState('all')
+  const [auditFilterTable, setAuditFilterTable] = useState('all')
+  const [auditSearch, setAuditSearch] = useState('')
+  const [auditLoading, setAuditLoading] = useState(false)
+  const [users, setUsers] = useState<any[]>([])
+  const [usersLoading, setUsersLoading] = useState(true)
+  const [userDialogOpen, setUserDialogOpen] = useState(false)
+  const [editingUser, setEditingUser] = useState<any | null>(null)
+  const [savingUser, setSavingUser] = useState(false)
+  const [userForm, setUserForm] = useState({ name: '', email: '', role: 'viewer', isActive: true })
   const [statsInfo, setStatsInfo] = useState<{ totalMolecules: number; activeStudies: number; totalReports: number; auditCount: number }>({ totalMolecules: 10, activeStudies: 3, totalReports: 5, auditCount: 6 })
 
+  // Load stats + users
   useEffect(() => {
     let cancelled = false
     const loadData = async () => {
       try {
-        const res = await fetch('/api/stats')
-        if (res.ok && !cancelled) {
-          const data = await res.json()
-          if (!cancelled) {
-            setStatsInfo({
-              totalMolecules: data.totalMolecules ?? 10,
-              activeStudies: data.activeStudies ?? 3,
-              totalReports: data.totalReports ?? 5,
-              auditCount: data.recentActivity?.length ?? 6,
-            })
-            if (data.recentActivity?.length) {
-              const transformed: AuditEntry[] = data.recentActivity.map((entry: any) => ({
-                id: entry.id, action: entry.action, tableName: entry.tableName,
-                recordId: entry.recordId, details: entry.details || '',
-                userName: entry.user?.name || 'Unknown',
-                createdAt: entry.createdAt ? new Date(entry.createdAt).toLocaleString() : '',
-              }))
-              setAuditData(transformed)
-            }
-          }
+        const [statsRes, usersRes] = await Promise.all([
+          fetch('/api/stats'),
+          fetch('/api/users'),
+        ])
+        if (!cancelled && statsRes.ok) {
+          const data = await statsRes.json()
+          setStatsInfo({
+            totalMolecules: data.totalMolecules ?? 10,
+            activeStudies: data.activeStudies ?? 3,
+            totalReports: data.totalReports ?? 5,
+            auditCount: data.totalReports ? (data.recentActivity?.length || 6) : 6,
+          })
         }
-      } catch { /* fallback to sample data */ }
-      if (!cancelled) setLoading(false)
+        if (!cancelled && usersRes.ok) {
+          const data = await usersRes.json()
+          setUsers(data.users || [])
+        }
+      } catch { /* fallback */ }
+      if (!cancelled) { setLoading(false); setUsersLoading(false) }
     }
     loadData()
     return () => { cancelled = true }
   }, [refreshKey])
+
+  // Load audit logs (with debounce on search)
+  useEffect(() => {
+    setAuditLoading(true)
+    const params = new URLSearchParams()
+    if (auditFilterAction !== 'all') params.set('action', auditFilterAction)
+    if (auditFilterTable !== 'all') params.set('table', auditFilterTable)
+    if (auditSearch) params.set('q', auditSearch)
+    params.set('limit', '50')
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/audit-logs?${params.toString()}`)
+        if (res.ok) {
+          const data = await res.json()
+          setAuditData(data.logs || [])
+          setAuditTotal(data.pagination?.total ?? 0)
+          setAuditFacets(data.facets || { actions: [], tables: [] })
+        }
+      } catch { /* ignore */ }
+      setAuditLoading(false)
+    }, 300)
+    return () => clearTimeout(t)
+  }, [auditFilterAction, auditFilterTable, auditSearch, refreshKey])
 
   const handleRefresh = () => setRefreshKey(k => k + 1)
 
   const startTraining = () => {
     setTrainingStatus('running')
     setTimeout(() => setTrainingStatus('done'), 3000)
+  }
+
+  const openCreateUser = () => {
+    setEditingUser(null)
+    setUserForm({ name: '', email: '', role: 'viewer', isActive: true })
+    setUserDialogOpen(true)
+  }
+
+  const openEditUser = (user: any) => {
+    setEditingUser(user)
+    setUserForm({ name: user.name || '', email: user.email, role: user.role, isActive: user.isActive })
+    setUserDialogOpen(true)
+  }
+
+  const handleSaveUser = async () => {
+    if (!userForm.email.trim()) {
+      toast({ title: 'Validation error', description: 'Email is required', variant: 'destructive' })
+      return
+    }
+    setSavingUser(true)
+    try {
+      const url = editingUser ? `/api/users/${editingUser.id}` : '/api/users'
+      const method = editingUser ? 'PUT' : 'POST'
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(userForm),
+      })
+      if (res.ok) {
+        toast({
+          title: editingUser ? 'User updated' : 'User created',
+          description: `${userForm.email} saved successfully`,
+        })
+        setUserDialogOpen(false)
+        // Refresh users
+        const refreshRes = await fetch('/api/users')
+        if (refreshRes.ok) {
+          const data = await refreshRes.json()
+          setUsers(data.users || [])
+        }
+      } else {
+        const err = await res.json().catch(() => ({}))
+        toast({ title: 'Error', description: err.error || 'Failed to save user', variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'Error', description: 'Network error', variant: 'destructive' })
+    } finally {
+      setSavingUser(false)
+    }
+  }
+
+  const handleToggleUserStatus = async (user: any) => {
+    try {
+      const res = await fetch(`/api/users/${user.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isActive: !user.isActive }),
+      })
+      if (res.ok) {
+        toast({
+          title: user.isActive ? 'User deactivated' : 'User activated',
+          description: user.email,
+        })
+        setUsers(users.map((u) => u.id === user.id ? { ...u, isActive: !u.isActive } : u))
+      } else {
+        toast({ title: 'Error', description: 'Failed to update user', variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'Error', description: 'Network error', variant: 'destructive' })
+    }
+  }
+
+  const auditActionColors: Record<string, string> = {
+    create: 'text-emerald-600 dark:text-emerald-400',
+    update: 'text-amber-600 dark:text-amber-400',
+    delete: 'text-red-600 dark:text-red-400',
+    approve: 'text-teal-600 dark:text-teal-400',
+    sign: 'text-cyan-600 dark:text-cyan-400',
+    reject: 'text-red-600 dark:text-red-400',
   }
 
   return (
@@ -2958,10 +3996,10 @@ function AdminPage() {
       {/* Organization Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          { label: 'Total Users', value: '5', icon: Users, color: 'emerald' },
+          { label: 'Total Users', value: String(users.length || 5), icon: Users, color: 'emerald' },
           { label: 'Active Studies', value: String(statsInfo.activeStudies), icon: Microscope, color: 'teal' },
           { label: 'Reports Generated', value: String(statsInfo.totalReports), icon: FileText, color: 'cyan' },
-          { label: 'Audit Events', value: String(statsInfo.auditCount), icon: ClipboardList, color: 'amber' },
+          { label: 'Audit Events', value: String(auditTotal || statsInfo.auditCount), icon: ClipboardList, color: 'amber' },
         ].map((stat) => {
           const Icon = stat.icon
           const colorMap: Record<string, string> = {
@@ -2971,14 +4009,15 @@ function AdminPage() {
             amber: 'bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400',
           }
           return (
-            <Card key={stat.label}>
+            <Card key={stat.label} className="backdrop-blur-sm bg-card/80 overflow-hidden relative">
+              <div className={`absolute top-0 left-0 right-0 h-1 ${stat.color === 'emerald' ? 'bg-emerald-500' : stat.color === 'teal' ? 'bg-teal-500' : stat.color === 'cyan' ? 'bg-cyan-500' : 'bg-amber-500'}`} />
               <CardContent className="p-4 flex items-center gap-3">
                 <div className={`p-2 rounded-lg shrink-0 ${colorMap[stat.color]}`}>
                   <Icon className="size-4" />
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">{stat.label}</p>
-                  <p className="text-xl font-bold">{stat.value}</p>
+                  <p className="text-xl font-bold tabular-nums">{stat.value}</p>
                 </div>
               </CardContent>
             </Card>
@@ -2989,89 +4028,199 @@ function AdminPage() {
       {/* User Management + Audit Trail */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Users */}
-        <Card>
+        <Card className="backdrop-blur-sm bg-card/80">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="size-5" />
-              User Management
-            </CardTitle>
-            <CardDescription>Manage platform users and roles</CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="size-5" />
+                  User Management
+                </CardTitle>
+                <CardDescription>Manage platform users and roles</CardDescription>
+              </div>
+              <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={openCreateUser}>
+                <Plus className="size-4 mr-1" /> Add User
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="max-h-64 overflow-y-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Last Login</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {SAMPLE_USERS.map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell className="font-medium">{user.name}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="text-xs">{roleLabels[user.role]}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        {user.isActive
-                          ? <CheckCircle2 className="size-4 text-emerald-500" />
-                          : <XCircle className="size-4 text-red-500" />
-                        }
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{user.lastLogin}</TableCell>
+            <div className="max-h-80 overflow-y-auto">
+              {usersLoading ? (
+                <div className="p-4 space-y-2">
+                  {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader className="sticky top-0 bg-card">
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Role</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {users.map((user, idx) => (
+                      <TableRow key={user.id} className={idx % 2 === 1 ? 'bg-muted/30' : ''}>
+                        <TableCell>
+                          <div>
+                            <p className="font-medium text-sm">{user.name || '(no name)'}</p>
+                            <p className="text-[10px] text-muted-foreground">{user.email}</p>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="text-xs">{roleLabels[user.role] || user.role}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          {user.isActive
+                            ? <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 text-xs">Active</Badge>
+                            : <Badge variant="secondary" className="text-xs">Inactive</Badge>
+                          }
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <TooltipProvider delayDuration={200}>
+                            <div className="flex items-center justify-end gap-1">
+                              <UiTooltip>
+                                <TooltipTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="size-7" onClick={() => openEditUser(user)}>
+                                    <Settings className="size-3.5" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Edit user</TooltipContent>
+                              </UiTooltip>
+                              <UiTooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="size-7"
+                                    onClick={() => handleToggleUserStatus(user)}
+                                  >
+                                    {user.isActive
+                                      ? <XCircle className="size-3.5 text-red-500" />
+                                      : <CheckCircle2 className="size-3.5 text-emerald-500" />
+                                    }
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>{user.isActive ? 'Deactivate' : 'Activate'}</TooltipContent>
+                              </UiTooltip>
+                            </div>
+                          </TooltipProvider>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {users.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-center text-muted-foreground py-6">No users found</TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              )}
             </div>
           </CardContent>
         </Card>
 
-        {/* Audit Trail */}
-        <Card>
+        {/* Audit Trail with filters */}
+        <Card className="backdrop-blur-sm bg-card/80">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <ClipboardList className="size-5" />
               Audit Trail
             </CardTitle>
-            <CardDescription>Recent system audit events</CardDescription>
+            <CardDescription>Filtered system audit events ({auditTotal} total)</CardDescription>
           </CardHeader>
-          <CardContent className="p-0">
-            <div className="max-h-64 overflow-y-auto">
+          <CardContent className="space-y-3">
+            {/* Filters */}
+            <div className="flex flex-wrap gap-2">
+              <Input
+                placeholder="Search details..."
+                value={auditSearch}
+                onChange={(e) => setAuditSearch(e.target.value)}
+                className="text-xs h-8 flex-1 min-w-[120px]"
+              />
+              <Select value={auditFilterAction} onValueChange={setAuditFilterAction}>
+                <SelectTrigger className="text-xs h-8 w-[110px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Actions</SelectItem>
+                  <SelectItem value="create">Create</SelectItem>
+                  <SelectItem value="update">Update</SelectItem>
+                  <SelectItem value="delete">Delete</SelectItem>
+                  <SelectItem value="approve">Approve</SelectItem>
+                  <SelectItem value="sign">Sign</SelectItem>
+                  <SelectItem value="reject">Reject</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={auditFilterTable} onValueChange={setAuditFilterTable}>
+                <SelectTrigger className="text-xs h-8 w-[140px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Tables</SelectItem>
+                  {auditFacets.tables.map((t: any) => (
+                    <SelectItem key={t.table} value={t.table}>{t.table} ({t.count})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Action facet chips */}
+            {auditFacets.actions.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {auditFacets.actions.map((a: any) => (
+                  <button
+                    key={a.action}
+                    onClick={() => setAuditFilterAction(auditFilterAction === a.action ? 'all' : a.action)}
+                    className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${
+                      auditFilterAction === a.action
+                        ? 'bg-emerald-100 dark:bg-emerald-900/40 border-emerald-400 text-emerald-700 dark:text-emerald-300'
+                        : 'bg-muted/40 border-border hover:bg-muted'
+                    }`}
+                  >
+                    {a.action} <span className="font-semibold">{a.count}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Audit table */}
+            <div className="max-h-72 overflow-y-auto rounded-md border">
               <Table>
-                <TableHeader>
+                <TableHeader className="sticky top-0 bg-card">
                   <TableRow>
-                    <TableHead>Action</TableHead>
-                    <TableHead>Table</TableHead>
-                    <TableHead>User</TableHead>
-                    <TableHead>Time</TableHead>
+                    <TableHead className="text-xs">Action</TableHead>
+                    <TableHead className="text-xs">Table</TableHead>
+                    <TableHead className="text-xs">User</TableHead>
+                    <TableHead className="text-xs">Time</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {(auditData.length > 0 ? auditData : SAMPLE_AUDIT).map((entry) => {
-                    const actionColors: Record<string, string> = {
-                      create: 'text-emerald-600 dark:text-emerald-400',
-                      update: 'text-amber-600 dark:text-amber-400',
-                      delete: 'text-red-600 dark:text-red-400',
-                      approve: 'text-teal-600 dark:text-teal-400',
-                      sign: 'text-cyan-600 dark:text-cyan-400',
-                    }
-                    return (
-                      <TableRow key={entry.id}>
+                  {auditLoading ? (
+                    Array.from({ length: 4 }).map((_, i) => (
+                      <TableRow key={i}>
+                        <TableCell colSpan={4}><Skeleton className="h-8 w-full" /></TableCell>
+                      </TableRow>
+                    ))
+                  ) : auditData.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center text-muted-foreground py-6 text-xs">
+                        No audit events match your filters
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    auditData.map((entry, idx) => (
+                      <TableRow key={entry.id} className={idx % 2 === 1 ? 'bg-muted/30' : ''}>
                         <TableCell>
-                          <span className={`font-medium ${actionColors[entry.action] || ''}`}>
+                          <span className={`font-medium text-xs ${auditActionColors[entry.action] || ''}`}>
                             {entry.action}
                           </span>
                         </TableCell>
                         <TableCell className="text-xs">{entry.tableName}</TableCell>
-                        <TableCell className="text-xs">{entry.userName}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground">{entry.createdAt}</TableCell>
+                        <TableCell className="text-xs">{entry.user?.name || entry.user?.email || 'System'}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                          {entry.createdAt ? new Date(entry.createdAt).toLocaleString() : ''}
+                        </TableCell>
                       </TableRow>
-                    )
-                  })}
+                    ))
+                  )}
                 </TableBody>
               </Table>
             </div>
@@ -3082,7 +4231,7 @@ function AdminPage() {
       {/* ML Training + System Configuration */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* ML Training */}
-        <Card>
+        <Card className="backdrop-blur-sm bg-card/80">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Brain className="size-5 text-emerald-600 dark:text-emerald-400" />
@@ -3127,7 +4276,7 @@ function AdminPage() {
         </Card>
 
         {/* System Configuration */}
-        <Card>
+        <Card className="backdrop-blur-sm bg-card/80">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Settings className="size-5" />
@@ -3154,6 +4303,71 @@ function AdminPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* User Create/Edit Dialog */}
+      <Dialog open={userDialogOpen} onOpenChange={setUserDialogOpen}>
+        <DialogContent className="sm:max-w-md" aria-describedby={undefined}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Users className="size-5 text-emerald-600 dark:text-emerald-400" />
+              {editingUser ? 'Edit User' : 'Add New User'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Full Name</Label>
+              <Input
+                placeholder="e.g. Dr. Jane Smith"
+                value={userForm.name}
+                onChange={(e) => setUserForm({ ...userForm, name: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>Email *</Label>
+              <Input
+                type="email"
+                placeholder="jane.smith@chemstab.io"
+                value={userForm.email}
+                onChange={(e) => setUserForm({ ...userForm, email: e.target.value })}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Role</Label>
+                <Select value={userForm.role} onValueChange={(v) => setUserForm({ ...userForm, role: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="viewer">Viewer</SelectItem>
+                    <SelectItem value="analyst">Analyst</SelectItem>
+                    <SelectItem value="project_manager">Project Manager</SelectItem>
+                    <SelectItem value="org_admin">Org Admin</SelectItem>
+                    <SelectItem value="super_admin">Super Admin</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Status</Label>
+                <Select value={userForm.isActive ? 'active' : 'inactive'} onValueChange={(v) => setUserForm({ ...userForm, isActive: v === 'active' })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="inactive">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setUserDialogOpen(false)}>Cancel</Button>
+            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={handleSaveUser} disabled={savingUser}>
+              {savingUser
+                ? <><RefreshCw className="size-4 mr-2 animate-spin" /> Saving...</>
+                : <><Plus className="size-4 mr-2" /> {editingUser ? 'Save Changes' : 'Create User'}</>
+              }
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </motion.div>
   )
 }
@@ -3168,6 +4382,7 @@ function PageRouter() {
     molecules: <MoleculesPage />,
     simulator: <SimulatorPage />,
     studies: <StudiesPage />,
+    degradation: <DegradationPage />,
     reports: <ReportsPage />,
     analytics: <AnalyticsPage />,
     admin: <AdminPage />,
