@@ -10,6 +10,7 @@ import { AIAssistant } from '@/components/layout/AIAssistant'
 import { CommandPalette, useOpenCommandPalette } from '@/components/layout/CommandPalette'
 import { LiveClock } from '@/components/layout/LiveClock'
 import { PageRouter } from '@/components/PageRouter'
+import { SettingsDialog } from '@/components/shared/SettingsDialog'
 
 export default function Home() {
   const { currentPage } = useAppStore()
@@ -177,6 +178,9 @@ export default function Home() {
 
       {/* Global Command Palette (Cmd+K / Ctrl+K) */}
       <CommandPalette />
+
+      {/* Settings Dialog */}
+      <SettingsDialog />
     </div>
   )
 }

@@ -21,6 +21,7 @@ import {
 } from '@/lib/sample-data'
 import type { MoleculeData } from '@/lib/types'
 import { Formula } from '@/components/shared/Formula'
+import { MoleculeStructure } from '@/components/shared/MoleculeStructure'
 import { useToast } from '@/hooks/use-toast'
 
 interface MoleculeComparisonProps {
@@ -75,6 +76,13 @@ export function MoleculeComparison({ molecules }: MoleculeComparisonProps) {
   const propertyRows: PropertyRow[] = useMemo(() => ([
     { label: 'Name', raw: (m) => m.name },
     { label: 'CAS Number', raw: (m) => m.casNumber || '—' },
+    {
+      label: 'Structure',
+      raw: (m) => m.smiles || '—',
+      render: (m) => m.smiles
+        ? <MoleculeStructure smiles={m.smiles} width={180} height={120} className="mx-auto" />
+        : <span className="text-xs text-muted-foreground italic">No structure</span>,
+    },
     {
       label: 'Formula',
       raw: (m) => formatFormula(m.formula),

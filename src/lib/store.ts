@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 import { SAMPLE_NOTIFICATIONS, type AppNotification } from '@/lib/sample-data'
 
 // ── Navigation State ────────────────────────────────────────────────────
@@ -201,4 +202,79 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
       }
     }),
 }))
+
+// ── Preferences State (persisted to localStorage) ───────────────────────
+
+export type PrefPageId = 'dashboard' | 'molecules' | 'simulator' | 'studies' | 'degradation' | 'reports' | 'analytics' | 'admin'
+export type MoleculeView = 'table' | 'grid'
+export type StudyView = 'list' | 'timeline'
+export type RefreshInterval = '30s' | '1min' | '5min' | '15min' | 'never'
+
+interface PreferencesState {
+  // Theme
+  sidebarDefaultCollapsed: boolean
+  // Notifications
+  notificationsEnabled: boolean
+  notificationCategories: {
+    studies: boolean
+    molecules: boolean
+    reports: boolean
+    system: boolean
+    alerts: boolean
+  }
+  autoRefreshInterval: RefreshInterval
+  // Defaults
+  defaultLandingPage: PrefPageId
+  defaultMoleculeView: MoleculeView
+  defaultStudyView: StudyView
+  defaultMoleculesPerPage: number
+  // Setters
+  setSidebarDefaultCollapsed: (v: boolean) => void
+  setNotificationsEnabled: (v: boolean) => void
+  setNotificationCategory: (cat: keyof PreferencesState['notificationCategories'], v: boolean) => void
+  setAutoRefreshInterval: (v: RefreshInterval) => void
+  setDefaultLandingPage: (v: PrefPageId) => void
+  setDefaultMoleculeView: (v: MoleculeView) => void
+  setDefaultStudyView: (v: StudyView) => void
+  setDefaultMoleculesPerPage: (v: number) => void
+}
+
+export const usePreferencesStore = create<PreferencesState>()(
+  persist(
+    (set) => ({
+      // Theme
+      sidebarDefaultCollapsed: false,
+      // Notifications
+      notificationsEnabled: true,
+      notificationCategories: {
+        studies: true,
+        molecules: true,
+        reports: true,
+        system: true,
+        alerts: true,
+      },
+      autoRefreshInterval: '1min',
+      // Defaults
+      defaultLandingPage: 'dashboard',
+      defaultMoleculeView: 'table',
+      defaultStudyView: 'list',
+      defaultMoleculesPerPage: 10,
+      // Setters
+      setSidebarDefaultCollapsed: (v) => set({ sidebarDefaultCollapsed: v }),
+      setNotificationsEnabled: (v) => set({ notificationsEnabled: v }),
+      setNotificationCategory: (cat, v) =>
+        set((s) => ({
+          notificationCategories: { ...s.notificationCategories, [cat]: v },
+        })),
+      setAutoRefreshInterval: (v) => set({ autoRefreshInterval: v }),
+      setDefaultLandingPage: (v) => set({ defaultLandingPage: v }),
+      setDefaultMoleculeView: (v) => set({ defaultMoleculeView: v }),
+      setDefaultStudyView: (v) => set({ defaultStudyView: v }),
+      setDefaultMoleculesPerPage: (v) => set({ defaultMoleculesPerPage: v }),
+    }),
+    {
+      name: 'chemstab-preferences',
+    }
+  )
+)
 

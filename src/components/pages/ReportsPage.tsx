@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import {
-  RefreshCw, FileText, Download, Eye, Sparkles,
+  RefreshCw, FileText, Download, Eye, Sparkles, Printer,
 } from 'lucide-react'
 import {
   Card, CardContent, CardTitle, CardDescription,
@@ -25,6 +25,7 @@ import {
   statusColors, transformStudy,
 } from '@/lib/sample-data'
 import type { ReportData, StudyData } from '@/lib/types'
+import { PrintReportView } from '@/components/shared/PrintReportView'
 
 export function ReportsPage() {
   const { toast } = useToast()
@@ -38,6 +39,8 @@ export function ReportsPage() {
   const [generating, setGenerating] = useState(false)
   const [previewReport, setPreviewReport] = useState<ReportData | null>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
+  const [printReport, setPrintReport] = useState<ReportData | null>(null)
+  const [printPreviewOpen, setPrintPreviewOpen] = useState(false)
 
   // reportStatusColors shares most entries with global statusColors
   // colorMap is now the global COLOR_MAP
@@ -360,6 +363,9 @@ export function ReportsPage() {
                         <Button variant="ghost" size="sm" className="text-xs h-7 px-2" onClick={(e) => { e.stopPropagation(); setPreviewReport(report); setPreviewOpen(true) }}>
                           <Eye className="size-3 mr-1" /> Preview
                         </Button>
+                        <Button variant="ghost" size="sm" className="text-xs h-7 px-2" onClick={(e) => { e.stopPropagation(); setPrintReport(report); setPrintPreviewOpen(true) }}>
+                          <Printer className="size-3 mr-1" /> Print Preview
+                        </Button>
                         <Button variant="ghost" size="sm" className="text-xs h-7 px-2" onClick={(e) => { e.stopPropagation(); handlePrintReport(report) }}>
                           <Download className="size-3 mr-1" /> Export PDF
                         </Button>
@@ -451,6 +457,15 @@ export function ReportsPage() {
               {generating ? <><RefreshCw className="size-4 mr-2 animate-spin" /> Generating...</> : <><FileText className="size-4 mr-2" /> Generate Report</>}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Print Preview Dialog */}
+      <Dialog open={printPreviewOpen} onOpenChange={setPrintPreviewOpen}>
+        <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto print-dialog-content">
+          {printReport ? (
+            <PrintReportView report={printReport} />
+          ) : null}
         </DialogContent>
       </Dialog>
     </motion.div>

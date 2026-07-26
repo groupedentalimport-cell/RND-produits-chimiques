@@ -41,6 +41,7 @@ import {
 } from '@/lib/sample-data'
 import type { MoleculeData } from '@/lib/types'
 import { Formula } from '@/components/shared/Formula'
+import { MoleculeStructure } from '@/components/shared/MoleculeStructure'
 import { MoleculeComparison } from '@/components/pages/MoleculeComparison'
 
 export function MoleculesPage() {
@@ -660,7 +661,13 @@ export function MoleculesPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {displayed.map((mol) => (
               <motion.div key={mol.id} whileHover={{ y: -4 }} transition={{ type: 'spring', stiffness: 300 }}>
-                <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => openDetail(mol)}>
+                <Card className="cursor-pointer hover:shadow-lg transition-shadow overflow-hidden" onClick={() => openDetail(mol)}>
+                  {/* 2D Molecule Structure at top of card */}
+                  {mol.smiles && (
+                    <div className="border-b border-border/50">
+                      <MoleculeStructure smiles={mol.smiles} width={280} height={140} className="rounded-none border-0" />
+                    </div>
+                  )}
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between mb-2">
                       <h3 className="font-semibold">{mol.name}</h3>
@@ -778,6 +785,19 @@ export function MoleculesPage() {
                     <p className="text-xs text-muted-foreground">SMILES</p>
                     <p className="text-sm font-mono break-all">{selectedMolecule.smiles || '—'}</p>
                   </div>
+
+                  {/* 2D Molecule Structure Viewer */}
+                  {selectedMolecule.smiles && (
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground">Molecular Structure</p>
+                      <MoleculeStructure
+                        smiles={selectedMolecule.smiles}
+                        width={400}
+                        height={220}
+                        className="w-full"
+                      />
+                    </div>
+                  )}
 
                   <Separator />
 

@@ -1,11 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus, RefreshCw, Download, ArrowRight, Thermometer, Droplets,
   Clock, Beaker, Activity, Eye, Gauge, Shield, CheckCircle2,
-  XCircle, Trash2, List, CalendarRange,
+  XCircle, Trash2, List, CalendarRange, CheckSquare, X, GitCompareArrows,
 } from 'lucide-react'
 import {
   Card, CardContent, CardFooter,
@@ -28,6 +28,7 @@ import {
 import {
   ToggleGroup, ToggleGroupItem,
 } from '@/components/ui/toggle-group'
+import { Checkbox } from '@/components/ui/checkbox'
 import { useToast } from '@/hooks/use-toast'
 import {
   studyTypeLabels, statusColors, transformStudy, exportCSV,
@@ -65,6 +66,62 @@ export function StudiesPage() {
     durationMonths: 24,
     ph: 7.0,
   })
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+  const clearSelection = () => setSelectedIds([])
+
+  // Batch status update handler
+  const batchUpdateStatus = async (newStatus: string) => {
+    if (selectedIds.length === 0) return
+    try {
+      const results = await Promise.all(selectedIds.map(id =>
+        fetch(`/api/studies/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: newStatus }),
+        })
+      ))
+      const successCount = results.filter(r => r.ok).length
+      toast({
+        title: `Batch status update`,
+        description: `${successCount} of ${selectedIds.length} studies updated to "${newStatus.replace('_', ' ')}"`,
+      })
+      clearSelection()
+      handleRefresh()
+    } catch {
+      toast({ title: 'Error', description: 'Network error during batch update', variant: 'destructive' })
+    }
+  }
+
+  // Batch export selected studies
+  const batchExportCSV = async () => {
+    if (selectedIds.length === 0) return
+    try {
+      const res = await fetch('/api/studies?limit=1000')
+      if (res.ok) {
+        const data = await res.json()
+        const selectedStudies = (data.studies || []).filter((s: any) => selectedIds.includes(s.id))
+        const rows = selectedStudies.map((s: any) => ({
+          id: s.id,
+          studyCode: s.studyCode ?? '',
+          substanceName: s.substanceName ?? '',
+          studyType: s.studyType ?? '',
+          status: s.status ?? '',
+          temperatureC: s.temperatureC ?? '',
+          humidityPercent: s.humidityPercent ?? '',
+          durationMonths: s.durationMonths ?? '',
+          predictedShelfLifeMonths: s.predictedShelfLifeMonths ?? '',
+        }))
+        exportCSV(rows, `chemstab-selected-studies-${new Date().toISOString().slice(0, 10)}.csv`)
+        toast({ title: 'Export complete', description: `Exported ${rows.length} selected studies to CSV` })
+      }
+    } catch {
+      toast({ title: 'Export failed', description: 'Network error', variant: 'destructive' })
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -429,6 +486,7 @@ export function StudiesPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-[40px]">Select</TableHead>
                     <TableHead>Study Code</TableHead>
                     <TableHead>Substance</TableHead>
                     <TableHead>Type</TableHead>
@@ -438,12 +496,22 @@ export function StudiesPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {apiStudies.map((std, idx) => (
+                  {apiStudies.map((std, idx) => {
+                    const isSelected = selectedIds.includes(std.id)
+                    return (
                     <TableRow
                       key={std.id}
-                      className={`cursor-pointer hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10 transition-colors ${idx % 2 === 1 ? 'bg-muted/30' : ''}`}
+                      className={`cursor-pointer transition-all ${isSelected ? 'bg-emerald-50/60 dark:bg-emerald-900/15 shadow-[inset_3px_0_0_0_rgb(16,185,129)]' : idx % 2 === 1 ? 'bg-muted/30' : ''} hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10`}
                       onClick={() => openDetail(std)}
                     >
+                      <TableCell className="align-middle" onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={() => toggleSelect(std.id)}
+                          aria-label={`Select study ${std.studyCode}`}
+                          className="cursor-pointer"
+                        />
+                      </TableCell>
                       <TableCell className="font-medium font-mono">{std.studyCode}</TableCell>
                       <TableCell>{std.substanceName}</TableCell>
                       <TableCell>{studyTypeLabels[std.studyType]}</TableCell>
@@ -455,10 +523,11 @@ export function StudiesPage() {
                         <Badge className={statusColors[std.status]}>{std.status.replace('_', ' ')}</Badge>
                       </TableCell>
                     </TableRow>
-                  ))}
+                    )
+                  })}
                   {apiStudies.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                         No studies found matching your criteria
                       </TableCell>
                     </TableRow>
@@ -475,6 +544,61 @@ export function StudiesPage() {
         </CardFooter>
       </Card>
       )}
+
+      {/* Floating Batch Action Bar — appears when studies are selected */}
+      <AnimatePresence>
+        {selectedIds.length >= 1 && view === 'list' && (
+          <motion.div
+            initial={{ y: 80, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 80, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 320, damping: 28 }}
+            className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 rounded-xl border border-emerald-200/60 dark:border-emerald-800/60 bg-card/95 backdrop-blur-md shadow-2xl shadow-emerald-900/20 px-4 py-2.5"
+          >
+            <div className="flex items-center gap-2 text-sm">
+              <span className="flex size-7 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                <CheckSquare className="size-4" />
+              </span>
+              <span className="font-medium">
+                Selected <span className="text-emerald-600 dark:text-emerald-400">{selectedIds.length}</span> study{selectedIds.length !== 1 ? 'ies' : 'y'}
+              </span>
+            </div>
+            <div className="h-6 w-px bg-border" />
+            {/* Batch status update buttons */}
+            <div className="flex items-center gap-1">
+              <Button size="sm" variant="outline" className="text-xs h-7 border-teal-300 dark:border-teal-700 hover:bg-teal-50 dark:hover:bg-teal-900/20" onClick={() => batchUpdateStatus('in_progress')}>
+                Start
+              </Button>
+              <Button size="sm" variant="outline" className="text-xs h-7 border-amber-300 dark:border-amber-700 hover:bg-amber-50 dark:hover:bg-amber-900/20" onClick={() => batchUpdateStatus('under_review')}>
+                Review
+              </Button>
+              <Button size="sm" variant="outline" className="text-xs h-7 border-emerald-300 dark:border-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-900/20" onClick={() => batchUpdateStatus('approved')}>
+                Approve
+              </Button>
+              <Button size="sm" variant="outline" className="text-xs h-7 border-red-300 dark:border-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400" onClick={() => batchUpdateStatus('rejected')}>
+                Reject
+              </Button>
+            </div>
+            <div className="h-6 w-px bg-border" />
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={batchExportCSV}
+            >
+              <Download className="size-4 mr-1" /> Export
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-red-600 hover:text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+              onClick={clearSelection}
+              aria-label="Clear selection"
+            >
+              <X className="size-4" /> Clear
+            </Button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Studies Timeline (Gantt-style View) */}
       {view === 'timeline' && (

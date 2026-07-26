@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/table'
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, PieChart, Pie, Cell,
+  ResponsiveContainer, PieChart, Pie, Cell, Legend,
 } from 'recharts'
 import { useAppStore } from '@/lib/store'
 import {
@@ -133,7 +133,7 @@ export function DashboardPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-400 dark:to-teal-400 bg-clip-text text-transparent">Dashboard</h1>
-          <p className="text-muted-foreground">Overview of your chemical stability assessment platform</p>
+          <p className="text-foreground/70">Overview of your chemical stability assessment platform</p>
           <p className="text-xs text-muted-foreground/70 mt-0.5 flex items-center gap-1">
             <RefreshCw className="size-2.5" />
             Last updated: <span className="font-mono">2 minutes ago</span>
@@ -164,7 +164,7 @@ export function DashboardPage() {
                   <div className="absolute top-0 right-0 size-24 rounded-full bg-gradient-to-br from-emerald-200/20 to-teal-200/20 dark:from-emerald-800/20 dark:to-teal-800/20 blur-2xl" />
                   <div className="flex items-center justify-between">
                     <div className="space-y-1">
-                      <p className="text-sm text-muted-foreground">{stat.label}</p>
+                      <p className="text-sm text-muted-foreground/90">{stat.label}</p>
                       <div className="text-2xl font-bold">{isNaN(Number(stat.value)) ? stat.value : <AnimatedNumber value={Number(stat.value)} />}</div>
                     </div>
                     <div className={`p-2 rounded-lg ${COLOR_MAP[stat.color]}`}><Icon className="size-5" /></div>
@@ -205,14 +205,15 @@ export function DashboardPage() {
             ) : (
               <ResponsiveContainer width="100%" height={280}>
                 <LineChart data={STABILITY_TRENDS_DATA}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" strokeOpacity={0.3} />
                   <XAxis dataKey="month" className="text-xs" />
-                  <YAxis domain={[50, 100]} className="text-xs" />
+                  <YAxis domain={[40, 100]} ticks={[40, 60, 80, 100]} allowDataOverflow={false} className="text-xs" />
                   <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb' }} />
+                  <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} iconType="circle" />
                   <Line type="monotone" dataKey="aspirin" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} name="Aspirin" />
                   <Line type="monotone" dataKey="acetaminophen" stroke="#14b8a6" strokeWidth={2} dot={{ r: 3 }} name="Acetaminophen" />
                   <Line type="monotone" dataKey="caffeine" stroke="#06b6d4" strokeWidth={2} dot={{ r: 3 }} name="Caffeine" />
-                  <Line type="monotone" dataKey="overall" stroke="#6366f1" strokeWidth={2} dot={{ r: 4 }} name="Overall" />
+                  <Line type="monotone" dataKey="overall" stroke="#f59e0b" strokeWidth={2} dot={{ r: 4, fill: '#f59e0b' }} name="Overall" />
                 </LineChart>
               </ResponsiveContainer>
             )}

@@ -468,4 +468,234 @@ ChemStab (Chemical Stability Assessment Platform) is a production-ready Next.js 
 
 5. **Add batch operations to Studies/Reports tables**: Similar to the Molecules comparison checkboxes, add multi-select for batch status updates or exports.
 
-6. **Performance**: Consider React.lazy + dynamic imports for heavy chart components if the bundle size grows further.
+---
+Task ID: SESSION-3 (Cron-triggered Development Round)
+Agent: Main orchestrator
+Task: Assess project status, QA testing, and add new features with styling improvements
+
+Work Log:
+- Reviewed worklog.md and assessed full project status (ChemStab platform with 8 pages, 16+ component files, API routes, AI assistant)
+- Performed QA testing via agent-browser across all 8 pages at 1440x900 viewport
+- Used VLM to analyze dashboard and molecules screenshots for visual issues
+- Fixed CSS parsing error (`::moz-selection` → `::-moz-selection`)
+- Created MoleculeStructure component (smiles-drawer 2D renderer) and integrated into:
+  - MoleculesPage detail dialog Properties tab
+  - MoleculesPage grid view cards
+  - MoleculeComparison dialog table
+- Enhanced Dashboard styling: added chart legends, fixed Y-axis intervals, changed indigo→amber, improved contrast
+- Enhanced Sidebar Quick Stats background opacity
+- Added batch operations to StudiesPage: checkboxes, floating action bar with batch status updates (Start/Review/Approve/Reject), batch CSV export, clear selection
+- Added SettingsDialog with 4 tabs (Theme, Notifications, Defaults, About) with localStorage persistence
+- Added PrintReportView with professional print layout and @media print CSS
+- All lint checks passed with 0 errors
+- All pages verified via agent-browser with no console errors
+
+Stage Summary:
+- **4 major features added**: MoleculeStructure viewer, Batch operations, SettingsDialog, PrintReportView
+- **Dashboard styling enhanced**: Chart legends, Y-axis intervals, color fixes, contrast improvements
+- **CSS bug fixed**: moz-selection pseudo-element syntax
+- All pages render correctly with HTTP 200 responses
+- VLM analysis confirms improvements are visually effective
+
+## Current Project Status
+
+ChemStab (Chemical Stability Assessment Platform) is now a feature-rich production-ready Next.js 16 application with:
+
+### Core Pages (8):
+- Dashboard (enhanced styling: chart legends, Y-axis, contrast)
+- Molecules (new: 2D structure viewer in detail dialog + grid cards + comparison)
+- Simulator
+- Studies (new: batch operations with checkboxes + floating action bar)
+- Degradation
+- Reports (new: print-friendly report view with @media print CSS)
+- Analytics
+- Admin
+
+### New Components Added This Session:
+- `src/components/shared/MoleculeStructure.tsx` — 2D molecular structure viewer using smiles-drawer
+- `src/components/shared/SettingsDialog.tsx` — User preferences dialog (4 tabs)
+- `src/components/shared/PrintReportView.tsx` — Professional print layout for regulatory submissions
+- `usePreferencesStore` in store.ts — Zustand store with localStorage persistence
+
+### Features:
+1. 2D Molecule Structure Viewer (SmilesDrawer) — renders SMILES as 2D structures in detail dialog, grid cards, and comparison view
+2. Batch Operations on Studies — multi-select checkboxes, floating action bar with Start/Review/Approve/Reject + Export + Clear
+3. User Preferences Dialog — Theme (light/dark/system), Notifications (enable/disable + categories + refresh interval), Defaults (landing page, molecule view, study view, page size), About (version + compliance)
+4. Print-Friendly Report View — professional print layout with @media print CSS, page breaks, compliance footer
+5. Dashboard styling enhancements — chart legends, Y-axis intervals, indigo→amber color fix, subtitle contrast, stat card labels contrast, Quick Stats sidebar background
+
+## Unresolved Issues / Risks
+
+1. **SmilesDrawer dynamic import**: The smiles-drawer package uses dynamic import to avoid SSR issues. If the CDN/bundle is slow, there may be a brief delay before structure rendering appears. This is acceptable for the current implementation.
+
+2. **Settings dialog state coordination**: Uses a shared `setSettingsOpen`/`useSettingsOpen` pattern. If multiple components try to open the dialog simultaneously, only one call will work. This is fine for the current use case (only the sidebar button opens it).
+
+3. **Print CSS specificity**: The @media print rules target specific class names like `.print-dialog-content`. If future UI changes alter these class names, the print CSS may need updating.
+
+4. **Batch status update**: Uses parallel API calls (Promise.all) for batch operations. If one fails while others succeed, the user gets a mixed result notification. This is acceptable for the current scale.
+
+## Priority Recommendations for Next Phase
+
+1. **Real-time notifications via WebSocket**: Use mini-service infrastructure to push live notifications when studies complete or risk alerts trigger.
+
+2. **Performance optimization**: Consider React.lazy + dynamic imports for SmilesDrawer, PrintReportView, and heavy chart components to reduce initial bundle size.
+
+3. **Enhance AI Assistant context**: Expand the AI assistant to include molecule-specific queries (e.g., "What's the stability profile of Aspirin?") by pulling molecule data from the API.
+
+4. **Mobile optimization**: Test and enhance the floating action bars (batch ops + molecule comparison) for smaller screens.
+
+5. **Export improvements**: Add PDF export (not just print) using a library like jspdf or pdf-lib for true PDF generation.
+
+---
+
+## Task 3: Dashboard Styling Enhancements (2026-03-04)
+
+### Changes Made
+
+**File: `/home/z/my-project/src/components/pages/DashboardPage.tsx`**
+
+1. **Added chart legend to LineChart**: Imported `Legend` from recharts and added `<Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} iconType="circle" />` after the `<Tooltip>` component in the Stability Score Trends chart.
+
+2. **Fixed Y-axis intervals**: Changed YAxis `domain={[50, 100]}` to `domain={[40, 100]}`, added `ticks={[40, 60, 80, 100]}` for standard intervals, and added `allowDataOverflow={false}`.
+
+3. **Changed "Overall" line color**: Replaced `#6366f1` (indigo) with `#f59e0b` (amber) for both the stroke and dot fill, complying with the "NO indigo/blue" color rule.
+
+4. **Increased subtitle contrast**: Changed the dashboard subtitle `<p className="text-muted-foreground">` to `text-foreground/70` for better readability.
+
+5. **Enhanced CartesianGrid visibility**: Added `strokeOpacity={0.3}` to the CartesianGrid component for better grid line visibility.
+
+6. **Improved stat card labels contrast**: Changed stat card label class from `text-muted-foreground` to `text-muted-foreground/90` for slightly better contrast.
+
+**File: `/home/z/my-project/src/components/layout/Sidebar.tsx`**
+
+7. **Enhanced Quick Stats sidebar background**: Increased background opacity from `from-emerald-50/60 to-teal-50/40 dark:from-emerald-950/40 dark:to-teal-950/20` to `from-emerald-50/80 to-teal-50/60 dark:from-emerald-950/60 dark:to-teal-950/40` for better visibility.
+
+### Verification
+- Ran `bun run lint` — passed with zero errors.
+
+---
+
+Task ID: 2
+Agent: molecule-component-developer
+Task: Create MoleculeStructure React component
+
+Work Log:
+- Read project worklog and context to understand ChemStab platform architecture
+- Investigated smiles-drawer v2.4.1 package API by examining type definitions (`app.d.ts`, `SmilesDrawer.d.ts`, `Drawer.d.ts`, `SvgDrawer.d.ts`)
+- Determined correct API: `SmilesDrawerNS` is the default export; `SmilesDrawer.SmiDrawer` is the class for drawing; method is `drawer.draw(smiles, canvas, theme, successCallback, errorCallback)`
+- Created `/home/z/my-project/src/components/shared/MoleculeStructure.tsx` with:
+  - `'use client'` component with TypeScript types for `smiles`, `width`, `height`, `className` props
+  - Canvas ref + container ref for responsive sizing
+  - Dynamic import of `smiles-drawer` to avoid SSR issues
+  - Device pixel ratio handling for sharp canvas rendering
+  - Light/dark theme support via `next-themes` `resolvedTheme` → drawer theme ('light'/'dark')
+  - Window resize listener for responsive redraw
+  - Fallback placeholder with Atom icon and "No structure available" for empty/invalid SMILES
+  - Error handling via errorCallback in `drawer.draw()`
+  - Subtle styling: rounded corners, border, card background with dark mode variant
+  - Accessibility: `aria-label` and `role="img"` on canvas
+- Ran `bun run lint` — passed with zero errors
+
+Stage Summary:
+- MoleculeStructure component is production-ready at `src/components/shared/MoleculeStructure.tsx`
+- Uses smiles-drawer v2.4.1 correctly via `SmilesDrawer.SmiDrawer` class
+- Supports light/dark themes, responsive sizing, and invalid SMILES fallback
+- Ready for integration into molecule detail dialogs and comparison views
+
+---
+
+## Task 5: SettingsDialog Component
+
+**Date**: 2024-03-XX
+**Status**: Completed
+
+### What was done:
+
+1. **Added `usePreferencesStore` to `/home/z/my-project/src/lib/store.ts`**
+   - Uses `zustand/middleware` `persist` for localStorage persistence
+   - Storage key: `chemstab-preferences`
+   - Fields: `sidebarDefaultCollapsed`, `notificationsEnabled`, `notificationCategories` (studies/molecules/reports/system/alerts), `autoRefreshInterval`, `defaultLandingPage`, `defaultMoleculeView`, `defaultStudyView`, `defaultMoleculesPerPage`
+   - Exported types: `PrefPageId`, `MoleculeView`, `StudyView`, `RefreshInterval`
+   - Each field has a dedicated setter method
+
+2. **Created `/home/z/my-project/src/components/shared/SettingsDialog.tsx`**
+   - `'use client'` component with shadcn Dialog
+   - 4 tabs: Theme, Notifications, Defaults, About
+   - **Theme tab**: Toggle cards (Light/Dark/System) using `useTheme` from next-themes, sidebar default collapsed toggle (Switch)
+   - **Notifications tab**: Enable/disable notifications (Switch), notification categories (Checkbox per category: Studies, Molecules, Reports, System, Alerts), auto-refresh interval (Select: 30s, 1min, 5min, 15min, Never)
+   - **Defaults tab**: Default landing page (Select: Dashboard, Molecules, Simulator, Studies, Degradation, Reports, Analytics, Admin), default molecule view (Select: Table/Grid), default study view (Select: List/Timeline), molecules per page (Select: 5, 10, 20, 50)
+   - **About tab**: Version info (ChemStab v2.0, Build #2024.03), compliance badges (ICH Q1A, 21 CFR Part 11, GxP) as gradient badges, license info, resource links (Documentation, API Reference, Support)
+   - Emerald gradient styling throughout (consistent with app theme)
+   - Uses `useToast` for feedback on every settings change
+   - Shared `useSettingsOpen` / `setSettingsOpen` pattern for coordinating dialog state between Sidebar and page
+
+3. **Integrated into Sidebar (`/home/z/my-project/src/components/layout/Sidebar.tsx`)**
+   - Changed Settings button from `onClick={() => setPage('admin')}` to `onClick={() => setSettingsOpen(true)}`
+   - Added import for `setSettingsOpen` from SettingsDialog
+
+4. **Added `<SettingsDialog />` to `page.tsx` Home() function**
+   - Imported `SettingsDialog` from `@/components/shared/SettingsDialog`
+   - Placed after `<CommandPalette />` in the component tree
+
+5. **Lint check**: `bun run lint` passed with zero errors
+
+### Files modified:
+- `src/lib/store.ts` — Added `usePreferencesStore` with localStorage persistence
+- `src/components/shared/SettingsDialog.tsx` — New file (502 lines)
+- `src/components/layout/Sidebar.tsx` — Settings button opens dialog
+- `src/app/page.tsx` — Added `<SettingsDialog />` component
+
+---
+
+## Task 6: Print-Friendly Report View (Agent: Z.ai Code)
+
+**Date**: 2025-03-04
+
+### Summary
+Added a professional print-friendly report view to the ChemStab platform. Users can now click "Print Preview" on any report card to open a Dialog showing a regulatory-compliant print layout with ChemStab branding, report details, study information, content sections, compliance footer, and a Print button that triggers `window.print()`.
+
+### Implementation Details:
+
+1. **Created `PrintReportView.tsx` (`/home/z/my-project/src/components/shared/PrintReportView.tsx`)** — New component (269 lines)
+   - Professional header with ChemStab logo/branding (CS logo badge + company name + document ID)
+   - Report title, type, and status with styled gradient banner
+   - Compliance notice block (ICH Q1A, 21 CFR Part 11) with shield icon
+   - Study details section — fetches linked study data from `/api/studies` API, displays in a 2×4 info grid (Study Code, Substance, Type, Status, Temperature, Humidity, Duration, Predicted Shelf Life)
+   - Content sections with report type-specific detailed text for all 5 report types (ich_q1a, ctd_module, fmea, doe, validation_protocol) — each with multiple sections with body text
+   - Methodology parameters table (Storage Condition, Testing Frequency, Container Closure, Light Protection, pH)
+   - Acceptance Criteria table (Assay, Degradation Products, Dissolution, Appearance)
+   - Conclusion section
+   - Approval Signatures block with 3 signatories (Analyst, Org Admin, Project Manager) including electronic signature compliance note
+   - Compliance footer (ICH Q1A, Q1B, Q1E, 21 CFR Part 11, GxP) with timestamp and document ID
+   - Print button that triggers `window.print()` (hidden during printing via `.no-print` class)
+   - Page break markers (`print-page-break` class) for proper pagination
+
+2. **Updated `ReportsPage.tsx` (`/home/z/my-project/src/components/pages/ReportsPage.tsx`)**
+   - Added `Printer` icon import from lucide-react
+   - Added `PrintReportView` import from shared components
+   - Added `printReport` and `printPreviewOpen` state variables
+   - Added "Print Preview" button (with Printer icon) next to "Preview" and "Export PDF" on each report card
+   - Added new Dialog for Print Preview with `PrintReportView` component, using `print-dialog-content` class for print CSS targeting
+
+3. **Added print-specific CSS to `globals.css` (`/home/z/my-project/src/app/globals.css`)**
+   - `.print-page-break` and `.no-print` utility classes
+   - `@media print` block with comprehensive rules:
+     - Hides sidebar, header, footer, AI assistant, command palette, notifications
+     - Hides all dialog overlays except print dialog content
+     - Hides all buttons except `.print-keep`
+     - Forces `.print-dialog-content` to fill the page (position: static, full width, no overflow)
+     - Forces `.print-report-container` to black/white color scheme
+     - Gradient elements rendered as dark gray for print readability
+     - Print-friendly table styling (borders, padding, headers)
+     - `@page` margins (1.5cm × 2cm, A4 size)
+     - Page break controls (`page-break-before: always` for `.print-page-break`)
+     - `page-break-inside: avoid` for headings, tables, signature blocks
+     - Removes shadows, animations, transitions, backdrop-blur effects
+
+4. **Lint check**: `bun run lint` passed with zero errors
+5. **Dev server**: Page loads successfully (GET / 200)
+
+### Files modified:
+- `src/components/shared/PrintReportView.tsx` — New file (269 lines)
+- `src/components/pages/ReportsPage.tsx` — Added Print Preview button + Dialog integration
+- `src/app/globals.css` — Added print-specific CSS with @media print rules

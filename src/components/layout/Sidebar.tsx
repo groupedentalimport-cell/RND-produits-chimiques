@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/tooltip'
 import { useAppStore } from '@/lib/store'
 import { NAV_ITEMS } from '@/lib/sample-data'
+import { setSettingsOpen } from '@/components/shared/SettingsDialog'
 
 export function Sidebar() {
   const { currentPage, setPage, sidebarOpen, toggleSidebar } = useAppStore()
@@ -137,7 +138,7 @@ export function Sidebar() {
             animate={{ opacity: 1, y: 0 }}
             className="px-2 pb-1"
           >
-            <div className="rounded-lg border border-emerald-500/20 bg-gradient-to-br from-emerald-50/60 to-teal-50/40 dark:from-emerald-950/40 dark:to-teal-950/20 p-2.5">
+            <div className="rounded-lg border border-emerald-500/20 bg-gradient-to-br from-emerald-50/80 to-teal-50/60 dark:from-emerald-950/60 dark:to-teal-950/40 p-2.5">
               <div className="flex items-center justify-between mb-1">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">Quick Stats</p>
                 <TrendingUp className="size-3 text-emerald-500" />
@@ -177,7 +178,7 @@ export function Sidebar() {
                 <Button
                   variant="ghost"
                   className={`group w-full justify-start gap-3 h-10 ${!sidebarOpen ? 'px-0 justify-center' : ''}`}
-                  onClick={() => setPage('admin')}
+                  onClick={() => setSettingsOpen(true)}
                 >
                   <Settings className="size-4 shrink-0 transition-transform group-hover:rotate-90 duration-300" />
                   {sidebarOpen && <span className="whitespace-nowrap">Settings</span>}
