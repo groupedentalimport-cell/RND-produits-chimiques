@@ -215,6 +215,7 @@ export async function POST() {
         temperatureC: 25,
         humidityPercent: 60,
         durationMonths: 24,
+        predictedShelfLifeMonths: 36,
         status: 'in_progress',
         moleculeId: molecules[0].id,
         orgId: org.id,
@@ -226,6 +227,7 @@ export async function POST() {
         temperatureC: 40,
         humidityPercent: 75,
         durationMonths: 6,
+        predictedShelfLifeMonths: 60,
         status: 'completed',
         moleculeId: molecules[2].id,
         orgId: org.id,
@@ -237,6 +239,7 @@ export async function POST() {
         temperatureC: 60,
         humidityPercent: 80,
         durationMonths: 3,
+        predictedShelfLifeMonths: 18,
         status: 'under_review',
         moleculeId: molecules[3].id,
         orgId: org.id,
@@ -248,6 +251,7 @@ export async function POST() {
         temperatureC: 30,
         humidityPercent: 65,
         durationMonths: 12,
+        predictedShelfLifeMonths: 6,
         status: 'draft',
         moleculeId: molecules[9].id,
         orgId: org.id,
@@ -259,6 +263,7 @@ export async function POST() {
         temperatureC: 25,
         humidityPercent: 60,
         durationMonths: 36,
+        predictedShelfLifeMonths: 48,
         status: 'approved',
         moleculeId: molecules[4].id,
         orgId: org.id,
@@ -426,6 +431,54 @@ export async function POST() {
       },
     });
 
+    // ── Create compliance reports ────────────────────────────────────────
+    const complianceReports = await Promise.all([
+      db.complianceReport.create({
+        data: {
+          studyId: studies[4].id,
+          studyCode: 'STB-2024-005',
+          substanceName: 'Ibuprofen',
+          overallScore: 92,
+          passCount: 8,
+          warningCount: 1,
+          failCount: 0,
+          notApplicableCount: 1,
+          readyForSubmission: true,
+          categoryScores: JSON.stringify([
+            { category: 'ICH Q1A Conditions', score: 95, status: 'pass' },
+            { category: 'Storage Conditions', score: 90, status: 'pass' },
+            { category: 'Analytical Methods', score: 88, status: 'pass' },
+            { category: 'Data Integrity', score: 92, status: 'pass' },
+            { category: 'Documentation', score: 85, status: 'warning' },
+          ]),
+          blockingIssues: JSON.stringify([]),
+          checkedBy: users[0].name || 'system',
+        },
+      }),
+      db.complianceReport.create({
+        data: {
+          studyId: studies[1].id,
+          studyCode: 'STB-2024-002',
+          substanceName: 'Caffeine',
+          overallScore: 78,
+          passCount: 6,
+          warningCount: 2,
+          failCount: 1,
+          notApplicableCount: 1,
+          readyForSubmission: false,
+          categoryScores: JSON.stringify([
+            { category: 'ICH Q1A Conditions', score: 82, status: 'pass' },
+            { category: 'Storage Conditions', score: 75, status: 'warning' },
+            { category: 'Analytical Methods', score: 80, status: 'pass' },
+            { category: 'Data Integrity', score: 70, status: 'warning' },
+            { category: 'Documentation', score: 60, status: 'fail' },
+          ]),
+          blockingIssues: JSON.stringify(['Documentation incomplete for accelerated study protocol']),
+          checkedBy: users[2].name || 'system',
+        },
+      }),
+    ]);
+
     return NextResponse.json({
       message: 'Database seeded successfully',
       data: {
@@ -437,6 +490,7 @@ export async function POST() {
         reports: reports.length,
         timePoints: timePoints.length,
         signatures: 1,
+        complianceReports: complianceReports.length,
       },
     }, { status: 201 });
   } catch (error) {

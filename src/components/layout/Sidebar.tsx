@@ -1,19 +1,41 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { useTheme } from 'next-themes'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronLeft, ChevronRight, X, Sun, Moon, Menu, Settings, TrendingUp } from 'lucide-react'
+import {
+  ChevronLeft, ChevronRight, X, Sun, Moon, Menu, Settings, TrendingUp,
+  Atom, Microscope, FileText, Star, ChevronDown, ChevronUp, Bookmark,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Tooltip, TooltipTrigger, TooltipContent, TooltipProvider,
 } from '@/components/ui/tooltip'
-import { useAppStore } from '@/lib/store'
+import { useAppStore, useFavoriteStore } from '@/lib/store'
 import { NAV_ITEMS } from '@/lib/sample-data'
 import { setSettingsOpen } from '@/components/shared/SettingsDialog'
+
+const ITEM_TYPE_ICON: Record<string, React.ElementType> = {
+  molecule: Atom,
+  study: Microscope,
+  report: FileText,
+}
+
+const ITEM_TYPE_PAGE: Record<string, string> = {
+  molecule: 'molecules',
+  study: 'studies',
+  report: 'reports',
+}
 
 export function Sidebar() {
   const { currentPage, setPage, sidebarOpen, toggleSidebar } = useAppStore()
   const { theme, setTheme } = useTheme()
+  const { favorites, refreshFavorites } = useFavoriteStore()
+  const [favCollapsed, setFavCollapsed] = useState(false)
+
+  useEffect(() => {
+    refreshFavorites()
+  }, [refreshFavorites])
 
   return (
     <>
@@ -129,6 +151,74 @@ export function Sidebar() {
               return button
             })}
           </TooltipProvider>
+
+          {/* Favorites collapsible section (only shown when sidebar is expanded) */}
+          {sidebarOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-3"
+            >
+              {/* Favorites header */}
+              <button
+                onClick={() => setFavCollapsed(!favCollapsed)}
+                className="flex items-center justify-between w-full px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 transition-colors"
+              >
+                <div className="flex items-center gap-1.5">
+                  <Bookmark className="size-3" />
+                  <span>Favorites</span>
+                  {favorites.length > 0 && (
+                    <span className="inline-flex items-center justify-center size-4 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-[9px] font-bold">
+                      {favorites.length}
+                    </span>
+                  )}
+                </div>
+                {favCollapsed ? <ChevronDown className="size-3" /> : <ChevronUp className="size-3" />}
+              </button>
+
+              {/* Favorites list */}
+              <AnimatePresence>
+                {!favCollapsed && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="space-y-1 max-h-48 overflow-y-auto"
+                  >
+                    {favorites.length === 0 ? (
+                      <div className="px-2 py-3 text-center">
+                        <Star className="size-5 text-emerald-300 dark:text-emerald-700 mx-auto mb-1" />
+                        <p className="text-xs text-muted-foreground">No favorites yet</p>
+                        <p className="text-[10px] text-muted-foreground/70 mt-0.5">
+                          Star items to bookmark them here
+                        </p>
+                      </div>
+                    ) : (
+                      favorites.map((fav) => {
+                        const FavIcon = ITEM_TYPE_ICON[fav.itemType] || Star
+                        const targetPage = ITEM_TYPE_PAGE[fav.itemType] || 'dashboard'
+                        return (
+                          <Button
+                            key={`${fav.itemType}-${fav.itemId}`}
+                            variant="ghost"
+                            size="sm"
+                            className="w-full justify-start gap-2 h-8 px-2 text-xs hover:bg-emerald-50 dark:hover:bg-emerald-900/20 group/fav transition-all"
+                            onClick={() => { setPage(targetPage as any); if (window.innerWidth < 1024) toggleSidebar(); }}
+                          >
+                            <FavIcon className="size-3 shrink-0 text-emerald-500 dark:text-emerald-400 transition-transform group-hover/fav:scale-110" />
+                            <span className="truncate text-foreground/80 group-hover/fav:text-foreground transition-colors">
+                              {fav.itemLabel}
+                            </span>
+                          </Button>
+                        )
+                      })
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
+          )}
         </nav>
 
         {/* Quick Stats mini-card (only in expanded sidebar) */}

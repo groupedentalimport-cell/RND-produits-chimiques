@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus, RefreshCw, Download, ArrowRight, Thermometer, Droplets,
   Clock, Beaker, Activity, Eye, Gauge, Shield, CheckCircle2,
-  XCircle, Trash2, List, CalendarRange, CheckSquare, X, GitCompareArrows,
+  XCircle, Trash2, List, CalendarRange, CheckSquare, X, GitCompareArrows, Star,
 } from 'lucide-react'
 import {
   Card, CardContent, CardFooter,
@@ -34,10 +34,12 @@ import {
   studyTypeLabels, statusColors, transformStudy, exportCSV,
 } from '@/lib/sample-data'
 import type { StudyData } from '@/lib/types'
+import { useFavoriteStore } from '@/lib/store'
 import { StudyTimeline } from './StudyTimeline'
 
 export function StudiesPage() {
   const { toast } = useToast()
+  const { isFavorite, toggleFavorite } = useFavoriteStore()
   const [statusFilter, setStatusFilter] = useState('all')
   const [typeFilter, setTypeFilter] = useState('all')
   const [studyTypeFilter, setStudyTypeFilter] = useState('all')
@@ -513,7 +515,19 @@ export function StudiesPage() {
                         />
                       </TableCell>
                       <TableCell className="font-medium font-mono">{std.studyCode}</TableCell>
-                      <TableCell>{std.substanceName}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1.5">
+                          <span>{std.substanceName}</span>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-5 shrink-0 p-0 hover:bg-transparent"
+                            onClick={(e) => { e.stopPropagation(); toggleFavorite('study', std.id, std.substanceName) }}
+                          >
+                            <Star className={`size-3.5 transition-colors ${isFavorite('study', std.id) ? 'fill-emerald-500 text-emerald-500' : 'text-muted-foreground/50 hover:text-emerald-400'}`} />
+                          </Button>
+                        </div>
+                      </TableCell>
                       <TableCell>{studyTypeLabels[std.studyType]}</TableCell>
                       <TableCell>{std.temperatureC}</TableCell>
                       <TableCell>

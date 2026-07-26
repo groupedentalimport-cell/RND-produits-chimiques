@@ -346,6 +346,28 @@ export async function POST(request: NextRequest) {
       // audit log failure should not fail the API call
     }
 
+    // Save compliance report to DB for history tracking
+    try {
+      await db.complianceReport.create({
+        data: {
+          studyId: study.id,
+          studyCode: study.studyCode,
+          substanceName: study.substanceName,
+          overallScore,
+          passCount,
+          warningCount,
+          failCount,
+          notApplicableCount,
+          readyForSubmission,
+          categoryScores: JSON.stringify(categoryScores),
+          blockingIssues: JSON.stringify(blockingIssues),
+          checkedBy: 'system',
+        },
+      })
+    } catch {
+      // DB save failure should not fail the API call
+    }
+
     return NextResponse.json(report)
   } catch (err) {
     console.error('[compliance-check] error:', err)

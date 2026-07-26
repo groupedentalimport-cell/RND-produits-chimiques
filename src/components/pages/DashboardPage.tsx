@@ -6,6 +6,7 @@ import {
   Plus, Play, ClipboardList, Download, Database, Microscope, Cpu,
   AlertTriangle, RefreshCw, FileText, CheckCircle2, Activity,
   ArrowRight, ArrowUpRight, ArrowDownRight, XCircle, ShieldCheck,
+  Clock, Atom, Shield, TrendingUp, Info, ExternalLink,
 } from 'lucide-react'
 import {
   Card, CardHeader, CardTitle, CardDescription, CardContent, CardAction,
@@ -18,14 +19,15 @@ import {
 } from '@/components/ui/table'
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, PieChart, Pie, Cell, Legend,
+  ResponsiveContainer, PieChart, Pie, Cell, Legend, ReferenceLine,
 } from 'recharts'
 import { useAppStore } from '@/lib/store'
 import {
   STABILITY_TRENDS_DATA, RISK_DISTRIBUTION_DATA, studyTypeLabels, statusColors,
   ACTION_ICON_MAP, GRADIENT_TOP_BAR, COLOR_MAP, COLOR_MAP_TEXT, transformStudy,
+  transformMolecule, riskColors, getScoreColor,
 } from '@/lib/sample-data'
-import type { PageId, StudyData } from '@/lib/types'
+import type { PageId, StudyData, MoleculeData } from '@/lib/types'
 import { AnimatedNumber } from '@/components/shared/AnimatedNumber'
 
 export function DashboardPage() {
@@ -38,6 +40,10 @@ export function DashboardPage() {
     studiesByStatus?: { status: string; _count: { status: number } }[];
   } | null>(null)
   const [recentStudies, setRecentStudies] = useState<StudyData[]>([])
+  const [shelfLifeStudies, setShelfLifeStudies] = useState<StudyData[]>([])
+  const [recentMolecules, setRecentMolecules] = useState<MoleculeData[]>([])
+  const [complianceScore, setComplianceScore] = useState<number | null>(null)
+  const [riskAlerts, setRiskAlerts] = useState<any[]>([])
 
   const quickActions = [
     { label: 'Add Molecule', icon: Plus, page: 'molecules' as PageId },
@@ -53,18 +59,51 @@ export function DashboardPage() {
     let cancelled = false
     const loadData = async () => {
       try {
-        const [statsRes, studiesRes] = await Promise.all([
+        const [statsRes, studiesRes, shelfLifeRes, moleculesRes, complianceRes] = await Promise.all([
           fetch('/api/stats'),
           fetch('/api/studies?limit=5'),
+          fetch('/api/studies?limit=10'),
+          fetch('/api/molecules?limit=5'),
+          fetch('/api/compliance-history'),
         ])
         if (statsRes.ok && !cancelled) {
           const data = await statsRes.json()
           if (!cancelled) setStatsData(data)
+          // Extract risk alerts from recentActivity (filter risk/alert related entries)
+          if (data.recentActivity) {
+            const alerts = data.recentActivity.filter((entry: any) => {
+              const isRiskRelated = /risk|alert|escalat|critical|reject|delete/i.test(entry.action) ||
+                /risk|alert|escalat|critical|hazard/i.test(entry.details || '') ||
+                /reject|delete/i.test(entry.action)
+              return isRiskRelated
+            })
+            if (!cancelled) setRiskAlerts(alerts)
+          }
         }
         if (studiesRes.ok && !cancelled) {
           const data = await studiesRes.json()
           const transformed: StudyData[] = (data.studies || []).slice(0, 5).map(transformStudy)
           if (!cancelled) setRecentStudies(transformed)
+        }
+        if (shelfLifeRes.ok && !cancelled) {
+          const data = await shelfLifeRes.json()
+          const withShelfLife: StudyData[] = (data.studies || [])
+            .filter((s: any) => s.predictedShelfLifeMonths != null)
+            .map(transformStudy)
+            .slice(0, 8)
+          if (!cancelled) setShelfLifeStudies(withShelfLife)
+        }
+        if (moleculesRes.ok && !cancelled) {
+          const data = await moleculesRes.json()
+          const transformed: MoleculeData[] = (data.molecules || []).slice(0, 5).map(transformMolecule)
+          if (!cancelled) setRecentMolecules(transformed)
+        }
+        if (complianceRes.ok && !cancelled) {
+          const data = await complianceRes.json()
+          if (data.reports && data.reports.length > 0) {
+            // Most recent report's overallScore
+            if (!cancelled) setComplianceScore(data.reports[0].overallScore)
+          }
         }
       } catch { /* fallback: statsData stays null, sample data used */ }
       if (!cancelled) setLoading(false)
@@ -75,17 +114,24 @@ export function DashboardPage() {
 
   const handleRefresh = () => setRefreshKey(k => k + 1)
 
+  // Derive compliance score color
+  const complianceColor = complianceScore !== null
+    ? (complianceScore >= 80 ? 'emerald' : complianceScore >= 60 ? 'amber' : 'red')
+    : 'emerald'
+
   // Derive stats from API data (fallback to sample values if API fails)
   const stats = statsData ? [
     { label: 'Total Molecules', value: String(statsData.totalMolecules), icon: Database, trend: `Avg score ${statsData.avgStabilityScore.toFixed(0)}`, trendUp: true, color: 'emerald' },
     { label: 'Active Studies', value: String(statsData.activeStudies), icon: Microscope, trend: `${statsData.totalReports} reports`, trendUp: false, color: 'teal' },
     { label: 'Avg Stability', value: statsData.avgStabilityScore.toFixed(1), icon: Cpu, trend: 'Platform-wide', trendUp: true, color: 'cyan' },
     { label: 'Risk Alerts', value: String((statsData.riskDistribution.high || 0) + (statsData.riskDistribution.critical || 0)), icon: AlertTriangle, trend: `${statsData.riskDistribution.critical || 0} critical`, trendUp: false, color: 'amber' },
+    { label: 'Compliance Score', value: complianceScore !== null ? complianceScore.toFixed(0) : '--', icon: ShieldCheck, trend: complianceScore !== null ? (complianceScore >= 80 ? 'Passing' : 'Needs review') : 'No data yet', trendUp: complianceScore !== null ? complianceScore >= 80 : false, color: complianceColor },
   ] : [
     { label: 'Total Molecules', value: '12', icon: Database, trend: '+3 this month', trendUp: true, color: 'emerald' },
     { label: 'Active Studies', value: '3', icon: Microscope, trend: '2 under review', trendUp: false, color: 'teal' },
     { label: 'Simulations Run', value: '47', icon: Cpu, trend: '+12 this week', trendUp: true, color: 'cyan' },
     { label: 'Risk Alerts', value: '2', icon: AlertTriangle, trend: '1 critical alert', trendUp: false, color: 'amber' },
+    { label: 'Compliance Score', value: '--', icon: ShieldCheck, trend: 'No data yet', trendUp: false, color: 'emerald' },
   ]
 
   // Derive risk distribution from API
@@ -114,7 +160,7 @@ export function DashboardPage() {
 
   // Sparkline colors per stat color
   const sparklineColors: Record<string, string> = {
-    emerald: '#10b981', teal: '#14b8a6', cyan: '#06b6d4', amber: '#f59e0b',
+    emerald: '#10b981', teal: '#14b8a6', cyan: '#06b6d4', amber: '#f59e0b', red: '#ef4444',
   }
   // Deterministic 7-day variations per card index for visual variety
   const sparkVariations = [
@@ -122,6 +168,7 @@ export function DashboardPage() {
     [30, 28, 32, 25, 29, 27, 31],
     [62, 65, 61, 68, 70, 66, 72],
     [3, 5, 2, 4, 6, 3, 2],
+    [85, 82, 88, 84, 90, 86, 92],
   ]
 
   return (
@@ -148,9 +195,9 @@ export function DashboardPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
         {loading ? (
-          Array.from({ length: 4 }).map((_, i) => (
+          Array.from({ length: 5 }).map((_, i) => (
             <Card key={i}><CardContent className="p-4"><div className="h-20 w-full rounded-md bg-muted animate-pulse" /></CardContent></Card>
           ))
         ) : stats.map((stat, statIdx) => {
@@ -160,6 +207,8 @@ export function DashboardPage() {
           // Pulse the Risk Alerts card when there are critical alerts
           const criticalCount = statsData?.riskDistribution?.critical || 0
           const isRiskAlertWithCritical = stat.label === 'Risk Alerts' && criticalCount > 0
+          // Compliance card tooltip when no data
+          const isComplianceNoData = stat.label === 'Compliance Score' && complianceScore === null
           return (
             <motion.div key={stat.label} whileHover={{ y: -4, boxShadow: '0 12px 32px rgba(0,0,0,0.15)' }} transition={{ type: 'spring', stiffness: 400 }}>
               <Card className={`cursor-pointer backdrop-blur-sm bg-card/80 transition-transform hover:-translate-y-1 overflow-hidden relative group ${isRiskAlertWithCritical ? 'ring-2 ring-amber-400/60 dark:ring-amber-500/40' : ''}`}>
@@ -174,8 +223,15 @@ export function DashboardPage() {
                   <div className="absolute top-0 right-0 size-24 rounded-full bg-gradient-to-br from-emerald-200/20 to-teal-200/20 dark:from-emerald-800/20 dark:to-teal-800/20 blur-2xl" />
                   <div className="flex items-center justify-between">
                     <div className="space-y-1">
-                      <p className="text-sm text-muted-foreground/90">{stat.label}</p>
-                      <div className="text-2xl font-bold">{isNaN(Number(stat.value)) ? stat.value : <AnimatedNumber value={Number(stat.value)} />}</div>
+                      <p className="text-xs sm:text-sm text-muted-foreground/90 flex items-center gap-1">
+                        {stat.label}
+                        {isComplianceNoData && (
+                          <span title="Run a compliance check to see your score" className="inline-flex items-center">
+                            <Info className="size-3.5 text-muted-foreground/60" />
+                          </span>
+                        )}
+                      </p>
+                      <div className={`text-xl sm:text-2xl font-bold ${complianceScore !== null && stat.label === 'Compliance Score' ? getScoreColor(complianceScore) : ''}`}>{isNaN(Number(stat.value)) ? stat.value : <AnimatedNumber value={Number(stat.value)} />}</div>
                     </div>
                     <div className={`p-2 rounded-lg ${COLOR_MAP[stat.color]}`}><Icon className="size-5" /></div>
                   </div>
@@ -183,8 +239,8 @@ export function DashboardPage() {
                     <div className="flex items-center gap-1 text-xs text-muted-foreground">
                       {stat.trendUp ? <ArrowUpRight className="size-3 text-emerald-500" /> : <ArrowDownRight className="size-3 text-amber-500" />}{stat.trend}
                     </div>
-                    {/* 7-day sparkline — tiny, no axes */}
-                    <div className="w-20 h-8 opacity-70 group-hover:opacity-100 transition-opacity">
+                    {/* 7-day sparkline — tiny, no axes, hidden on very small screens */}
+                    <div className="w-20 h-8 opacity-70 group-hover:opacity-100 transition-opacity hidden sm:block">
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={sparkData.map((v, i) => ({ i, v }))}>
                           <Line type="monotone" dataKey="v" stroke={sparkColor} strokeWidth={1.5} dot={false} isAnimationActive={false} />
@@ -297,7 +353,7 @@ export function DashboardPage() {
             <CardHeader>
               <CardTitle>Quick Actions</CardTitle>
             </CardHeader>
-            <CardContent className="grid grid-cols-2 gap-2">
+            <CardContent className="grid grid-cols-3 sm:grid-cols-2 gap-2">
               {quickActions.map((action) => {
                 const Icon = action.icon
                 return (
@@ -473,6 +529,249 @@ export function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          NEW SECTIONS: Shelf Life Predictions, Recent Molecules, Risk Alerts
+         ══════════════════════════════════════════════════════════════════════ */}
+
+      {/* Shelf Life Predictions + Recent Molecules */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* ── Shelf Life Predictions Card ── */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.1 }}
+          whileHover={{ y: -4, boxShadow: '0 12px 32px rgba(0,0,0,0.15)' }}
+        >
+          <Card className="backdrop-blur-sm bg-card/80 overflow-hidden relative group">
+            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-emerald-500 to-teal-500" />
+            <div className="pointer-events-none absolute inset-0 grid-pattern opacity-40 -z-10" aria-hidden />
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="size-5 text-emerald-600 dark:text-emerald-400" />
+                Shelf Life Predictions
+              </CardTitle>
+              <CardDescription>Predicted shelf life vs ICH 24-month reference threshold</CardDescription>
+              <CardAction>
+                <Badge variant="outline" className="text-xs border-emerald-500/30 text-emerald-600 dark:text-emerald-400">ICH Ref: 24 mo</Badge>
+              </CardAction>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <Skeleton className="h-[220px] w-full" />
+              ) : shelfLifeStudies.length === 0 ? (
+                <div className="py-12 text-center">
+                  <Clock className="size-12 text-emerald-500/20 dark:text-emerald-400/20 mx-auto mb-3" />
+                  <p className="font-medium text-foreground">No shelf life data yet</p>
+                  <p className="text-sm text-muted-foreground mt-1">Complete a study with predicted shelf life to see predictions here</p>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart
+                    data={shelfLifeStudies.map((s) => ({
+                      name: s.substanceName.length > 12 ? s.substanceName.slice(0, 12) + '…' : s.substanceName,
+                      months: s.predictedShelfLifeMonths ?? 0,
+                      fill: (s.predictedShelfLifeMonths ?? 0) > 24 ? '#10b981' : (s.predictedShelfLifeMonths ?? 0) >= 12 ? '#f59e0b' : '#ef4444',
+                    }))}
+                    layout="vertical"
+                    margin={{ left: 10, right: 20, top: 5, bottom: 5 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" strokeOpacity={0.3} horizontal={false} />
+                    <XAxis type="number" domain={[0, 'dataMax + 10']} className="text-xs" tickFormatter={(v: number) => `${v}mo`} />
+                    <YAxis type="category" dataKey="name" width={90} className="text-xs" />
+                    <Tooltip
+                      formatter={(value: number) => [`${value} months`, 'Shelf Life']}
+                      contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb' }}
+                    />
+                    <ReferenceLine x={24} stroke="#10b981" strokeWidth={2} strokeDasharray="6 3" label={{ value: 'ICH 24mo', position: 'insideTopRight', fill: '#10b981', fontSize: 11 }} />
+                    <Bar dataKey="months" radius={[0, 6, 6, 0]} barSize={20}>
+                      {shelfLifeStudies.map((s, idx) => {
+                        const months = s.predictedShelfLifeMonths ?? 0
+                        const barFill = months > 24 ? '#10b981' : months >= 12 ? '#f59e0b' : '#ef4444'
+                        return <Cell key={idx} fill={barFill} />
+                      })}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* ── Recent Molecules Card ── */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+          whileHover={{ y: -4, boxShadow: '0 12px 32px rgba(0,0,0,0.15)' }}
+        >
+          <Card className="backdrop-blur-sm bg-card/80 overflow-hidden relative group">
+            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-teal-500 to-cyan-500" />
+            <div className="pointer-events-none absolute inset-0 grid-pattern opacity-40 -z-10" aria-hidden />
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Atom className="size-5 text-teal-600 dark:text-teal-400" />
+                Recent Molecules
+              </CardTitle>
+              <CardDescription>Newly added compounds in the database</CardDescription>
+              <CardAction>
+                <button
+                  onClick={() => setPage('molecules')}
+                  className="text-xs text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 font-medium flex items-center gap-1 transition-colors group"
+                >
+                  View All <ExternalLink className="size-3" />
+                </button>
+              </CardAction>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <div className="space-y-3">
+                  {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+                </div>
+              ) : recentMolecules.length === 0 ? (
+                <div className="py-12 text-center">
+                  <Atom className="size-12 text-teal-500/20 dark:text-teal-400/20 mx-auto mb-3" />
+                  <p className="font-medium text-foreground">No molecules yet</p>
+                  <p className="text-sm text-muted-foreground mt-1">Add your first molecule to see it here</p>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-[280px] overflow-y-auto">
+                  {recentMolecules.map((mol, idx) => {
+                    const riskBadgeColors: Record<string, string> = {
+                      low: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+                      moderate: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+                      high: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+                      critical: 'bg-red-200 text-red-800 dark:bg-red-900/60 dark:text-red-200',
+                    }
+                    const score = mol.stabilityScore
+                    const scoreBarColor = score >= 80 ? 'bg-emerald-500' : score >= 60 ? 'bg-teal-500' : score >= 40 ? 'bg-amber-500' : 'bg-red-500'
+                    return (
+                      <motion.div
+                        key={mol.id}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: idx * 0.08 }}
+                        className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10 cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm group/row"
+                        onClick={() => setPage('molecules')}
+                      >
+                        {/* Molecule icon */}
+                        <div className="size-8 rounded-lg bg-gradient-to-br from-teal-100 to-emerald-100 dark:from-teal-900/30 dark:to-emerald-900/30 flex items-center justify-center shrink-0">
+                          <Atom className="size-4 text-teal-600 dark:text-teal-400" />
+                        </div>
+                        {/* Info */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium truncate">{mol.name}</span>
+                            <Badge className={`text-[10px] px-1.5 py-0 ${riskBadgeColors[mol.riskLevel] || riskBadgeColors.low}`}>{mol.riskLevel}</Badge>
+                          </div>
+                          <span className="text-xs text-muted-foreground">CAS: {mol.casNumber || 'N/A'}</span>
+                        </div>
+                        {/* Stability score mini progress */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          <div className="w-20 h-2 rounded-full bg-muted/50 overflow-hidden">
+                            <div className={`h-full rounded-full ${scoreBarColor} transition-all duration-500`} style={{ width: `${Math.max(score, 5)}%` }} />
+                          </div>
+                          <span className={`text-xs font-mono tabular-nums w-6 ${getScoreColor(score)}`}>{score}</span>
+                        </div>
+                      </motion.div>
+                    )
+                  })}
+                </div>
+              )}
+              {/* View All Molecules link */}
+              {!loading && recentMolecules.length > 0 && (
+                <div className="pt-3 mt-2 border-t border-muted/30">
+                  <button
+                    onClick={() => setPage('molecules')}
+                    className="text-xs text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 font-medium flex items-center gap-1 transition-colors group"
+                  >
+                    View All Molecules
+                    <ArrowRight className="size-3 transition-transform group-hover:translate-x-0.5" />
+                  </button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
+      </div>
+
+      {/* ── Risk Alerts Timeline Card ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.3 }}
+        whileHover={{ y: -4, boxShadow: '0 12px 32px rgba(0,0,0,0.15)' }}
+      >
+        <Card className="backdrop-blur-sm bg-card/80 overflow-hidden relative group">
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-amber-500 to-orange-500" />
+          <div className="pointer-events-none absolute inset-0 grid-pattern opacity-40 -z-10" aria-hidden />
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <AlertTriangle className="size-5 text-amber-600 dark:text-amber-400" />
+              Risk Alerts Timeline
+            </CardTitle>
+            <CardDescription>Recent risk-related events and alerts</CardDescription>
+            <CardAction>
+              <Badge variant="outline" className="text-xs border-amber-500/30 text-amber-600 dark:text-amber-400">Last 7 days</Badge>
+            </CardAction>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="space-y-3">
+                {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}
+              </div>
+            ) : riskAlerts.length === 0 ? (
+              <div className="py-12 text-center">
+                <CheckCircle2 className="size-12 text-emerald-500/30 dark:text-emerald-400/30 mx-auto mb-3" />
+                <p className="font-medium text-foreground">No risk alerts in the last 7 days</p>
+                <p className="text-sm text-muted-foreground mt-1">All systems operating within normal parameters</p>
+              </div>
+            ) : (
+              <div className="max-h-64 overflow-y-auto space-y-0">
+                {riskAlerts.map((entry: any, idx: number) => {
+                  // Determine severity: critical or warning
+                  const isCritical = /critical|reject|delete/i.test(entry.action) || /critical/i.test(entry.details || '')
+                  const severityColor = isCritical ? 'red' : 'amber'
+                  const dotColor = isCritical ? 'bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.5)]' : 'bg-amber-500 shadow-[0_0_6px_rgba(245,158,11,0.5)]'
+                  const lineGradient = isCritical ? 'from-red-500 to-amber-500' : 'from-amber-500 to-teal-500'
+                  const severityBadge = isCritical
+                    ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+                    : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                  const severityLabel = isCritical ? 'Critical' : 'Warning'
+                  const actionIcon = ACTION_ICON_MAP[entry.action] || AlertTriangle
+                  const IconComp = actionIcon
+                  return (
+                    <motion.div
+                      key={entry.id || idx}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: idx * 0.1 }}
+                      className="relative border-l-2 pl-4 ml-3 p-2 rounded-r-lg hover:bg-amber-50/50 dark:hover:bg-amber-900/10 transition-colors"
+                      style={{ borderImage: 'linear-gradient(to bottom, var(--tw-gradient-stops)) 1' }}
+                    >
+                      {/* Gradient line */}
+                      <div className={`absolute left-0 top-0 bottom-0 w-0.5 bg-gradient-to-b ${lineGradient}`} />
+                      {/* Color-coded dot */}
+                      <span className={`absolute -left-[5px] top-2.5 size-2.5 rounded-full ${dotColor}`} />
+                      <div className="flex items-start gap-3">
+                        <IconComp className={`size-4 mt-0.5 shrink-0 ${COLOR_MAP_TEXT[severityColor]}`} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <Badge className={`text-[10px] px-1.5 py-0 ${severityBadge}`}>{severityLabel}</Badge>
+                            <span className="text-xs text-muted-foreground font-mono">{new Date(entry.createdAt).toLocaleString()}</span>
+                          </div>
+                          <p className="text-sm leading-snug">{entry.details || `${entry.action} on ${entry.tableName} (#${entry.recordId})`}</p>
+                          {entry.user?.name && <p className="text-xs text-muted-foreground mt-0.5">by {entry.user.name}</p>}
+                        </div>
+                      </div>
+                    </motion.div>
+                  )
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </motion.div>
     </motion.div>
   )
 }

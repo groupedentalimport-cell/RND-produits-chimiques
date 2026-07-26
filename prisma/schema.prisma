@@ -154,3 +154,33 @@ model Report {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
+
+// ── Compliance Reports (history of compliance checks) ──────────────────
+
+model ComplianceReport {
+  id                String   @id @default(cuid())
+  studyId           String?
+  studyCode         String?
+  substanceName     String?
+  overallScore      Float
+  passCount         Int
+  warningCount      Int
+  failCount         Int
+  notApplicableCount Int
+  readyForSubmission Boolean @default(false)
+  categoryScores    String   // JSON string of category score breakdowns
+  blockingIssues    String?  // JSON string of blocking issues
+  checkedBy         String   @default("system")
+  createdAt         DateTime @default(now())
+}
+
+// ── Favorites/Bookmarks ────────────────────────────────────────────────
+
+model Favorite {
+  id        String   @id @default(cuid())
+  itemType  String   // molecule, study, report
+  itemId    String   // id of the favorited item
+  itemLabel String   // name/label for quick display
+  userId    String   @default("system")
+  createdAt DateTime @default(now())
+}

@@ -1,0 +1,535 @@
+     1→'use client'
+     2→
+     3→import { useState, useEffect } from 'react'
+     4→import { motion } from 'framer-motion'
+     5→import {
+     6→  Plus, Play, ClipboardList, Download, Database, Microscope, Cpu,
+     7→  AlertTriangle, RefreshCw, FileText, CheckCircle2, Activity,
+     8→  ArrowRight, ArrowUpRight, ArrowDownRight, XCircle, ShieldCheck,
+     9→  Clock, Atom, Shield, TrendingUp, Info, ExternalLink,
+    10→} from 'lucide-react'
+    11→import {
+    12→  Card, CardHeader, CardTitle, CardDescription, CardContent, CardAction,
+    13→} from '@/components/ui/card'
+    14→import { Button } from '@/components/ui/button'
+    15→import { Badge } from '@/components/ui/badge'
+    16→import { Skeleton } from '@/components/ui/skeleton'
+    17→import {
+    18→  Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
+    19→} from '@/components/ui/table'
+    20→import {
+    21→  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+    22→  ResponsiveContainer, PieChart, Pie, Cell, Legend, ReferenceLine,
+    23→} from 'recharts'
+    24→import { useAppStore } from '@/lib/store'
+    25→import {
+    26→  STABILITY_TRENDS_DATA, RISK_DISTRIBUTION_DATA, studyTypeLabels, statusColors,
+    27→  ACTION_ICON_MAP, GRADIENT_TOP_BAR, COLOR_MAP, COLOR_MAP_TEXT, transformStudy,
+    28→  transformMolecule, riskColors, getScoreColor,
+    29→} from '@/lib/sample-data'
+    30→import type { PageId, StudyData, MoleculeData } from '@/lib/types'
+    31→import { AnimatedNumber } from '@/components/shared/AnimatedNumber'
+    32→
+    33→export function DashboardPage() {
+    34→  const [loading, setLoading] = useState(true)
+    35→  const [refreshKey, setRefreshKey] = useState(0)
+    36→  const [statsData, setStatsData] = useState<{
+    37→    totalMolecules: number; activeStudies: number; avgStabilityScore: number;
+    38→    riskDistribution: Record<string, number>; recentActivity: any[];
+    39→    totalReports: number;
+    40→    studiesByStatus?: { status: string; _count: { status: number } }[];
+    41→  } | null>(null)
+    42→  const [recentStudies, setRecentStudies] = useState<StudyData[]>([])
+    43→  const [shelfLifeStudies, setShelfLifeStudies] = useState<StudyData[]>([])
+    44→  const [recentMolecules, setRecentMolecules] = useState<MoleculeData[]>([])
+    45→  const [complianceScore, setComplianceScore] = useState<number | null>(null)
+    46→  const [riskAlerts, setRiskAlerts] = useState<any[]>([])
+    47→
+    48→  const quickActions = [
+    49→    { label: 'Add Molecule', icon: Plus, page: 'molecules' as PageId },
+    50→    { label: 'Run Simulation', icon: Play, page: 'simulator' as PageId },
+    51→    { label: 'Create Study', icon: ClipboardList, page: 'studies' as PageId },
+    52→    { label: 'Compliance Check', icon: ShieldCheck, page: 'compliance' as PageId },
+    53→    { label: 'Generate Report', icon: Download, page: 'reports' as PageId },
+    54→  ]
+    55→
+    56→  const { setPage } = useAppStore()
+    57→
+    58→  useEffect(() => {
+    59→    let cancelled = false
+    60→    const loadData = async () => {
+    61→      try {
+    62→        const [statsRes, studiesRes, shelfLifeRes, moleculesRes, complianceRes] = await Promise.all([
+    63→          fetch('/api/stats'),
+    64→          fetch('/api/studies?limit=5'),
+    65→          fetch('/api/studies?limit=10'),
+    66→          fetch('/api/molecules?limit=5'),
+    67→          fetch('/api/compliance-history'),
+    68→        ])
+    69→        if (statsRes.ok && !cancelled) {
+    70→          const data = await statsRes.json()
+    71→          if (!cancelled) setStatsData(data)
+    72→          // Extract risk alerts from recentActivity (filter risk/alert related entries)
+    73→          if (data.recentActivity) {
+    74→            const alerts = data.recentActivity.filter((entry: any) => {
+    75→              const isRiskRelated = /risk|alert|escalat|critical|reject|delete/i.test(entry.action) ||
+    76→                /risk|alert|escalat|critical|hazard/i.test(entry.details || '') ||
+    77→                /reject|delete/i.test(entry.action)
+    78→              return isRiskRelated
+    79→            })
+    80→            if (!cancelled) setRiskAlerts(alerts)
+    81→          }
+    82→        }
+    83→        if (studiesRes.ok && !cancelled) {
+    84→          const data = await studiesRes.json()
+    85→          const transformed: StudyData[] = (data.studies || []).slice(0, 5).map(transformStudy)
+    86→          if (!cancelled) setRecentStudies(transformed)
+    87→        }
+    88→        if (shelfLifeRes.ok && !cancelled) {
+    89→          const data = await shelfLifeRes.json()
+    90→          const withShelfLife: StudyData[] = (data.studies || [])
+    91→            .filter((s: any) => s.predictedShelfLifeMonths != null)
+    92→            .map(transformStudy)
+    93→            .slice(0, 8)
+    94→          if (!cancelled) setShelfLifeStudies(withShelfLife)
+    95→        }
+    96→        if (moleculesRes.ok && !cancelled) {
+    97→          const data = await moleculesRes.json()
+    98→          const transformed: MoleculeData[] = (data.molecules || []).slice(0, 5).map(transformMolecule)
+    99→          if (!cancelled) setRecentMolecules(transformed)
+   100→        }
+   101→        if (complianceRes.ok && !cancelled) {
+   102→          const data = await complianceRes.json()
+   103→          if (data.reports && data.reports.length > 0) {
+   104→            // Most recent report's overallScore
+   105→            if (!cancelled) setComplianceScore(data.reports[0].overallScore)
+   106→          }
+   107→        }
+   108→      } catch { /* fallback: statsData stays null, sample data used */ }
+   109→      if (!cancelled) setLoading(false)
+   110→    }
+   111→    loadData()
+   112→    return () => { cancelled = true }
+   113→  }, [refreshKey])
+   114→
+   115→  const handleRefresh = () => setRefreshKey(k => k + 1)
+   116→
+   117→  // Derive compliance score color
+   118→  const complianceColor = complianceScore !== null
+   119→    ? (complianceScore >= 80 ? 'emerald' : complianceScore >= 60 ? 'amber' : 'red')
+   120→    : 'emerald'
+   121→
+   122→  // Derive stats from API data (fallback to sample values if API fails)
+   123→  const stats = statsData ? [
+   124→    { label: 'Total Molecules', value: String(statsData.totalMolecules), icon: Database, trend: `Avg score ${statsData.avgStabilityScore.toFixed(0)}`, trendUp: true, color: 'emerald' },
+   125→    { label: 'Active Studies', value: String(statsData.activeStudies), icon: Microscope, trend: `${statsData.totalReports} reports`, trendUp: false, color: 'teal' },
+   126→    { label: 'Avg Stability', value: statsData.avgStabilityScore.toFixed(1), icon: Cpu, trend: 'Platform-wide', trendUp: true, color: 'cyan' },
+   127→    { label: 'Risk Alerts', value: String((statsData.riskDistribution.high || 0) + (statsData.riskDistribution.critical || 0)), icon: AlertTriangle, trend: `${statsData.riskDistribution.critical || 0} critical`, trendUp: false, color: 'amber' },
+   128→    { label: 'Compliance Score', value: complianceScore !== null ? complianceScore.toFixed(0) : '--', icon: ShieldCheck, trend: complianceScore !== null ? (complianceScore >= 80 ? 'Passing' : 'Needs review') : 'No data yet', trendUp: complianceScore !== null ? complianceScore >= 80 : false, color: complianceColor },
+   129→  ] : [
+   130→    { label: 'Total Molecules', value: '12', icon: Database, trend: '+3 this month', trendUp: true, color: 'emerald' },
+   131→    { label: 'Active Studies', value: '3', icon: Microscope, trend: '2 under review', trendUp: false, color: 'teal' },
+   132→    { label: 'Simulations Run', value: '47', icon: Cpu, trend: '+12 this week', trendUp: true, color: 'cyan' },
+   133→    { label: 'Risk Alerts', value: '2', icon: AlertTriangle, trend: '1 critical alert', trendUp: false, color: 'amber' },
+   134→    { label: 'Compliance Score', value: '--', icon: ShieldCheck, trend: 'No data yet', trendUp: false, color: 'emerald' },
+   135→  ]
+   136→
+   137→  // Derive risk distribution from API
+   138→  const riskDistChart = statsData ? [
+   139→    { level: 'Low', count: statsData.riskDistribution.low || 0, fill: '#10b981' },
+   140→    { level: 'Moderate', count: statsData.riskDistribution.moderate || 0, fill: '#f59e0b' },
+   141→    { level: 'High', count: statsData.riskDistribution.high || 0, fill: '#ef4444' },
+   142→    { level: 'Critical', count: statsData.riskDistribution.critical || 0, fill: '#dc2626' },
+   143→  ] : RISK_DISTRIBUTION_DATA
+   144→
+   145→  // Derive recent activity from API audit logs
+   146→  const recentActivity = statsData?.recentActivity?.length
+   147→    ? statsData.recentActivity.map((entry: any) => ({
+   148→        text: `${entry.action} on ${entry.tableName} (#${entry.recordId}) — ${entry.details || ''}`.trim(),
+   149→        time: new Date(entry.createdAt).toLocaleDateString(),
+   150→        icon: ACTION_ICON_MAP[entry.action] || Activity,
+   151→        color: ({ create: 'emerald', update: 'amber', delete: 'red', approve: 'teal', sign: 'cyan', reject: 'red' })[entry.action] || 'emerald',
+   152→      }))
+   153→    : [
+   154→      { text: 'Study STB-2024-002 updated — Acetaminophen accelerated testing milestone completed', time: '2 hours ago', icon: CheckCircle2, color: 'emerald' },
+   155→      { text: 'Risk level escalated for Hydrogen Peroxide — now classified as critical', time: '5 hours ago', icon: AlertTriangle, color: 'red' },
+   156→      { text: 'New molecule added: Formaldehyde (CAS 50-00-0)', time: '1 day ago', icon: Plus, color: 'teal' },
+   157→      { text: 'ICH Q1A report generated for Aspirin long-term study', time: '2 days ago', icon: FileText, color: 'cyan' },
+   158→      { text: 'Simulation batch #47 completed — Ibuprofen formulation stability', time: '3 days ago', icon: Cpu, color: 'emerald' },
+   159→    ]
+   160→
+   161→  // Sparkline colors per stat color
+   162→  const sparklineColors: Record<string, string> = {
+   163→    emerald: '#10b981', teal: '#14b8a6', cyan: '#06b6d4', amber: '#f59e0b', red: '#ef4444',
+   164→  }
+   165→  // Deterministic 7-day variations per card index for visual variety
+   166→  const sparkVariations = [
+   167→    [12, 19, 14, 22, 18, 26, 24],
+   168→    [30, 28, 32, 25, 29, 27, 31],
+   169→    [62, 65, 61, 68, 70, 66, 72],
+   170→    [3, 5, 2, 4, 6, 3, 2],
+   171→    [85, 82, 88, 84, 90, 86, 92],
+   172→  ]
+   173→
+   174→  return (
+   175→    <motion.div
+   176→      initial={{ opacity: 0, y: 20 }}
+   177→      animate={{ opacity: 1, y: 0 }}
+   178→      transition={{ duration: 0.4 }}
+   179→      className="space-y-6 relative"
+   180→    >
+   181→      {/* Subtle grid pattern background with radial fade */}
+   182→      <div className="pointer-events-none absolute inset-0 grid-pattern grid-pattern-fade opacity-60 -z-10" aria-hidden />
+   183→      <div className="flex items-center justify-between">
+   184→        <div>
+   185→          <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-400 dark:to-teal-400 bg-clip-text text-transparent">Dashboard</h1>
+   186→          <p className="text-foreground/70">Overview of your chemical stability assessment platform</p>
+   187→          <p className="text-xs text-muted-foreground/70 mt-0.5 flex items-center gap-1">
+   188→            <RefreshCw className="size-2.5" />
+   189→            Last updated: <span className="font-mono">2 minutes ago</span>
+   190→          </p>
+   191→        </div>
+   192→        <Button variant="outline" size="sm" onClick={handleRefresh} disabled={loading}>
+   193→          <RefreshCw className={`size-4 mr-1 ${loading ? 'animate-spin' : ''}`} /> Refresh
+   194→        </Button>
+   195→      </div>
+   196→
+   197→      {/* Stats Cards */}
+   198→      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+   199→        {loading ? (
+   200→          Array.from({ length: 5 }).map((_, i) => (
+   201→            <Card key={i}><CardContent className="p-4"><div className="h-20 w-full rounded-md bg-muted animate-pulse" /></CardContent></Card>
+   202→          ))
+   203→        ) : stats.map((stat, statIdx) => {
+   204→          const Icon = stat.icon
+   205→          const sparkColor = sparklineColors[stat.color] || '#10b981'
+   206→          const sparkData = sparkVariations[statIdx] || sparkVariations[0]
+   207→          // Pulse the Risk Alerts card when there are critical alerts
+   208→          const criticalCount = statsData?.riskDistribution?.critical || 0
+   209→          const isRiskAlertWithCritical = stat.label === 'Risk Alerts' && criticalCount > 0
+   210→          // Compliance card tooltip when no data
+   211→          const isComplianceNoData = stat.label === 'Compliance Score' && complianceScore === null
+   212→          return (
+   213→            <motion.div key={stat.label} whileHover={{ y: -4, boxShadow: '0 12px 32px rgba(0,0,0,0.15)' }} transition={{ type: 'spring', stiffness: 400 }}>
+   214→              <Card className={`cursor-pointer backdrop-blur-sm bg-card/80 transition-transform hover:-translate-y-1 overflow-hidden relative group ${isRiskAlertWithCritical ? 'ring-2 ring-amber-400/60 dark:ring-amber-500/40' : ''}`}>
+   215→                {/* Pulsing amber glow border for Risk Alerts with critical count */}
+   216→                {isRiskAlertWithCritical && (
+   217→                  <span className="pointer-events-none absolute -inset-px rounded-xl ring-1 ring-amber-400/40 dark:ring-amber-500/30 animate-pulse" aria-hidden />
+   218→                )}
+   219→                <div className={`absolute inset-x-0 top-0 h-1 ${GRADIENT_TOP_BAR[stat.color] || GRADIENT_TOP_BAR.emerald}`} />
+   220→                {/* Hover gradient overlay */}
+   221→                <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/0 via-transparent to-teal-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+   222→                <CardContent className="p-4 relative">
+   223→                  <div className="absolute top-0 right-0 size-24 rounded-full bg-gradient-to-br from-emerald-200/20 to-teal-200/20 dark:from-emerald-800/20 dark:to-teal-800/20 blur-2xl" />
+   224→                  <div className="flex items-center justify-between">
+   225→                    <div className="space-y-1">
+   226→                      <p className="text-sm text-muted-foreground/90 flex items-center gap-1">
+   227→                        {stat.label}
+   228→                        {isComplianceNoData && (
+   229→                          <span title="Run a compliance check to see your score" className="inline-flex items-center">
+   230→                            <Info className="size-3.5 text-muted-foreground/60" />
+   231→                          </span>
+   232→                        )}
+   233→                      </p>
+   234→                      <div className={`text-2xl font-bold ${complianceScore !== null && stat.label === 'Compliance Score' ? getScoreColor(complianceScore) : ''}`}>{isNaN(Number(stat.value)) ? stat.value : <AnimatedNumber value={Number(stat.value)} />}</div>
+   235→                    </div>
+   236→                    <div className={`p-2 rounded-lg ${COLOR_MAP[stat.color]}`}><Icon className="size-5" /></div>
+   237→                  </div>
+   238→                  <div className="flex items-end justify-between gap-2 mt-2">
+   239→                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+   240→                      {stat.trendUp ? <ArrowUpRight className="size-3 text-emerald-500" /> : <ArrowDownRight className="size-3 text-amber-500" />}{stat.trend}
+   241→                    </div>
+   242→                    {/* 7-day sparkline — tiny, no axes */}
+   243→                    <div className="w-20 h-8 opacity-70 group-hover:opacity-100 transition-opacity">
+   244→                      <ResponsiveContainer width="100%" height="100%">
+   245→                        <LineChart data={sparkData.map((v, i) => ({ i, v }))}>
+   246→                          <Line type="monotone" dataKey="v" stroke={sparkColor} strokeWidth={1.5} dot={false} isAnimationActive={false} />
+   247→                        </LineChart>
+   248→                      </ResponsiveContainer>
+   249→                    </div>
+   250→                  </div>
+   251→                </CardContent>
+   252→              </Card>
+   253→            </motion.div>
+   254→          )
+   255→        })}
+   256→      </div>
+   257→
+   258→      {/* Charts Row */}
+   259→      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+   260→        <Card>
+   261→          <CardHeader>
+   262→            <CardTitle>Stability Score Trends</CardTitle>
+   263→            <CardDescription>Monthly tracking of key compound stability scores</CardDescription>
+   264→            <CardAction>
+   265→              <Badge variant="outline" className="text-xs">Last 8 months</Badge>
+   266→            </CardAction>
+   267→          </CardHeader>
+   268→          <CardContent>
+   269→            {loading ? (
+   270→              <Skeleton className="h-[280px] w-full" />
+   271→            ) : (
+   272→              <ResponsiveContainer width="100%" height={280}>
+   273→                <LineChart data={STABILITY_TRENDS_DATA}>
+   274→                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" strokeOpacity={0.3} />
+   275→                  <XAxis dataKey="month" className="text-xs" />
+   276→                  <YAxis domain={[40, 100]} ticks={[40, 60, 80, 100]} allowDataOverflow={false} className="text-xs" />
+   277→                  <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb' }} />
+   278→                  <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} iconType="circle" />
+   279→                  <Line type="monotone" dataKey="aspirin" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} name="Aspirin" />
+   280→                  <Line type="monotone" dataKey="acetaminophen" stroke="#14b8a6" strokeWidth={2} dot={{ r: 3 }} name="Acetaminophen" />
+   281→                  <Line type="monotone" dataKey="caffeine" stroke="#06b6d4" strokeWidth={2} dot={{ r: 3 }} name="Caffeine" />
+   282→                  <Line type="monotone" dataKey="overall" stroke="#f59e0b" strokeWidth={2} dot={{ r: 4, fill: '#f59e0b' }} name="Overall" />
+   283→                </LineChart>
+   284→              </ResponsiveContainer>
+   285→            )}
+   286→          </CardContent>
+   287→        </Card>
+   288→
+   289→        <Card>
+   290→          <CardHeader>
+   291→            <CardTitle>Risk Distribution</CardTitle>
+   292→            <CardDescription>Current molecule risk level breakdown</CardDescription>
+   293→          </CardHeader>
+   294→          <CardContent>
+   295→            {loading ? (
+   296→              <Skeleton className="h-[280px] w-full" />
+   297→            ) : (
+   298→              <ResponsiveContainer width="100%" height={280}>
+   299→                <BarChart data={riskDistChart}>
+   300→                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+   301→                  <XAxis dataKey="level" className="text-xs" />
+   302→                  <YAxis className="text-xs" />
+   303→                  <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb' }} />
+   304→                  <Bar dataKey="count" radius={[6, 6, 0, 0]}>
+   305→                    {riskDistChart.map((entry, index) => (
+   306→                      <Cell key={`cell-${index}`} fill={entry.fill} />
+   307→                    ))}
+   308→                  </Bar>
+   309→                </BarChart>
+   310→              </ResponsiveContainer>
+   311→            )}
+   312→          </CardContent>
+   313→        </Card>
+   314→      </div>
+   315→
+   316→      {/* Activity Feed + Quick Actions + System Status */}
+   317→      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+   318→        {/* Recent Activity */}
+   319→        <Card className="lg:col-span-2">
+   320→          <CardHeader>
+   321→            <CardTitle>Recent Activity</CardTitle>
+   322→            <CardDescription>Latest events across the platform</CardDescription>
+   323→          </CardHeader>
+   324→          <CardContent className="max-h-72 overflow-y-auto space-y-3">
+   325→            {recentActivity.map((item, i) => {
+   326→              const Icon = item.icon
+   327→              return (
+   328→                <motion.div key={i} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.1 }} className="relative border-l-2 pl-4 ml-2 p-2 rounded-r-lg hover:bg-muted/50 transition-colors" style={{ borderImage: 'linear-gradient(to bottom, #10b981, #14b8a6) 1' }}>
+   329→                  <span className="absolute -left-[5px] top-2 size-2.5 rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 shadow-[0_0_6px_rgba(16,185,129,0.5)]" />
+   330→                  <div className="flex items-start gap-3">
+   331→                    <Icon className={`size-4 mt-0.5 shrink-0 ${COLOR_MAP_TEXT[item.color]}`} />
+   332→                    <div className="flex-1 min-w-0"><p className="text-sm leading-snug">{item.text}</p><p className="text-xs text-muted-foreground mt-0.5">{item.time}</p></div>
+   333→                  </div>
+   334→                </motion.div>
+   335→              )
+   336→            })}
+   337→          </CardContent>
+   338→          {/* View all link */}
+   339→          <div className="px-6 pb-4 pt-0">
+   340→            <button
+   341→              onClick={() => setPage('admin')}
+   342→              className="text-xs text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 font-medium flex items-center gap-1 transition-colors group"
+   343→            >
+   344→              View all activity
+   345→              <ArrowRight className="size-3 transition-transform group-hover:translate-x-0.5" />
+   346→            </button>
+   347→          </div>
+   348→        </Card>
+   349→
+   350→        {/* Quick Actions + System Status */}
+   351→        <div className="space-y-4">
+   352→          <Card>
+   353→            <CardHeader>
+   354→              <CardTitle>Quick Actions</CardTitle>
+   355→            </CardHeader>
+   356→            <CardContent className="grid grid-cols-2 gap-2">
+   357→              {quickActions.map((action) => {
+   358→                const Icon = action.icon
+   359→                return (
+   360→                  <motion.div
+   361→                    key={action.label}
+   362→                    whileHover={{ scale: 1.03 }}
+   363→                    whileTap={{ scale: 0.97 }}
+   364→                  >
+   365→                    <Button
+   366→                      variant="outline"
+   367→                      className="w-full h-auto py-3 flex flex-col items-center gap-2"
+   368→                      onClick={() => setPage(action.page)}
+   369→                    >
+   370→                      <Icon className="size-5 text-emerald-600 dark:text-emerald-400" />
+   371→                      <span className="text-xs">{action.label}</span>
+   372→                    </Button>
+   373→                  </motion.div>
+   374→                )
+   375→              })}
+   376→            </CardContent>
+   377→          </Card>
+   378→
+   379→          <Card className="gradient-border backdrop-blur-sm bg-card/80">
+   380→            <CardHeader>
+   381→              <CardTitle className="flex items-center gap-2">
+   382→                <span className="relative flex h-2 w-2">
+   383→                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+   384→                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+   385→                </span>
+   386→                System Status
+   387→              </CardTitle>
+   388→            </CardHeader>
+   389→            <CardContent className="space-y-3">
+   390→              {[
+   391→                { label: 'Database', status: 'Operational', ok: true },
+   392→                { label: 'ML Pipeline', status: 'Idle', ok: true },
+   393→                { label: 'Storage', status: '78% used', ok: true },
+   394→                { label: 'API Gateway', status: 'Operational', ok: true },
+   395→              ].map((item) => (
+   396→                <div key={item.label} className="flex items-center justify-between text-sm">
+   397→                  <span className="text-muted-foreground">{item.label}</span>
+   398→                  <div className="flex items-center gap-2">
+   399→                    <span>{item.status}</span>
+   400→                    {item.ok
+   401→                      ? <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" /><span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" /></span>
+   402→                      : <XCircle className="size-3.5 text-red-500" />}
+   403→                  </div>
+   404→                </div>
+   405→              ))}
+   406→            </CardContent>
+   407→          </Card>
+   408→        </div>
+   409→      </div>
+   410→
+   411→      {/* Recent Studies + Status Donut */}
+   412→      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+   413→        <Card className="lg:col-span-2 backdrop-blur-sm bg-card/80">
+   414→          <CardHeader>
+   415→            <div className="flex items-center justify-between">
+   416→              <div>
+   417→                <CardTitle className="flex items-center gap-2">
+   418→                  <Microscope className="size-5 text-emerald-600 dark:text-emerald-400" />
+   419→                  Recent Studies
+   420→                </CardTitle>
+   421→                <CardDescription>Latest stability studies across the platform</CardDescription>
+   422→              </div>
+   423→              <Button variant="outline" size="sm" onClick={() => setPage('studies')}>
+   424→                View All <ArrowRight className="size-3 ml-1" />
+   425→              </Button>
+   426→            </div>
+   427→          </CardHeader>
+   428→          <CardContent className="p-0">
+   429→            <div className="max-h-72 overflow-y-auto">
+   430→              {loading ? (
+   431→                <div className="p-4 space-y-2">
+   432→                  {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+   433→                </div>
+   434→              ) : recentStudies.length === 0 ? (
+   435→                <div className="p-12 text-center relative">
+   436→                  <Microscope className="size-14 text-emerald-500/20 dark:text-emerald-400/20 mx-auto mb-3" />
+   437→                  <p className="font-medium text-foreground">No studies yet</p>
+   438→                  <p className="text-sm text-muted-foreground mt-1">Create your first stability study to see it here</p>
+   439→                  <Button
+   440→                    className="bg-emerald-600 hover:bg-emerald-700 text-white mt-3"
+   441→                    size="sm"
+   442→                    onClick={() => setPage('studies')}
+   443→                  >
+   444→                    <Plus className="size-4 mr-1" /> Create Study
+   445→                  </Button>
+   446→                </div>
+   447→              ) : (
+   448→                <Table>
+   449→                  <TableHeader className="sticky top-0 bg-card">
+   450→                    <TableRow>
+   451→                      <TableHead className="text-xs">Code</TableHead>
+   452→                      <TableHead className="text-xs">Substance</TableHead>
+   453→                      <TableHead className="text-xs">Type</TableHead>
+   454→                      <TableHead className="text-xs">Temp</TableHead>
+   455→                      <TableHead className="text-xs">Status</TableHead>
+   456→                    </TableRow>
+   457→                  </TableHeader>
+   458→                  <TableBody>
+   459→                    {recentStudies.map((s, idx) => (
+   460→                      <TableRow key={s.id} className={`cursor-pointer hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[inset_3px_0_0_0_rgb(16,185,129),0_4px_12px_-4px_rgba(16,185,129,0.25)] ${idx % 2 === 1 ? 'bg-muted/30' : ''}`} onClick={() => setPage('studies')}>
+   461→                        <TableCell className="font-mono text-xs font-medium">{s.studyCode}</TableCell>
+   462→                        <TableCell className="text-sm">{s.substanceName}</TableCell>
+   463→                        <TableCell className="text-xs text-muted-foreground">{studyTypeLabels[s.studyType] || s.studyType}</TableCell>
+   464→                        <TableCell className="text-xs">{s.temperatureC}°C</TableCell>
+   465→                        <TableCell><Badge className={`text-[10px] ${statusColors[s.status] || ''}`}>{s.status.replace('_', ' ')}</Badge></TableCell>
+   466→                      </TableRow>
+   467→                    ))}
+   468→                  </TableBody>
+   469→                </Table>
+   470→              )}
+   471→            </div>
+   472→          </CardContent>
+   473→        </Card>
+   474→
+   475→        <Card className="backdrop-blur-sm bg-card/80">
+   476→          <CardHeader>
+   477→            <CardTitle>Studies by Status</CardTitle>
+   478→            <CardDescription>Distribution of study workflow states</CardDescription>
+   479→          </CardHeader>
+   480→          <CardContent>
+   481→            {loading ? (
+   482→              <Skeleton className="h-[220px] w-full" />
+   483→            ) : !statsData?.studiesByStatus || statsData.studiesByStatus.length === 0 ? (
+   484→              <p className="text-sm text-muted-foreground py-16 text-center">No data available</p>
+   485→            ) : (
+   486→              <>
+   487→                <ResponsiveContainer width="100%" height={180}>
+   488→                  <PieChart>
+   489→                    <Pie
+   490→                      data={statsData.studiesByStatus.map((s) => ({ name: s.status.replace('_', ' '), value: s._count.status }))}
+   491→                      dataKey="value"
+   492→                      nameKey="name"
+   493→                      cx="50%"
+   494→                      cy="50%"
+   495→                      innerRadius={40}
+   496→                      outerRadius={70}
+   497→                      paddingAngle={2}
+   498→                    >
+   499→                      {statsData.studiesByStatus.map((entry, idx) => {
+   500→                        const statusColors: Record<string, string> = {
+   501→                          draft: '#94a3b8', in_progress: '#14b8a6', completed: '#10b981',
+   502→                          under_review: '#f59e0b', approved: '#22c55e', rejected: '#ef4444',
+   503→                        }
+   504→                        return <Cell key={idx} fill={statusColors[entry.status] || '#94a3b8'} />
+   505→                      })}
+   506→                    </Pie>
+   507→                    <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb' }} />
+   508→                  </PieChart>
+   509→                </ResponsiveContainer>
+   510→                <div className="space-y-1 mt-2">
+   511→                  {statsData.studiesByStatus.map((s) => {
+   512→                    const statusColors: Record<string, string> = {
+   513→                      draft: 'bg-slate-400', in_progress: 'bg-teal-500', completed: 'bg-emerald-500',
+   514→                      under_review: 'bg-amber-500', approved: 'bg-green-500', rejected: 'bg-red-500',
+   515→                    }
+   516→                    return (
+   517→                      <div key={s.status} className="flex items-center justify-between text-xs">
+   518→                        <div className="flex items-center gap-2">
+   519→                          <span className={`size-2 rounded-full ${statusColors[s.status] || 'bg-slate-400'}`} />
+   520→                          <span className="capitalize">{s.status.replace('_', ' ')}</span>
+   521→                        </div>
+   522→                        <span className="font-semibold tabular-nums">{s._count.status}</span>
+   523→                      </div>
+   524→                    )
+   525→                  })}
+   526→                </div>
+   527→              </>
+   528→            )}
+   529→          </CardContent>
+   530→        </Card>
+   531→      </div>
+   532→    </motion.div>
+   533→  )
+   534→}
+   535→

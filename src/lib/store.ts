@@ -239,6 +239,64 @@ interface PreferencesState {
   setDefaultMoleculesPerPage: (v: number) => void
 }
 
+// ── Favorites State ──────────────────────────────────────────────────────
+
+export interface FavoriteItem {
+  itemType: string
+  itemId: string
+  itemLabel: string
+}
+
+interface FavoriteState {
+  favorites: FavoriteItem[]
+  loading: boolean
+  setFavorites: (favorites: FavoriteItem[]) => void
+  setLoading: (loading: boolean) => void
+  toggleFavorite: (itemType: string, itemId: string, itemLabel: string) => Promise<void>
+  refreshFavorites: () => Promise<void>
+  isFavorite: (itemType: string, itemId: string) => boolean
+}
+
+export const useFavoriteStore = create<FavoriteState>((set, get) => ({
+  favorites: [],
+  loading: false,
+  setFavorites: (favorites) => set({ favorites }),
+  setLoading: (loading) => set({ loading }),
+  toggleFavorite: async (itemType, itemId, itemLabel) => {
+    try {
+      const res = await fetch('/api/favorites', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itemType, itemId, itemLabel }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        // Refresh the list to reflect the toggle
+        await get().refreshFavorites()
+      }
+    } catch (err) {
+      console.error('[favorites] toggle error:', err)
+    }
+  },
+  refreshFavorites: async () => {
+    set({ loading: true })
+    try {
+      const res = await fetch('/api/favorites')
+      if (res.ok) {
+        const data = await res.json()
+        set({ favorites: data.favorites || [] })
+      }
+    } catch (err) {
+      console.error('[favorites] refresh error:', err)
+    } finally {
+      set({ loading: false })
+    }
+  },
+  isFavorite: (itemType, itemId) => {
+    return get().favorites.some((f) => f.itemType === itemType && f.itemId === itemId)
+  },
+}))
+
 export const usePreferencesStore = create<PreferencesState>()(
   persist(
     (set) => ({

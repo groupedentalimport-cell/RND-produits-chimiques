@@ -14,9 +14,9 @@ export function PageSkeleton() {
         <div className="h-4 w-72 rounded-md shimmer" />
       </div>
 
-      {/* 4 KPI card skeletons */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {Array.from({ length: 4 }).map((_, i) => (
+      {/* 5 KPI card skeletons */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+        {Array.from({ length: 5 }).map((_, i) => (
           <div key={i} className="rounded-xl border border-border/60 overflow-hidden">
             <div className="h-1 bg-gradient-to-r from-emerald-500/40 to-teal-500/40" />
             <div className="p-4 space-y-3">

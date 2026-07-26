@@ -425,6 +425,96 @@ select:focus-visible,
   animation: fade-in-up 0.45s ease-out both;
 }
 
+/* ── Mobile-first responsive utilities ────────────────────────────────────── */
+
+/* Touch-friendly tap targets — minimum 44px for mobile */
+@media (max-width: 640px) {
+  button, a, [role="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  /* Reduce padding on mobile for better space usage */
+  .card-mobile-compact {
+    padding: 12px !important;
+  }
+  /* Smaller text on mobile for stat cards */
+  .stat-mobile-sm {
+    font-size: 1rem !important;
+  }
+  /* Horizontal scroll for tables on mobile */
+  .table-mobile-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  /* Hide desktop-only decorative elements on mobile */
+  .mobile-hide {
+    display: none !important;
+  }
+}
+
+/* ── Enhanced animation utilities ─────────────────────────────────────────── */
+
+/* Float animation — gentle up/down motion for decorative elements */
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+.float {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Scale bounce — for interactive button feedback */
+@keyframes scale-bounce {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+.scale-bounce {
+  animation: scale-bounce 0.3s ease-out;
+}
+
+/* Rotate slowly — for decorative icon elements */
+@keyframes rotate-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.rotate-slow {
+  animation: rotate-slow 20s linear infinite;
+}
+
+/* Gradient sweep animation for card accent bars */
+@keyframes gradient-sweep {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+.gradient-sweep {
+  background-size: 200% 100%;
+  animation: gradient-sweep 3s ease-in-out infinite;
+}
+
+/* ── Hover lift utility (applied via motion.div in React, but also available as CSS) ── */
+.hover-lift {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.hover-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 28px -8px rgba(16, 185, 129, 0.16);
+}
+.dark .hover-lift:hover {
+  box-shadow: 0 12px 28px -8px rgba(20, 184, 166, 0.22);
+}
+
+/* ── Tooltip shimmer for premium feel ──────────────────────────────────────── */
+@keyframes tooltip-shimmer {
+  0% { opacity: 0.85; }
+  50% { opacity: 1; }
+  100% { opacity: 0.85; }
+}
+.tooltip-shimmer {
+  animation: tooltip-shimmer 2.5s ease-in-out infinite;
+}
+
 /* ── Print-specific styles ─────────────────────────────────────────────────── */
 
 /* Print page breaks for report sections */

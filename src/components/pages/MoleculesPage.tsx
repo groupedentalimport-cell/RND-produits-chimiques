@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus, Download, RefreshCw, Search, BarChart3, LayoutGrid,
   Microscope, AlertTriangle, GitCompareArrows, X, CheckSquare, Atom, Database,
-  Network,
+  Network, Star,
 } from 'lucide-react'
 import {
   Card, CardContent, CardFooter,
@@ -32,7 +32,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import {
   Tooltip as UiTooltip, TooltipTrigger, TooltipContent, TooltipProvider,
 } from '@/components/ui/tooltip'
-import { useAppStore, useCompareStore } from '@/lib/store'
+import { useAppStore, useCompareStore, useFavoriteStore } from '@/lib/store'
 import { useToast } from '@/hooks/use-toast'
 import {
   transformMolecule, riskColors, getScoreColor,
@@ -51,6 +51,7 @@ export function MoleculesPage() {
   const { toast } = useToast()
   const { setPage } = useAppStore()
   const { selectedIds: compareIds, toggleId: toggleCompareId, setCompareOpen, clear: clearCompare } = useCompareStore()
+  const { isFavorite, toggleFavorite } = useFavoriteStore()
   const [searchQuery, setSearchQuery] = useState('')
   const [riskFilter, setRiskFilter] = useState('all')
   const [sourceFilter, setSourceFilter] = useState('all')
@@ -524,7 +525,19 @@ export function MoleculesPage() {
                           className="cursor-pointer"
                         />
                       </TableCell>
-                      <TableCell className="font-medium">{mol.name}</TableCell>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-1.5">
+                          <span>{mol.name}</span>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-5 shrink-0 p-0 hover:bg-transparent"
+                            onClick={(e) => { e.stopPropagation(); toggleFavorite('molecule', mol.id, mol.name) }}
+                          >
+                            <Star className={`size-3.5 transition-colors ${isFavorite('molecule', mol.id) ? 'fill-emerald-500 text-emerald-500' : 'text-muted-foreground/50 hover:text-emerald-400'}`} />
+                          </Button>
+                        </div>
+                      </TableCell>
                       <TableCell><Formula>{mol.formula}</Formula></TableCell>
                       <TableCell>{mol.molarMass ? mol.molarMass.toFixed(2) : '—'}</TableCell>
                       <TableCell>{mol.logP ? mol.logP.toFixed(2) : '—'}</TableCell>
@@ -673,7 +686,17 @@ export function MoleculesPage() {
                   )}
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between mb-2">
-                      <h3 className="font-semibold">{mol.name}</h3>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <h3 className="font-semibold truncate">{mol.name}</h3>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-5 shrink-0 p-0 hover:bg-transparent"
+                          onClick={(e) => { e.stopPropagation(); toggleFavorite('molecule', mol.id, mol.name) }}
+                        >
+                          <Star className={`size-3.5 transition-colors ${isFavorite('molecule', mol.id) ? 'fill-emerald-500 text-emerald-500' : 'text-muted-foreground/50 hover:text-emerald-400'}`} />
+                        </Button>
+                      </div>
                       <Badge className={`text-[10px] ${riskColors[mol.riskLevel]}`}>{mol.riskLevel}</Badge>
                     </div>
                     <Formula>{mol.formula}</Formula>

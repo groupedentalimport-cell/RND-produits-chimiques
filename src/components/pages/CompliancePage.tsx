@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   ClipboardCheck, RefreshCw, CheckCircle2, AlertTriangle, XCircle, MinusCircle,
   FileText, Shield, Award, ChevronRight, Sparkles, Download, Loader2, Info,
-  FlaskConical, Microscope, BookOpen, Scale,
+  FlaskConical, Microscope, BookOpen, Scale, History, Clock, ChevronDown,
 } from 'lucide-react'
 import {
   Card, CardContent, CardHeader, CardTitle, CardDescription,
@@ -22,6 +22,9 @@ import {
 import {
   Accordion, AccordionContent, AccordionItem, AccordionTrigger,
 } from '@/components/ui/accordion'
+import {
+  Tabs, TabsList, TabsTrigger, TabsContent,
+} from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
 import {
   COMPLIANCE_CATEGORY_LABELS,
@@ -85,6 +88,25 @@ interface StudyOption {
   durationMonths: number
 }
 
+// ── History Report (mirrors compliance-history API) ────────────────────
+
+interface HistoryReport {
+  id: string
+  studyId: string
+  studyCode: string
+  substanceName: string
+  overallScore: number
+  passCount: number
+  warningCount: number
+  failCount: number
+  notApplicableCount: number
+  readyForSubmission: boolean
+  categoryScores: CategoryScore[]
+  blockingIssues: string[]
+  checkedBy: string
+  createdAt: string
+}
+
 // ── Helpers ─────────────────────────────────────────────────────────────
 
 const STATUS_META: Record<ComplianceStatus, {
@@ -142,6 +164,13 @@ function getScoreLabel(score: number): string {
   if (score >= 60) return 'Needs Attention'
   if (score >= 40) return 'At Risk'
   return 'Non-Compliant'
+}
+
+function getScoreBadgeClasses(score: number): string {
+  if (score >= 80) return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 border-emerald-300/60 dark:border-emerald-700/60'
+  if (score >= 60) return 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 border-amber-300/60 dark:border-amber-700/60'
+  if (score >= 40) return 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300 border-orange-300/60 dark:border-orange-700/60'
+  return 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 border-red-300/60 dark:border-red-700/60'
 }
 
 const STUDY_TYPE_LABELS: Record<string, string> = {
@@ -445,6 +474,9 @@ export function CompliancePage() {
   const [loading, setLoading] = useState(true)
   const [checking, setChecking] = useState(false)
   const [report, setReport] = useState<ComplianceReport | null>(null)
+  const [historyReports, setHistoryReports] = useState<HistoryReport[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null)
 
   // Load studies on mount
   useEffect(() => {
@@ -479,11 +511,26 @@ export function CompliancePage() {
     return () => { cancelled = true }
   }, [])
 
-  const selectedStudy = useMemo(
-    () => studies.find((s) => s.id === selectedStudyId),
-    [studies, selectedStudyId],
-  )
+  // Load compliance history on mount
+  const loadHistory = async () => {
+    setHistoryLoading(true)
+    try {
+      const res = await fetch('/api/compliance-history')
+      if (res.ok) {
+        const data = await res.json()
+        setHistoryReports(data.reports || [])
+      }
+    } catch {
+      // ignore
+    }
+    setHistoryLoading(false)
+  }
 
+  useEffect(() => {
+    loadHistory()
+  }, [])
+
+  // Refresh history after a successful check
   const runCheck = async () => {
     if (!selectedStudyId) {
       toast({ title: 'Select a study', description: 'Please pick a study to check.', variant: 'destructive' })
@@ -503,6 +550,8 @@ export function CompliancePage() {
       }
       const data: ComplianceReport = await res.json()
       setReport(data)
+      // Refresh history so the new report appears
+      loadHistory()
       toast({
         title: `Compliance check complete`,
         description: `Overall score: ${data.overallScore}/100 — ${getScoreLabel(data.overallScore)}`,
@@ -517,6 +566,11 @@ export function CompliancePage() {
       setChecking(false)
     }
   }
+
+  const selectedStudy = useMemo(
+    () => studies.find((s) => s.id === selectedStudyId),
+    [studies, selectedStudyId],
+  )
 
   const handlePrint = () => {
     window.print()
@@ -651,204 +705,467 @@ export function CompliancePage() {
         </CardContent>
       </Card>
 
-      {/* Main content area */}
-      {checking ? (
-        <CheckingState />
-      ) : !report ? (
-        <Card className="print:hidden">
-          <CardContent className="pt-6">
-            <EmptyState />
-          </CardContent>
-        </Card>
-      ) : (
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
-          className="space-y-6"
-        >
-          {/* Top row: Score ring + certificate */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Score ring */}
-            <Card className="border-emerald-500/20 print:hidden">
-              <CardHeader className="pb-2">
-                <CardTitle className="flex items-center gap-2 text-sm">
-                  <Award className="size-4 text-emerald-500" />
-                  Overall Compliance Score
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-col items-center pt-2">
-                <ScoreRing score={report.overallScore} />
-                <p className="text-xs text-muted-foreground text-center mt-3 max-w-xs">
-                  Weighted score across {report.results.length} rules ({report.passCount + report.warningCount + report.failCount} applicable, {report.notApplicableCount} not applicable).
-                </p>
-                <div className="flex items-center gap-2 mt-3">
-                  {report.readyForSubmission ? (
-                    <Badge className="bg-emerald-500 hover:bg-emerald-500 text-white gap-1">
-                      <CheckCircle2 className="size-3" /> Ready for submission
-                    </Badge>
-                  ) : (
-                    <Badge variant="destructive" className="gap-1">
-                      <XCircle className="size-3" /> Not ready for submission
-                    </Badge>
-                  )}
-                </div>
+      {/* Tabs: Current Check & History */}
+      <Tabs defaultValue="current" className="space-y-4">
+        <TabsList className="w-full sm:w-auto">
+          <TabsTrigger value="current" className="gap-1.5">
+            <ClipboardCheck className="size-3.5" />
+            Current Check
+          </TabsTrigger>
+          <TabsTrigger value="history" className="gap-1.5">
+            <History className="size-3.5" />
+            History
+          </TabsTrigger>
+        </TabsList>
+
+        {/* ── Current Check Tab ──────────────────────────────────────────── */}
+        <TabsContent value="current">
+          {checking ? (
+            <CheckingState />
+          ) : !report ? (
+            <Card className="print:hidden">
+              <CardContent className="pt-6">
+                <EmptyState />
               </CardContent>
             </Card>
+          ) : (
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4 }}
+              className="space-y-6"
+            >
+              {/* Top row: Score ring + certificate */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Score ring */}
+                <Card className="border-emerald-500/20 print:hidden">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="flex items-center gap-2 text-sm">
+                      <Award className="size-4 text-emerald-500" />
+                      Overall Compliance Score
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="flex flex-col items-center pt-2">
+                    <ScoreRing score={report.overallScore} />
+                    <p className="text-xs text-muted-foreground text-center mt-3 max-w-xs">
+                      Weighted score across {report.results.length} rules ({report.passCount + report.warningCount + report.failCount} applicable, {report.notApplicableCount} not applicable).
+                    </p>
+                    <div className="flex items-center gap-2 mt-3">
+                      {report.readyForSubmission ? (
+                        <Badge className="bg-emerald-500 hover:bg-emerald-500 text-white gap-1">
+                          <CheckCircle2 className="size-3" /> Ready for submission
+                        </Badge>
+                      ) : (
+                        <Badge variant="destructive" className="gap-1">
+                          <XCircle className="size-3" /> Not ready for submission
+                        </Badge>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
 
-            {/* Certificate */}
-            <div className="lg:col-span-2">
-              <ComplianceCertificate report={report} />
+                {/* Certificate */}
+                <div className="lg:col-span-2">
+                  <ComplianceCertificate report={report} />
+                </div>
+              </div>
+
+              {/* Category breakdown */}
+              <Card className="print:hidden">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-sm">
+                    <BookOpen className="size-4 text-emerald-500" />
+                    Category Breakdown
+                  </CardTitle>
+                  <CardDescription>
+                    Compliance score by regulatory category. Hover for details.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {report.categoryScores.map((cat, i) => {
+                      const color = getScoreColor(cat.score)
+                      return (
+                        <motion.div
+                          key={cat.category}
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: i * 0.05 }}
+                          className="p-3 rounded-lg border border-border/60 hover:border-emerald-500/40 hover:shadow-md hover:shadow-emerald-500/5 transition-all hover-lift"
+                        >
+                          <div className="flex items-start justify-between mb-2">
+                            <div>
+                              <p className="text-xs font-semibold">{cat.label}</p>
+                              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{cat.category}</p>
+                            </div>
+                            <span className="text-lg font-bold tabular-nums" style={{ color }}>
+                              {cat.score}
+                            </span>
+                          </div>
+                          <div className="h-1.5 rounded-full bg-muted/40 overflow-hidden">
+                            <motion.div
+                              className="h-full rounded-full"
+                              style={{ background: color }}
+                              initial={{ width: 0 }}
+                              animate={{ width: `${cat.score}%` }}
+                              transition={{ duration: 0.8, delay: 0.2 + i * 0.05, ease: 'easeOut' }}
+                            />
+                          </div>
+                          <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
+                            <span className="flex items-center gap-0.5">
+                              <CheckCircle2 className="size-2.5 text-emerald-500" /> {cat.pass}
+                            </span>
+                            <span className="flex items-center gap-0.5">
+                              <AlertTriangle className="size-2.5 text-amber-500" /> {cat.warning}
+                            </span>
+                            <span className="flex items-center gap-0.5">
+                              <XCircle className="size-2.5 text-red-500" /> {cat.fail}
+                            </span>
+                            {cat.notApplicable > 0 && (
+                              <span className="flex items-center gap-0.5">
+                                <MinusCircle className="size-2.5 text-slate-400" /> {cat.notApplicable}
+                              </span>
+                            )}
+                          </div>
+                        </motion.div>
+                      )
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Detailed rule results */}
+              <Card className="print:hidden">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-sm">
+                    <FileText className="size-4 text-emerald-500" />
+                    Detailed Rule Results
+                  </CardTitle>
+                  <CardDescription>
+                    {report.results.length} rules evaluated across {report.categoryScores.length} categories. Click to expand evidence.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Accordion type="multiple" className="w-full">
+                    {groupedResults.map((group) => (
+                      <AccordionItem key={group.category} value={group.category} className="border-border/60">
+                        <AccordionTrigger className="hover:no-underline hover:bg-emerald-50/40 dark:hover:bg-emerald-950/20 px-3 rounded-md">
+                          <div className="flex items-center gap-3 flex-1">
+                            <span
+                              className="w-2 h-2 rounded-full"
+                              style={{ background: COMPLIANCE_CATEGORY_COLORS[group.category] }}
+                            />
+                            <span className="font-medium text-sm">{group.label}</span>
+                            <span className="text-xs text-muted-foreground">
+                              ({group.results.filter(r => r.status === 'pass').length}/{group.results.filter(r => r.status !== 'not_applicable').length} pass)
+                            </span>
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="pt-2 space-y-2">
+                          {group.results.map((r) => {
+                            const meta = STATUS_META[r.status]
+                            const Icon = meta.icon
+                            return (
+                              <motion.div
+                                key={r.ruleId}
+                                initial={{ opacity: 0, x: -8 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                className="p-3 rounded-lg border border-border/40 bg-muted/20 hover:bg-muted/40 transition-colors slide-in-left"
+                              >
+                                <div className="flex items-start gap-3">
+                                  <Icon className={`size-4 mt-0.5 shrink-0 ${meta.textClass}`} />
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-start justify-between gap-2 flex-wrap">
+                                      <div>
+                                        <p className="text-sm font-medium">
+                                          <span className="font-mono text-xs text-muted-foreground mr-1.5">{r.ruleId}</span>
+                                          {r.ruleTitle}
+                                        </p>
+                                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                                          {r.guideline} · weight {r.weight}
+                                        </p>
+                                      </div>
+                                      <StatusBadge status={r.status} />
+                                    </div>
+                                    <p className="text-xs text-muted-foreground mt-1.5">{r.evidence}</p>
+                                    {r.recommendation && (
+                                      <div className="mt-2 flex items-start gap-1.5 p-2 rounded bg-amber-50/60 dark:bg-amber-950/20 border border-amber-500/20">
+                                        <Info className="size-3 text-amber-500 mt-0.5 shrink-0" />
+                                        <p className="text-[11px] text-amber-700 dark:text-amber-300">
+                                          <span className="font-semibold">Recommendation:</span> {r.recommendation}
+                                        </p>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </motion.div>
+                            )
+                          })}
+                        </AccordionContent>
+                      </AccordionItem>
+                    ))}
+                  </Accordion>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+
+          {/* Loading skeleton on initial mount */}
+          {loading && !report && !checking && (
+            <div className="space-y-4">
+              <Skeleton className="h-24 w-full" />
+              <Skeleton className="h-64 w-full" />
             </div>
-          </div>
+          )}
+        </TabsContent>
 
-          {/* Category breakdown */}
-          <Card className="print:hidden">
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2 text-sm">
-                <BookOpen className="size-4 text-emerald-500" />
-                Category Breakdown
-              </CardTitle>
-              <CardDescription>
-                Compliance score by regulatory category. Hover for details.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {report.categoryScores.map((cat, i) => {
-                  const color = getScoreColor(cat.score)
+        {/* ── History Tab ────────────────────────────────────────────────── */}
+        <TabsContent value="history">
+          {historyLoading ? (
+            <div className="space-y-4">
+              <Skeleton className="h-16 w-full" />
+              <Skeleton className="h-16 w-full" />
+              <Skeleton className="h-16 w-full" />
+            </div>
+          ) : historyReports.length === 0 ? (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex flex-col items-center justify-center py-16 px-4"
+            >
+              <div className="relative mb-6">
+                <div className="relative w-20 h-20 rounded-2xl bg-gradient-to-br from-teal-500 to-cyan-600 flex items-center justify-center shadow-xl shadow-teal-500/30">
+                  <Clock className="size-10 text-white" />
+                </div>
+              </div>
+              <h3 className="text-xl font-semibold mb-2">No History Yet</h3>
+              <p className="text-muted-foreground text-center max-w-md mb-6">
+                No compliance checks have been run yet. Run your first check above to create a history entry.
+              </p>
+              <Button
+                variant="outline"
+                className="gap-2 border-teal-500/40 text-teal-600 hover:bg-teal-50 dark:text-teal-400 dark:hover:bg-teal-950/30"
+                onClick={() => {
+                  // Switch to current tab — no direct way with radix, just inform user
+                  toast({ title: 'Switch to Current Check tab', description: 'Select a study and run a compliance check.' })
+                }}
+              >
+                <ClipboardCheck className="size-4" />
+                Run First Check
+              </Button>
+            </motion.div>
+          ) : (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="space-y-4"
+            >
+              {/* Summary header */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <History className="size-3.5 text-teal-500" />
+                  <span className="uppercase tracking-wider">
+                    {historyReports.length} compliance check{historyReports.length !== 1 ? 's' : ''} recorded
+                  </span>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 border-teal-500/30 text-teal-600 hover:bg-teal-50/60 dark:text-teal-400 dark:hover:bg-teal-950/20"
+                  onClick={loadHistory}
+                >
+                  <RefreshCw className="size-3.5" />
+                  Refresh
+                </Button>
+              </div>
+
+              {/* History cards */}
+              <div className="max-h-[600px] overflow-y-auto space-y-3 pr-1 custom-scrollbar">
+                {historyReports.map((hr, i) => {
+                  const isExpanded = expandedHistoryId === hr.id
+                  const scoreColor = getScoreColor(hr.overallScore)
+                  const scoreLabel = getScoreLabel(hr.overallScore)
+                  const badgeClasses = getScoreBadgeClasses(hr.overallScore)
+                  const date = new Date(hr.createdAt)
+
                   return (
                     <motion.div
-                      key={cat.category}
+                      key={hr.id}
                       initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: i * 0.05 }}
-                      className="p-3 rounded-lg border border-border/60 hover:border-emerald-500/40 hover:shadow-md hover:shadow-emerald-500/5 transition-all hover-lift"
+                      transition={{ delay: i * 0.04 }}
                     >
-                      <div className="flex items-start justify-between mb-2">
-                        <div>
-                          <p className="text-xs font-semibold">{cat.label}</p>
-                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{cat.category}</p>
-                        </div>
-                        <span className="text-lg font-bold tabular-nums" style={{ color }}>
-                          {cat.score}
-                        </span>
-                      </div>
-                      <div className="h-1.5 rounded-full bg-muted/40 overflow-hidden">
-                        <motion.div
-                          className="h-full rounded-full"
-                          style={{ background: color }}
-                          initial={{ width: 0 }}
-                          animate={{ width: `${cat.score}%` }}
-                          transition={{ duration: 0.8, delay: 0.2 + i * 0.05, ease: 'easeOut' }}
-                        />
-                      </div>
-                      <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
-                        <span className="flex items-center gap-0.5">
-                          <CheckCircle2 className="size-2.5 text-emerald-500" /> {cat.pass}
-                        </span>
-                        <span className="flex items-center gap-0.5">
-                          <AlertTriangle className="size-2.5 text-amber-500" /> {cat.warning}
-                        </span>
-                        <span className="flex items-center gap-0.5">
-                          <XCircle className="size-2.5 text-red-500" /> {cat.fail}
-                        </span>
-                        {cat.notApplicable > 0 && (
-                          <span className="flex items-center gap-0.5">
-                            <MinusCircle className="size-2.5 text-slate-400" /> {cat.notApplicable}
-                          </span>
-                        )}
-                      </div>
+                      <Card
+                        className="cursor-pointer border-border/60 hover:border-teal-500/40 hover:shadow-md hover:shadow-teal-500/5 transition-all hover-lift overflow-hidden"
+                        onClick={() => setExpandedHistoryId(isExpanded ? null : hr.id)}
+                      >
+                        <div className="h-1" style={{ background: `linear-gradient(90deg, ${scoreColor}, ${scoreColor}60)` }} />
+                        <CardContent className="p-4">
+                          {/* Top row */}
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="font-mono text-xs font-semibold text-muted-foreground">
+                                  {hr.studyCode}
+                                </span>
+                                <span className="font-medium text-sm truncate">
+                                  {hr.substanceName}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                                <Clock className="size-3" />
+                                <span>{date.toLocaleDateString()} · {date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                {hr.checkedBy && (
+                                  <span className="ml-1">by {hr.checkedBy}</span>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0">
+                              {/* Score badge */}
+                              <Badge variant="outline" className={`font-bold tabular-nums ${badgeClasses}`}>
+                                {hr.overallScore}
+                              </Badge>
+                              {/* Ready badge */}
+                              {hr.readyForSubmission ? (
+                                <Badge className="bg-emerald-500 hover:bg-emerald-500 text-white gap-1 text-[11px]">
+                                  <CheckCircle2 className="size-3" /> Ready
+                                </Badge>
+                              ) : (
+                                <Badge variant="destructive" className="gap-1 text-[11px]">
+                                  <XCircle className="size-3" /> Not Ready
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Counts row */}
+                          <div className="flex items-center gap-3 mt-3 text-xs">
+                            <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                              <CheckCircle2 className="size-3" /> {hr.passCount} pass
+                            </span>
+                            <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                              <AlertTriangle className="size-3" /> {hr.warningCount} warn
+                            </span>
+                            <span className="flex items-center gap-1 text-red-600 dark:text-red-400">
+                              <XCircle className="size-3" /> {hr.failCount} fail
+                            </span>
+                            {hr.notApplicableCount > 0 && (
+                              <span className="flex items-center gap-1 text-slate-500 dark:text-slate-400">
+                                <MinusCircle className="size-3" /> {hr.notApplicableCount} N/A
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Expanded detail */}
+                          <AnimatePresence>
+                            {isExpanded && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.25 }}
+                                className="overflow-hidden"
+                              >
+                                <div className="pt-4 mt-4 border-t border-border/50 space-y-3">
+                                  {/* Category scores */}
+                                  {Array.isArray(hr.categoryScores) && hr.categoryScores.length > 0 && (
+                                    <div>
+                                      <p className="text-xs font-semibold mb-2 flex items-center gap-1.5">
+                                        <BookOpen className="size-3 text-teal-500" />
+                                        Category Scores
+                                      </p>
+                                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                        {hr.categoryScores.map((cs: CategoryScore) => {
+                                          const catColor = getScoreColor(cs.score)
+                                          return (
+                                            <div
+                                              key={cs.category}
+                                              className="p-2 rounded-lg border border-border/40 bg-muted/20"
+                                            >
+                                              <div className="flex items-center justify-between mb-1">
+                                                <span className="text-[11px] font-medium truncate">{cs.label}</span>
+                                                <span className="text-sm font-bold tabular-nums" style={{ color: catColor }}>
+                                                  {cs.score}
+                                                </span>
+                                              </div>
+                                              <div className="h-1 rounded-full bg-muted/40 overflow-hidden">
+                                                <div
+                                                  className="h-full rounded-full transition-all duration-500"
+                                                  style={{ width: `${cs.score}%`, background: catColor }}
+                                                />
+                                              </div>
+                                              <div className="flex items-center gap-1.5 mt-1.5 text-[10px] text-muted-foreground">
+                                                <span className="flex items-center gap-0.5"><CheckCircle2 className="size-2 text-emerald-500" />{cs.pass}</span>
+                                                <span className="flex items-center gap-0.5"><AlertTriangle className="size-2 text-amber-500" />{cs.warning}</span>
+                                                <span className="flex items-center gap-0.5"><XCircle className="size-2 text-red-500" />{cs.fail}</span>
+                                              </div>
+                                            </div>
+                                          )
+                                        })}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Blocking issues */}
+                                  {hr.blockingIssues.length > 0 && (
+                                    <div>
+                                      <p className="text-xs font-semibold text-red-600 dark:text-red-400 mb-1 flex items-center gap-1.5">
+                                        <XCircle className="size-3" />
+                                        Blocking Issues
+                                      </p>
+                                      <ul className="list-disc list-inside space-y-0.5 text-[11px] text-muted-foreground">
+                                        {hr.blockingIssues.map((issue, idx) => (
+                                          <li key={idx}>{issue}</li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  )}
+
+                                  {/* View Details button */}
+                                  <div className="flex justify-end">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="gap-1.5 border-teal-500/30 text-teal-600 hover:bg-teal-50/60 dark:text-teal-400 dark:hover:bg-teal-950/20"
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        // Load this study and switch to current tab
+                                        setSelectedStudyId(hr.studyId)
+                                        toast({
+                                          title: 'Study selected',
+                                          description: `Switched to ${hr.studyCode} — ${hr.substanceName}. Run a check on the Current Check tab to see updated results.`,
+                                        })
+                                      }}
+                                    >
+                                      <ChevronRight className="size-3.5" />
+                                      Load This Study
+                                    </Button>
+                                  </div>
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+
+                          {/* Expand indicator */}
+                          <div className="flex justify-center mt-2">
+                            <motion.div
+                              animate={{ rotate: isExpanded ? 180 : 0 }}
+                              transition={{ duration: 0.2 }}
+                            >
+                              <ChevronDown className="size-3.5 text-muted-foreground" />
+                            </motion.div>
+                          </div>
+                        </CardContent>
+                      </Card>
                     </motion.div>
                   )
                 })}
               </div>
-            </CardContent>
-          </Card>
-
-          {/* Detailed rule results */}
-          <Card className="print:hidden">
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2 text-sm">
-                <FileText className="size-4 text-emerald-500" />
-                Detailed Rule Results
-              </CardTitle>
-              <CardDescription>
-                {report.results.length} rules evaluated across {report.categoryScores.length} categories. Click to expand evidence.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Accordion type="multiple" className="w-full">
-                {groupedResults.map((group) => (
-                  <AccordionItem key={group.category} value={group.category} className="border-border/60">
-                    <AccordionTrigger className="hover:no-underline hover:bg-emerald-50/40 dark:hover:bg-emerald-950/20 px-3 rounded-md">
-                      <div className="flex items-center gap-3 flex-1">
-                        <span
-                          className="w-2 h-2 rounded-full"
-                          style={{ background: COMPLIANCE_CATEGORY_COLORS[group.category] }}
-                        />
-                        <span className="font-medium text-sm">{group.label}</span>
-                        <span className="text-xs text-muted-foreground">
-                          ({group.results.filter(r => r.status === 'pass').length}/{group.results.filter(r => r.status !== 'not_applicable').length} pass)
-                        </span>
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent className="pt-2 space-y-2">
-                      {group.results.map((r) => {
-                        const meta = STATUS_META[r.status]
-                        const Icon = meta.icon
-                        return (
-                          <motion.div
-                            key={r.ruleId}
-                            initial={{ opacity: 0, x: -8 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            className="p-3 rounded-lg border border-border/40 bg-muted/20 hover:bg-muted/40 transition-colors slide-in-left"
-                          >
-                            <div className="flex items-start gap-3">
-                              <Icon className={`size-4 mt-0.5 shrink-0 ${meta.textClass}`} />
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-start justify-between gap-2 flex-wrap">
-                                  <div>
-                                    <p className="text-sm font-medium">
-                                      <span className="font-mono text-xs text-muted-foreground mr-1.5">{r.ruleId}</span>
-                                      {r.ruleTitle}
-                                    </p>
-                                    <p className="text-[11px] text-muted-foreground mt-0.5">
-                                      {r.guideline} · weight {r.weight}
-                                    </p>
-                                  </div>
-                                  <StatusBadge status={r.status} />
-                                </div>
-                                <p className="text-xs text-muted-foreground mt-1.5">{r.evidence}</p>
-                                {r.recommendation && (
-                                  <div className="mt-2 flex items-start gap-1.5 p-2 rounded bg-amber-50/60 dark:bg-amber-950/20 border border-amber-500/20">
-                                    <Info className="size-3 text-amber-500 mt-0.5 shrink-0" />
-                                    <p className="text-[11px] text-amber-700 dark:text-amber-300">
-                                      <span className="font-semibold">Recommendation:</span> {r.recommendation}
-                                    </p>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </motion.div>
-                        )
-                      })}
-                    </AccordionContent>
-                  </AccordionItem>
-                ))}
-              </Accordion>
-            </CardContent>
-          </Card>
-        </motion.div>
-      )}
-
-      {/* Loading skeleton on initial mount */}
-      {loading && !report && !checking && (
-        <div className="space-y-4">
-          <Skeleton className="h-24 w-full" />
-          <Skeleton className="h-64 w-full" />
-        </div>
-      )}
+            </motion.div>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }
