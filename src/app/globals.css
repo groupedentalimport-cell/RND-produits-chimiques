@@ -123,22 +123,122 @@
 
 /* Custom scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: oklch(0.7 0 0 / 30%);
+  background: oklch(0.7 0 0 / 40%);
   border-radius: 999px;
+  transition: background 0.2s ease;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: oklch(0.5 0 0 / 50%);
+  background: oklch(0.55 0.13 162 / 60%);
 }
 .dark ::-webkit-scrollbar-thumb {
-  background: oklch(0.5 0 0 / 40%);
+  background: oklch(0.5 0 0 / 45%);
 }
 .dark ::-webkit-scrollbar-thumb:hover {
-  background: oklch(0.7 0 0 / 60%);
+  background: oklch(0.7 0.13 162 / 70%);
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Emerald selection color */
+::selection {
+  background: rgba(16, 185, 129, 0.2);
+  color: inherit;
+}
+::moz-selection {
+  background: rgba(16, 185, 129, 0.2);
+}
+
+/* ── Reusable utility classes ────────────────────────────────────────────── */
+
+/* Emerald gradient text */
+.text-gradient-emerald {
+  background-image: linear-gradient(to right, #059669, #0d9488);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.dark .text-gradient-emerald {
+  background-image: linear-gradient(to right, #34d399, #2dd4bf);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Glassmorphism panel */
+.glass {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+.dark .glass {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Card hover lift effect */
+.card-hover {
+  transition: all 0.3s ease;
+}
+.card-hover:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px -8px rgba(16, 185, 129, 0.18);
+}
+
+/* Emerald glow pulse */
+.glow-emerald {
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
+}
+
+/* Shimmer animation for loading skeletons */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(229, 231, 235, 0.4) 25%,
+    rgba(229, 231, 235, 0.8) 37%,
+    rgba(229, 231, 235, 0.4) 63%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+.dark .shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(51, 65, 85, 0.4) 25%,
+    rgba(51, 65, 85, 0.8) 37%,
+    rgba(51, 65, 85, 0.4) 63%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+/* Subtle pulse glow for live indicators */
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(16, 185, 129, 0);
+  }
+}
+.pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
 }

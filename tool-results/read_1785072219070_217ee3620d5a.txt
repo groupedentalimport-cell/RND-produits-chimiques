@@ -1,0 +1,681 @@
+     1→'use client'
+     2→
+     3→import { useState, useEffect } from 'react'
+     4→import { motion } from 'framer-motion'
+     5→import {
+     6→  Plus, RefreshCw, Download, ArrowRight, Thermometer, Droplets,
+     7→  Clock, Beaker, Activity, Eye, Gauge, Shield, CheckCircle2,
+     8→  XCircle, Trash2,
+     9→} from 'lucide-react'
+    10→import {
+    11→  Card, CardContent, CardFooter,
+    12→} from '@/components/ui/card'
+    13→import { Button } from '@/components/ui/button'
+    14→import { Badge } from '@/components/ui/badge'
+    15→import { Input } from '@/components/ui/input'
+    16→import { Label } from '@/components/ui/label'
+    17→import { Skeleton } from '@/components/ui/skeleton'
+    18→import { Separator } from '@/components/ui/separator'
+    19→import {
+    20→  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+    21→} from '@/components/ui/dialog'
+    22→import {
+    23→  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+    24→} from '@/components/ui/select'
+    25→import {
+    26→  Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
+    27→} from '@/components/ui/table'
+    28→import { useToast } from '@/hooks/use-toast'
+    29→import {
+    30→  studyTypeLabels, statusColors, transformStudy, exportCSV,
+    31→} from '@/lib/sample-data'
+    32→import type { StudyData } from '@/lib/types'
+    33→
+    34→export function StudiesPage() {
+    35→  const { toast } = useToast()
+    36→  const [statusFilter, setStatusFilter] = useState('all')
+    37→  const [typeFilter, setTypeFilter] = useState('all')
+    38→  const [studyTypeFilter, setStudyTypeFilter] = useState('all')
+    39→  const [createOpen, setCreateOpen] = useState(false)
+    40→  const [loading, setLoading] = useState(true)
+    41→  const [refreshKey, setRefreshKey] = useState(0)
+    42→  const [apiStudies, setApiStudies] = useState<StudyData[]>([])
+    43→  const [totalCount, setTotalCount] = useState(0)
+    44→  const [studiesByStatus, setStudiesByStatus] = useState<{ status: string; _count: { status: number } }[]>([])
+    45→  const [creating, setCreating] = useState(false)
+    46→  const [exporting, setExporting] = useState(false)
+    47→  const [detailOpen, setDetailOpen] = useState(false)
+    48→  const [detailStudy, setDetailStudy] = useState<any | null>(null)
+    49→  const [detailLoading, setDetailLoading] = useState(false)
+    50→  const [signing, setSigning] = useState(false)
+    51→  const [statusUpdating, setStatusUpdating] = useState(false)
+    52→  const [newTimePoint, setNewTimePoint] = useState({ timeDays: 0, percentRemaining: 100, isOOS: false, isOOT: false })
+    53→  const [addingTimePoint, setAddingTimePoint] = useState(false)
+    54→  const [deletingTimePointId, setDeletingTimePointId] = useState<string | null>(null)
+    55→  const [newStudy, setNewStudy] = useState({
+    56→    substanceName: '',
+    57→    studyType: 'long_term',
+    58→    temperatureC: 25,
+    59→    humidityPercent: 60,
+    60→    durationMonths: 24,
+    61→    ph: 7.0,
+    62→  })
+    63→
+    64→  useEffect(() => {
+    65→    let cancelled = false
+    66→    const loadData = async () => {
+    67→      const params = new URLSearchParams()
+    68→      if (statusFilter !== 'all') params.set('status', statusFilter)
+    69→      if (studyTypeFilter !== 'all') params.set('type', studyTypeFilter)
+    70→      try {
+    71→        const [studiesRes, statsRes] = await Promise.all([
+    72→          fetch(`/api/studies?${params.toString()}`),
+    73→          fetch('/api/stats'),
+    74→        ])
+    75→        if (studiesRes.ok && !cancelled) {
+    76→          const data = await studiesRes.json()
+    77→          const transformed: StudyData[] = (data.studies || []).map((s: any) => ({
+    78→            ...transformStudy(s), humidityPercent: s.humidityPercent ?? null, ph: s.ph ?? null,
+    79→          }))
+    80→          if (!cancelled) {
+    81→            setApiStudies(transformed)
+    82→            setTotalCount(data.pagination?.total ?? 0)
+    83→          }
+    84→        }
+    85→        if (statsRes.ok && !cancelled) {
+    86→          const statsData = await statsRes.json()
+    87→          if (statsData.studiesByStatus && !cancelled) {
+    88→            setStudiesByStatus(statsData.studiesByStatus)
+    89→          }
+    90→        }
+    91→      } catch { /* fallback */ }
+    92→      if (!cancelled) setLoading(false)
+    93→    }
+    94→    loadData()
+    95→    return () => { cancelled = true }
+    96→  }, [statusFilter, studyTypeFilter, refreshKey])
+    97→
+    98→  const handleRefresh = () => setRefreshKey(k => k + 1)
+    99→
+   100→  const handleCreate = async () => {
+   101→    if (!newStudy.substanceName.trim()) {
+   102→      toast({ title: 'Validation error', description: 'Substance name is required', variant: 'destructive' })
+   103→      return
+   104→    }
+   105→    setCreating(true)
+   106→    // Generate a study code based on substance name + timestamp
+   107→    const code = `STB-${new Date().getFullYear()}-${String(Date.now()).slice(-5)}`
+   108→    try {
+   109→      const res = await fetch('/api/studies', {
+   110→        method: 'POST',
+   111→        headers: { 'Content-Type': 'application/json' },
+   112→        body: JSON.stringify({
+   113→          studyCode: code,
+   114→          substanceName: newStudy.substanceName,
+   115→          studyType: newStudy.studyType,
+   116→          temperatureC: newStudy.temperatureC,
+   117→          humidityPercent: newStudy.humidityPercent,
+   118→          durationMonths: newStudy.durationMonths,
+   119→          ph: newStudy.ph,
+   120→        }),
+   121→      })
+   122→      if (res.ok) {
+   123→        toast({
+   124→          title: 'Study created',
+   125→          description: `${newStudy.substanceName} study created successfully (${code})`,
+   126→        })
+   127→        setCreateOpen(false)
+   128→        setNewStudy({ substanceName: '', studyType: 'long_term', temperatureC: 25, humidityPercent: 60, durationMonths: 24, ph: 7.0 })
+   129→        handleRefresh()
+   130→      } else {
+   131→        const errBody = await res.json().catch(() => ({}))
+   132→        toast({ title: 'Error', description: errBody.error || 'Failed to create study', variant: 'destructive' })
+   133→      }
+   134→    } catch {
+   135→      toast({ title: 'Error', description: 'Network error', variant: 'destructive' })
+   136→    } finally {
+   137→      setCreating(false)
+   138→    }
+   139→  }
+   140→
+   141→  const openDetail = async (study: StudyData) => {
+   142→    setDetailOpen(true)
+   143→    setDetailLoading(true)
+   144→    setDetailStudy(null)
+   145→    try {
+   146→      const res = await fetch(`/api/studies/${study.id}`)
+   147→      if (res.ok) {
+   148→        const data = await res.json()
+   149→        if (data.study) {
+   150→          setDetailStudy(data.study)
+   151→        } else {
+   152→          // Fallback: use the row data we already have
+   153→          setDetailStudy(study)
+   154→        }
+   155→      } else {
+   156→        setDetailStudy(study)
+   157→      }
+   158→    } catch {
+   159→      setDetailStudy(study)
+   160→    } finally {
+   161→      setDetailLoading(false)
+   162→    }
+   163→  }
+   164→
+   165→  const updateStudyStatus = async (newStatus: string) => {
+   166→    if (!detailStudy) return
+   167→    setStatusUpdating(true)
+   168→    try {
+   169→      const res = await fetch(`/api/studies/${detailStudy.id}`, {
+   170→        method: 'PUT',
+   171→        headers: { 'Content-Type': 'application/json' },
+   172→        body: JSON.stringify({
+   173→          status: newStatus,
+   174→          rejectionReason: newStatus === 'rejected' ? 'Rejected during review' : undefined,
+   175→        }),
+   176→      })
+   177→      if (res.ok) {
+   178→        const data = await res.json()
+   179→        if (data.study) {
+   180→          setDetailStudy((prev: any) => prev ? { ...prev, ...data.study } : prev)
+   181→        }
+   182→        toast({ title: 'Status updated', description: `Study marked as ${newStatus.replace('_', ' ')}` })
+   183→        handleRefresh()
+   184→      } else {
+   185→        toast({ title: 'Error', description: 'Failed to update status', variant: 'destructive' })
+   186→      }
+   187→    } catch {
+   188→      toast({ title: 'Error', description: 'Network error', variant: 'destructive' })
+   189→    } finally {
+   190→      setStatusUpdating(false)
+   191→    }
+   192→  }
+   193→
+   194→  const signStudy = async () => {
+   195→    if (!detailStudy) return
+   196→    setSigning(true)
+   197→    try {
+   198→      const res = await fetch(`/api/studies/${detailStudy.id}`, {
+   199→        method: 'POST',
+   200→        headers: { 'Content-Type': 'application/json' },
+   201→        body: JSON.stringify({
+   202→          signerName: 'Dr. Sarah Chen',
+   203→          signerRole: 'org_admin',
+   204→          meaning: 'Reviewed and Approved',
+   205→          newStatus: detailStudy.status === 'under_review' ? 'approved' : undefined,
+   206→        }),
+   207→      })
+   208→      if (res.ok) {
+   209→        const data = await res.json()
+   210→        // Refresh detail to show new signature
+   211→        if (data.study) {
+   212→          setDetailStudy((prev: any) => prev ? { ...prev, ...data.study, signatures: [...(prev.signatures || []), data.signature] } : prev)
+   213→        }
+   214→        toast({ title: 'Study signed', description: 'Electronic signature recorded (FDA 21 CFR Part 11)' })
+   215→        handleRefresh()
+   216→      } else {
+   217→        toast({ title: 'Error', description: 'Failed to sign study', variant: 'destructive' })
+   218→      }
+   219→    } catch {
+   220→      toast({ title: 'Error', description: 'Network error', variant: 'destructive' })
+   221→    } finally {
+   222→      setSigning(false)
+   223→    }
+   224→  }
+   225→
+   226→  const handleAddTimePoint = async () => {
+   227→    if (!detailStudy) return
+   228→    if (newTimePoint.timeDays < 0) {
+   229→      toast({ title: 'Validation error', description: 'Time (days) must be ≥ 0', variant: 'destructive' })
+   230→      return
+   231→    }
+   232→    setAddingTimePoint(true)
+   233→    try {
+   234→      const degradationPercent = Math.max(0, 100 - newTimePoint.percentRemaining)
+   235→      const res = await fetch('/api/timepoints', {
+   236→        method: 'POST',
+   237→        headers: { 'Content-Type': 'application/json' },
+   238→        body: JSON.stringify({
+   239→          timeDays: newTimePoint.timeDays,
+   240→          percentRemaining: newTimePoint.percentRemaining,
+   241→          degradationPercent,
+   242→          isOOS: newTimePoint.isOOS,
+   243→          isOOT: newTimePoint.isOOT,
+   244→          studyId: detailStudy.id,
+   245→        }),
+   246→      })
+   247→      if (res.ok) {
+   248→        const data = await res.json()
+   249→        toast({ title: 'Time point added', description: `Day ${newTimePoint.timeDays} recorded` })
+   250→        setDetailStudy((prev: any) => prev
+   251→          ? { ...prev, timePoints: [...(prev.timePoints || []), data.timePoint].sort((a: any, b: any) => a.timeDays - b.timeDays) }
+   252→          : prev)
+   253→        setNewTimePoint({ timeDays: 0, percentRemaining: 100, isOOS: false, isOOT: false })
+   254→      } else {
+   255→        const err = await res.json().catch(() => ({}))
+   256→        toast({ title: 'Error', description: err.error || 'Failed to add time point', variant: 'destructive' })
+   257→      }
+   258→    } catch {
+   259→      toast({ title: 'Error', description: 'Network error', variant: 'destructive' })
+   260→    } finally {
+   261→      setAddingTimePoint(false)
+   262→    }
+   263→  }
+   264→
+   265→  const handleDeleteTimePoint = async (tpId: string) => {
+   266→    setDeletingTimePointId(tpId)
+   267→    try {
+   268→      const res = await fetch(`/api/timepoints/${tpId}`, { method: 'DELETE' })
+   269→      if (res.ok) {
+   270→        toast({ title: 'Time point deleted', description: 'Measurement removed from study' })
+   271→        setDetailStudy((prev: any) => prev
+   272→          ? { ...prev, timePoints: (prev.timePoints || []).filter((tp: any) => tp.id !== tpId) }
+   273→          : prev)
+   274→      } else {
+   275→        toast({ title: 'Error', description: 'Failed to delete time point', variant: 'destructive' })
+   276→      }
+   277→    } catch {
+   278→      toast({ title: 'Error', description: 'Network error', variant: 'destructive' })
+   279→    } finally {
+   280→      setDeletingTimePointId(null)
+   281→    }
+   282→  }
+   283→
+   284→  const exportStudiesCSV = async () => {
+   285→    setExporting(true)
+   286→    try {
+   287→      const res = await fetch('/api/studies?limit=1000')
+   288→      if (res.ok) {
+   289→        const data = await res.json()
+   290→        const rows = (data.studies || []).map((s: any) => ({
+   291→          id: s.id,
+   292→          studyCode: s.studyCode ?? '',
+   293→          substanceName: s.substanceName ?? '',
+   294→          studyType: s.studyType ?? '',
+   295→          status: s.status ?? '',
+   296→          temperatureC: s.temperatureC ?? '',
+   297→          humidityPercent: s.humidityPercent ?? '',
+   298→          durationMonths: s.durationMonths ?? '',
+   299→          predictedShelfLifeMonths: s.predictedShelfLifeMonths ?? '',
+   300→          ph: s.ph ?? '',
+   301→        }))
+   302→        if (!rows.length) {
+   303→          toast({ title: 'Nothing to export', description: 'No studies found to export' })
+   304→        } else {
+   305→          exportCSV(rows, `chemstab-studies-${new Date().toISOString().slice(0, 10)}.csv`)
+   306→          toast({ title: 'Export complete', description: `Exported ${rows.length} studies to CSV` })
+   307→        }
+   308→      } else {
+   309→        toast({ title: 'Export failed', description: 'Failed to fetch studies', variant: 'destructive' })
+   310→      }
+   311→    } catch {
+   312→      toast({ title: 'Export failed', description: 'Network error', variant: 'destructive' })
+   313→    } finally {
+   314→      setExporting(false)
+   315→    }
+   316→  }
+   317→
+   318→  return (
+   319→    <motion.div
+   320→      initial={{ opacity: 0, y: 20 }}
+   321→      animate={{ opacity: 1, y: 0 }}
+   322→      transition={{ duration: 0.4 }}
+   323→      className="space-y-6"
+   324→    >
+   325→      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+   326→        <div>
+   327→          <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-400 dark:to-teal-400 bg-clip-text text-transparent">Studies Management</h1>
+   328→          <p className="text-muted-foreground">Manage and track stability studies across your organization</p>
+   329→        </div>
+   330→        <div className="flex gap-2 flex-wrap">
+   331→          <Button variant="outline" size="sm" onClick={exportStudiesCSV} disabled={exporting}>
+   332→            <Download className={`size-4 mr-1 ${exporting ? 'animate-pulse' : ''}`} /> Export CSV
+   333→          </Button>
+   334→          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={loading}>
+   335→            <RefreshCw className={`size-4 mr-1 ${loading ? 'animate-spin' : ''}`} /> Refresh
+   336→          </Button>
+   337→          <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => setCreateOpen(true)}>
+   338→            <Plus className="size-4 mr-2" /> Create Study
+   339→          </Button>
+   340→        </div>
+   341→      </div>
+   342→
+   343→      {/* Status Pipeline Visualization */}
+   344→      <div className="flex items-center gap-1 p-3 rounded-xl bg-gradient-to-r from-emerald-50/50 to-teal-50/50 dark:from-emerald-950/20 dark:to-teal-950/20 border">
+   345→        {['draft', 'in_progress', 'under_review', 'approved'].map((stage, i) => {
+   346→          const count = studiesByStatus?.find(s => s.status === stage)?._count?.status || 0
+   347→          const stageColors: Record<string, string> = {
+   348→            draft: 'bg-slate-400', in_progress: 'bg-teal-500', under_review: 'bg-amber-500', approved: 'bg-emerald-500'
+   349→          }
+   350→          const stageLabels: Record<string, string> = {
+   351→            draft: 'Draft', in_progress: 'In Progress', under_review: 'Under Review', approved: 'Approved'
+   352→          }
+   353→          return (
+   354→            <div key={stage} className="flex items-center gap-1">
+   355→              {i > 0 && <ArrowRight className="size-3 text-muted-foreground" />}
+   356→              <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-white/60 dark:bg-card/60">
+   357→                <span className={`size-2 rounded-full ${stageColors[stage]}`} />
+   358→                <span className="text-xs font-medium">{stageLabels[stage]}</span>
+   359→                <Badge variant="secondary" className="text-[10px] h-4 px-1">{count}</Badge>
+   360→              </div>
+   361→            </div>
+   362→          )
+   363→        })}
+   364→      </div>
+   365→
+   366→      {/* Study Type Filter Pills */}
+   367→      <div className="flex flex-wrap gap-2 mb-1">
+   368→        {['all', 'long_term', 'accelerated', 'intermediate', 'stress'].map((type) => (
+   369→          <Button
+   370→            key={type}
+   371→            variant={studyTypeFilter === type ? 'default' : 'outline'}
+   372→            size="sm"
+   373→            className={`h-7 text-xs rounded-full ${studyTypeFilter === type ? 'bg-emerald-600 text-white hover:bg-emerald-700' : ''}`}
+   374→            onClick={() => setStudyTypeFilter(type)}
+   375→          >
+   376→            {type === 'all' ? 'All Types' : studyTypeLabels[type]}
+   377→          </Button>
+   378→        ))}
+   379→      </div>
+   380→
+   381→      {/* Status Filter */}
+   382→      <div className="flex gap-3">
+   383→        <Select value={statusFilter} onValueChange={setStatusFilter}>
+   384→          <SelectTrigger className="w-[160px]">
+   385→            <SelectValue placeholder="Filter by Status" />
+   386→          </SelectTrigger>
+   387→          <SelectContent>
+   388→            <SelectItem value="all">All Statuses</SelectItem>
+   389→            <SelectItem value="draft">Draft</SelectItem>
+   390→            <SelectItem value="in_progress">In Progress</SelectItem>
+   391→            <SelectItem value="completed">Completed</SelectItem>
+   392→            <SelectItem value="under_review">Under Review</SelectItem>
+   393→            <SelectItem value="approved">Approved</SelectItem>
+   394→          </SelectContent>
+   395→        </Select>
+   396→      </div>
+   397→
+   398→      {/* Studies Table */}
+   399→      <Card className="backdrop-blur-sm bg-card/80">
+   400→        <CardContent className="p-0">
+   401→          <div className="max-h-96 overflow-y-auto">
+   402→            {loading ? (
+   403→              <div className="space-y-2 p-4">
+   404→                {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+   405→              </div>
+   406→            ) : (
+   407→              <Table>
+   408→                <TableHeader>
+   409→                  <TableRow>
+   410→                    <TableHead>Study Code</TableHead>
+   411→                    <TableHead>Substance</TableHead>
+   412→                    <TableHead>Type</TableHead>
+   413→                    <TableHead>Temp (°C)</TableHead>
+   414→                    <TableHead>Shelf Life</TableHead>
+   415→                    <TableHead>Status</TableHead>
+   416→                  </TableRow>
+   417→                </TableHeader>
+   418→                <TableBody>
+   419→                  {apiStudies.map((std, idx) => (
+   420→                    <TableRow
+   421→                      key={std.id}
+   422→                      className={`cursor-pointer hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10 transition-colors ${idx % 2 === 1 ? 'bg-muted/30' : ''}`}
+   423→                      onClick={() => openDetail(std)}
+   424→                    >
+   425→                      <TableCell className="font-medium font-mono">{std.studyCode}</TableCell>
+   426→                      <TableCell>{std.substanceName}</TableCell>
+   427→                      <TableCell>{studyTypeLabels[std.studyType]}</TableCell>
+   428→                      <TableCell>{std.temperatureC}</TableCell>
+   429→                      <TableCell>
+   430→                        {std.predictedShelfLifeMonths !== null ? `${std.predictedShelfLifeMonths} mo` : '—'}
+   431→                      </TableCell>
+   432→                      <TableCell>
+   433→                        <Badge className={statusColors[std.status]}>{std.status.replace('_', ' ')}</Badge>
+   434→                      </TableCell>
+   435→                    </TableRow>
+   436→                  ))}
+   437→                  {apiStudies.length === 0 && (
+   438→                    <TableRow>
+   439→                      <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+   440→                        No studies found matching your criteria
+   441→                      </TableCell>
+   442→                    </TableRow>
+   443→                  )}
+   444→                </TableBody>
+   445→              </Table>
+   446→            )}
+   447→          </div>
+   448→        </CardContent>
+   449→        <CardFooter className="border-t pt-4">
+   450→          <p className="text-sm text-muted-foreground">
+   451→            {loading ? 'Loading...' : `${apiStudies.length} of ${totalCount} studies shown`}
+   452→          </p>
+   453→        </CardFooter>
+   454→      </Card>
+   455→
+   456→      {/* Create Study Dialog */}
+   457→      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+   458→        <DialogContent className="sm:max-w-lg">
+   459→          <DialogHeader>
+   460→            <DialogTitle>Create New Stability Study</DialogTitle>
+   461→            <DialogDescription>Define the parameters for a new stability study</DialogDescription>
+   462→          </DialogHeader>
+   463→          <div className="space-y-4">
+   464→            <div><Label className="text-emerald-700 dark:text-emerald-400">Substance Name *</Label><Input placeholder="Enter substance name" value={newStudy.substanceName} onChange={(e) => setNewStudy({ ...newStudy, substanceName: e.target.value })} className="border-emerald-200 dark:border-emerald-800/50 focus:border-emerald-500" /></div>
+   465→            <div className="p-3 rounded-lg bg-emerald-50/50 dark:bg-emerald-900/10 border border-emerald-200/50 dark:border-emerald-800/50">
+   466→              <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400 mb-2">Study Code Preview</p>
+   467→              <p className="text-sm font-mono text-muted-foreground">STB-{new Date().getFullYear()}-{String(Date.now()).slice(-5)} <span className="text-xs">(auto-generated)</span></p>
+   468→            </div>
+   469→            <div className="grid grid-cols-2 gap-3">
+   470→              <div><Label className="text-emerald-700 dark:text-emerald-400">Study Type</Label><Select value={newStudy.studyType} onValueChange={(v) => setNewStudy({ ...newStudy, studyType: v })}><SelectTrigger className="border-emerald-200 dark:border-emerald-800/50"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="long_term">Long-Term</SelectItem><SelectItem value="accelerated">Accelerated</SelectItem><SelectItem value="intermediate">Intermediate</SelectItem><SelectItem value="stress">Stress Testing</SelectItem></SelectContent></Select></div>
+   471→              <div><Label className="text-emerald-700 dark:text-emerald-400">Duration (months)</Label><Input type="number" value={newStudy.durationMonths} onChange={(e) => setNewStudy({ ...newStudy, durationMonths: parseInt(e.target.value) || 0 })} className="border-emerald-200 dark:border-emerald-800/50 focus:border-emerald-500" /></div>
+   472→              <div><Label className="text-emerald-700 dark:text-emerald-400">Temperature (°C)</Label><Input type="number" value={newStudy.temperatureC} onChange={(e) => setNewStudy({ ...newStudy, temperatureC: parseFloat(e.target.value) || 0 })} className="border-emerald-200 dark:border-emerald-800/50 focus:border-emerald-500" /></div>
+   473→              <div><Label className="text-emerald-700 dark:text-emerald-400">Humidity (%)</Label><Input type="number" value={newStudy.humidityPercent} onChange={(e) => setNewStudy({ ...newStudy, humidityPercent: parseFloat(e.target.value) || 0 })} className="border-emerald-200 dark:border-emerald-800/50 focus:border-emerald-500" /></div>
+   474→              <div><Label className="text-emerald-700 dark:text-emerald-400">pH</Label><Input type="number" step="0.1" value={newStudy.ph} onChange={(e) => setNewStudy({ ...newStudy, ph: parseFloat(e.target.value) || 7.0 })} className="border-emerald-200 dark:border-emerald-800/50 focus:border-emerald-500" /></div>
+   475→            </div>
+   476→          </div>
+   477→          <DialogFooter>
+   478→            <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
+   479→            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={handleCreate} disabled={creating}>
+   480→              {creating ? <><RefreshCw className="size-4 mr-2 animate-spin" /> Creating...</> : 'Create Study'}
+   481→            </Button>
+   482→          </DialogFooter>
+   483→        </DialogContent>
+   484→      </Dialog>
+   485→
+   486→      {/* Study Detail Dialog */}
+   487→      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
+   488→        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto" aria-describedby={undefined}>
+   489→          <DialogHeader>
+   490→            <DialogTitle className="flex items-center gap-2 flex-wrap">
+   491→              {detailLoading ? (
+   492→                <span>Loading Study Details</span>
+   493→              ) : detailStudy ? (
+   494→                <>
+   495→                  <span className="bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-400 dark:to-teal-400 bg-clip-text text-transparent font-mono">
+   496→                    {detailStudy.studyCode}
+   497→                  </span>
+   498→                  <Badge className={statusColors[detailStudy.status]}>{detailStudy.status.replace('_', ' ')}</Badge>
+   499→                </>
+   500→              ) : (
+   501→                <span>Study Details</span>
+   502→              )}
+   503→            </DialogTitle>
+   504→            {detailStudy && (
+   505→              <DialogDescription>
+   506→                {detailStudy.substanceName} · {studyTypeLabels[detailStudy.studyType] || detailStudy.studyType}
+   507→              </DialogDescription>
+   508→            )}
+   509→          </DialogHeader>
+   510→          {detailLoading ? (
+   511→            <div className="py-12 flex flex-col items-center gap-3">
+   512→              <RefreshCw className="size-8 animate-spin text-emerald-600" />
+   513→              <p className="text-sm text-muted-foreground">Loading study details...</p>
+   514→            </div>
+   515→          ) : detailStudy ? (
+   516→            <>
+   517→
+   518→              <div className="space-y-4">
+   519→                {/* Key info grid */}
+   520→                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+   521→                  {[
+   522→                    { label: 'Temperature', value: `${detailStudy.temperatureC}°C`, icon: Thermometer },
+   523→                    { label: 'Humidity', value: detailStudy.humidityPercent !== null ? `${detailStudy.humidityPercent}%` : '—', icon: Droplets },
+   524→                    { label: 'Duration', value: `${detailStudy.durationMonths} mo`, icon: Clock },
+   525→                    { label: 'pH', value: detailStudy.ph !== null ? detailStudy.ph.toFixed(1) : '—', icon: Beaker },
+   526→                    { label: 'Kinetic Order', value: detailStudy.kineticOrder ? `${detailStudy.kineticOrder}` : '—', icon: Activity },
+   527→                    { label: 'Light Exposure', value: detailStudy.lightExposure || '—', icon: Eye },
+   528→                  ].map((field) => {
+   529→                    const Icon = field.icon
+   530→                    return (
+   531→                      <div key={field.label} className="p-2 rounded-lg bg-muted/40 space-y-1">
+   532→                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+   533→                          <Icon className="size-3" /> {field.label}
+   534→                        </div>
+   535→                        <p className="text-sm font-medium">{field.value}</p>
+   536→                      </div>
+   537→                    )
+   538→                  })}
+   539→                </div>
+   540→
+   541→                {/* Highlighted shelf life */}
+   542→                <div className="p-3 rounded-lg bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 border-l-4 border-emerald-500">
+   543→                  <div className="flex items-center justify-between">
+   544→                    <div className="flex items-center gap-2">
+   545→                      <Gauge className="size-4 text-emerald-600 dark:text-emerald-400" />
+   546→                      <span className="text-sm font-medium">Predicted Shelf Life</span>
+   547→                    </div>
+   548→                    <span className="text-xl font-bold text-emerald-700 dark:text-emerald-300">
+   549→                      {detailStudy.predictedShelfLifeMonths !== null ? `${detailStudy.predictedShelfLifeMonths} months` : 'Not yet determined'}
+   550→                    </span>
+   551→                  </div>
+   552→                </div>
+   553→
+   554→                {/* Kinetics details */}
+   555→                {(detailStudy.activationEnergy !== null && detailStudy.activationEnergy !== undefined) ||
+   556→                 (detailStudy.rateConstant !== null && detailStudy.rateConstant !== undefined) ? (
+   557→                  <div className="grid grid-cols-2 gap-3">
+   558→                    <div className="p-2 rounded-lg bg-muted/40">
+   559→                      <p className="text-xs text-muted-foreground">Activation Energy</p>
+   560→                      <p className="text-sm font-medium">{detailStudy.activationEnergy ? `${detailStudy.activationEnergy.toFixed(2)} kJ/mol` : '—'}</p>
+   561→                    </div>
+   562→                    <div className="p-2 rounded-lg bg-muted/40">
+   563→                      <p className="text-xs text-muted-foreground">Rate Constant</p>
+   564→                      <p className="text-sm font-medium">{detailStudy.rateConstant ? detailStudy.rateConstant.toExponential(3) : '—'}</p>
+   565→                    </div>
+   566→                  </div>
+   567→                ) : null}
+   568→
+   569→                <Separator />
+   570→
+   571→                {/* Time points table */}
+   572→                <div className="space-y-2">
+   573→                  <div className="flex items-center gap-2">
+   574→                    <Activity className="size-4 text-emerald-600 dark:text-emerald-400" />
+   575→                    <p className="text-sm font-medium">Time Points ({detailStudy.timePoints?.length || 0})</p>
+   576→                  </div>
+   577→                  {detailStudy.timePoints && detailStudy.timePoints.length > 0 ? (
+   578→                    <div className="max-h-48 overflow-y-auto rounded-lg border">
+   579→                      <Table>
+   580→                        <TableHeader>
+   581→                          <TableRow>
+   582→                            <TableHead>Time (days)</TableHead>
+   583→                            <TableHead>Time (mo)</TableHead>
+   584→                            <TableHead>% Remaining</TableHead>
+   585→                            <TableHead>Degradation</TableHead>
+   586→                            <TableHead>Flags</TableHead>
+   587→                            <TableHead className="w-8"></TableHead>
+   588→                          </TableRow>
+   589→                        </TableHeader>
+   590→                        <TableBody>
+   591→                          {detailStudy.timePoints.map((tp: any, idx: number) => (
+   592→                            <TableRow key={tp.id} className={idx % 2 === 1 ? 'bg-muted/30' : ''}>
+   593→                              <TableCell className="font-mono text-xs">{tp.timeDays}</TableCell>
+   594→                              <TableCell className="font-mono text-xs">{tp.timeMonths?.toFixed(1) ?? '—'}</TableCell>
+   595→                              <TableCell className="font-mono text-xs">{tp.percentRemaining !== null && tp.percentRemaining !== undefined ? `${tp.percentRemaining.toFixed(1)}%` : '—'}</TableCell>
+   596→                              <TableCell className="font-mono text-xs">{tp.degradationPercent !== null && tp.degradationPercent !== undefined ? `${tp.degradationPercent.toFixed(1)}%` : '—'}</TableCell>
+   597→                              <TableCell>
+   598→                                    {tp.isOOS ? <Badge variant="destructive" className="text-[10px] mr-1">OOS</Badge> : null}
+   599→                                    {tp.isOOT ? <Badge variant="outline" className="text-[10px]">OOT</Badge> : null}
+   600→                                    {!tp.isOOS && !tp.isOOT ? <span className="text-xs text-muted-foreground">—</span> : null}
+   601→                                  </TableCell>
+   602→                              <TableCell>
+   603→                                <Button
+   604→                                  variant="ghost"
+   605→                                  size="icon"
+   606→                                  className="size-6 text-muted-foreground hover:text-red-500"
+   607→                                  onClick={() => handleDeleteTimePoint(tp.id)}
+   608→                                  disabled={deletingTimePointId === tp.id}
+   609→                                >
+   610→                                  <Trash2 className={`size-3 ${deletingTimePointId === tp.id ? 'animate-spin' : ''}`} />
+   611→                                </Button>
+   612→                              </TableCell>
+   613→                            </TableRow>
+   614→                          ))}
+   615→                        </TableBody>
+   616→                      </Table>
+   617→                    </div>
+   618→                  ) : (
+   619→                    <p className="text-sm text-muted-foreground p-3 rounded-lg bg-muted/30">
+   620→                      No time point data recorded for this study yet. Add measurements below.
+   621→                    </p>
+   622→                  )}
+   623→
+   624→                  {/* Add time point form */}
+   625→                  <div className="p-2 rounded-lg bg-emerald-50/50 dark:bg-emerald-900/10 border border-emerald-200/50 dark:border-emerald-800/50">
+   626→                    <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400 mb-2">Add Time Point</p>
+   627→                    <div className="flex flex-wrap items-end gap-2">
+   628→                      <div className="flex-1 min-w-[100px]"><Label className="text-[10px] text-muted-foreground">Time (days)</Label><Input type="number" min="0" placeholder="0" value={newTimePoint.timeDays || ''} onChange={(e) => setNewTimePoint({ ...newTimePoint, timeDays: parseInt(e.target.value) || 0 })} className="text-xs h-8" /></div>
+   629→                      <div className="flex-1 min-w-[100px]"><Label className="text-[10px] text-muted-foreground">% Remaining</Label><Input type="number" min="0" max="100" step="0.1" placeholder="100" value={newTimePoint.percentRemaining || ''} onChange={(e) => setNewTimePoint({ ...newTimePoint, percentRemaining: parseFloat(e.target.value) || 0 })} className="text-xs h-8" /></div>
+   630→                      <label className="flex items-center gap-1 text-xs cursor-pointer h-8"><input type="checkbox" checked={newTimePoint.isOOS} onChange={(e) => setNewTimePoint({ ...newTimePoint, isOOS: e.target.checked })} className="rounded" />OOS</label>
+   631→                      <label className="flex items-center gap-1 text-xs cursor-pointer h-8"><input type="checkbox" checked={newTimePoint.isOOT} onChange={(e) => setNewTimePoint({ ...newTimePoint, isOOT: e.target.checked })} className="rounded" />OOT</label>
+   632→                      <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white h-8" onClick={handleAddTimePoint} disabled={addingTimePoint}>
+   633→                        {addingTimePoint ? <><RefreshCw className="size-3 mr-1 animate-spin" /> Adding...</> : <><Plus className="size-3 mr-1" /> Add</>}
+   634→                      </Button>
+   635→                    </div>
+   636→                  </div>
+   637→                </div>
+   638→
+   639→                <Separator />
+   640→
+   641→                {/* Electronic signatures */}
+   642→                <div className="space-y-2">
+   643→                  <div className="flex items-center gap-2"><Shield className="size-4 text-emerald-600 dark:text-emerald-400" /><p className="text-sm font-medium">Electronic Signatures ({detailStudy.signatures?.length || 0})</p></div>
+   644→                  {detailStudy.signatures && detailStudy.signatures.length > 0 ? (
+   645→                    <div className="space-y-2">
+   646→                      {detailStudy.signatures.map((sig: any) => (
+   647→                        <div key={sig.id} className="flex items-center gap-3 p-2 rounded-lg bg-muted/40">
+   648→                          <div className="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center text-xs font-bold shrink-0">{sig.signerName?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() || '??'}</div>
+   649→                          <div className="flex-1 min-w-0"><p className="text-sm font-medium">{sig.signerName}</p><p className="text-xs text-muted-foreground">{sig.meaning} · {sig.signerRole}</p></div>
+   650→                          <div className="text-right shrink-0"><p className="text-xs text-muted-foreground">{sig.signedAt ? new Date(sig.signedAt).toLocaleString() : ''}</p><p className="text-[10px] font-mono text-muted-foreground">#{sig.signatureHash?.slice(0, 8)}</p></div>
+   651→                        </div>
+   652→                      ))}
+   653→                    </div>
+   654→                  ) : <p className="text-sm text-muted-foreground p-3 rounded-lg bg-muted/30">No electronic signatures recorded yet.</p>}
+   655→                </div>
+   656→
+   657→                <Separator />
+   658→
+   659→                {/* Status action buttons */}
+   660→                {detailStudy.status === 'under_review' && (
+   661→                  <div className="flex flex-wrap gap-2">
+   662→                    <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => updateStudyStatus('approved')} disabled={statusUpdating}><CheckCircle2 className="size-4 mr-1" /> Approve</Button>
+   663→                    <Button size="sm" variant="destructive" onClick={() => updateStudyStatus('rejected')} disabled={statusUpdating}><XCircle className="size-4 mr-1" /> Reject</Button>
+   664→                  </div>
+   665→                )}
+   666→              </div>
+   667→
+   668→              <DialogFooter className="gap-2 flex-wrap">
+   669→                <Button variant="outline" onClick={signStudy} disabled={signing}>{signing ? <><RefreshCw className="size-4 mr-2 animate-spin" /> Signing...</> : <><Shield className="size-4 mr-2" /> Sign Study</>}</Button>
+   670→                <Button onClick={() => setDetailOpen(false)}>Close</Button>
+   671→              </DialogFooter>
+   672→            </>
+   673→          ) : (
+   674→            <div className="py-12 text-center text-sm text-muted-foreground">Failed to load study details.</div>
+   675→          )}
+   676→        </DialogContent>
+   677→      </Dialog>
+   678→    </motion.div>
+   679→  )
+   680→}
+   681→

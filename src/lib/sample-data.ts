@@ -1,0 +1,459 @@
+import {
+  LayoutDashboard, Atom, Beaker, Microscope, FlaskConical, FileText, BarChart3, ShieldCheck,
+  FileCheck, BookOpen, AlertTriangle, GraduationCap, Scale,
+  Plus, RefreshCw, Trash2, CheckCircle2, Shield, XCircle,
+  Cpu,
+} from 'lucide-react'
+import type { PageId, MoleculeData, StudyData, ReportData, UserData, AuditEntry } from '@/lib/types'
+
+// ── Sample Data ────────────────────────────────────────────────────────────
+
+// QSPR Model Performance (hardcoded realistic values)
+export const QSPR_MODEL_PERFORMANCE = [
+  { model: 'Solubility', r2: 0.82, rmse: 0.54, mae: 0.41, fill: '#10b981' },
+  { model: 'logD', r2: 0.78, rmse: 0.61, mae: 0.47, fill: '#14b8a6' },
+  { model: 'Hydration', r2: 0.75, rmse: 0.72, mae: 0.55, fill: '#06b6d4' },
+]
+
+export const SAMPLE_MOLECULES: MoleculeData[] = [
+  { id: 'mol-1', name: 'Aspirin', casNumber: '50-78-2', smiles: 'CC(=O)OC1=CC=CC=C1C(=O)O', formula: 'C₉H₈O₄', molarMass: 180.16, logP: 1.19, stabilityScore: 72, riskLevel: 'low', dataSource: 'PubChem', description: 'Acetylsalicylic acid, a common NSAID and antiplatelet agent. Sensitive to moisture and hydrolysis.', meltingPoint: 135, boilingPoint: null },
+  { id: 'mol-2', name: 'Benzene', casNumber: '71-43-2', smiles: 'C1=CC=CC=C1', formula: 'C₆H₆', molarMass: 78.11, logP: 2.13, stabilityScore: 45, riskLevel: 'moderate', dataSource: 'ChEMBL', description: 'Aromatic hydrocarbon. Known carcinogen. Relatively stable under normal conditions but poses significant health risks.', meltingPoint: 5.5, boilingPoint: 80.1 },
+  { id: 'mol-3', name: 'Caffeine', casNumber: '58-08-2', smiles: 'CN1C=NC2=C1C(=O)N(C(=O)N2C)C', formula: 'C₈H₁₀N₄O₂', molarMass: 194.19, logP: -0.07, stabilityScore: 88, riskLevel: 'low', dataSource: 'PubChem', description: '1,3,7-trimethylxanthine. Very stable compound, widely consumed stimulant.', meltingPoint: 238, boilingPoint: null },
+  { id: 'mol-4', name: 'Acetaminophen', casNumber: '103-90-2', smiles: 'CC(=O)NC1=CC=C(O)C=C1', formula: 'C₈H₉NO₂', molarMass: 151.16, logP: 0.46, stabilityScore: 65, riskLevel: 'low', dataSource: 'PubChem', description: 'Paracetamol. Analgesic and antipyretic. Can degrade under humid conditions via hydrolysis.', meltingPoint: 169, boilingPoint: null },
+  { id: 'mol-5', name: 'Ibuprofen', casNumber: '15687-27-1', smiles: 'CC(C)CC1=CC=C(C=C1)C(C)C(=O)O', formula: 'C₁₃H₁₈O₂', molarMass: 206.28, logP: 3.97, stabilityScore: 70, riskLevel: 'low', dataSource: 'ChEMBL', description: 'Propionic acid derivative NSAID. Stable under normal storage conditions.', meltingPoint: 76, boilingPoint: null },
+  { id: 'mol-6', name: 'Ethanol', casNumber: '64-17-5', smiles: 'CCO', formula: 'C₂H₆O', molarMass: 46.07, logP: -0.31, stabilityScore: 92, riskLevel: 'low', dataSource: 'PubChem', description: 'Simple alcohol. Highly stable, volatile. Used as solvent and disinfectant.', meltingPoint: -114.1, boilingPoint: 78.37 },
+  { id: 'mol-7', name: 'Methanol', casNumber: '67-56-1', smiles: 'CO', formula: 'CH₄O', molarMass: 32.04, logP: -0.74, stabilityScore: 80, riskLevel: 'low', dataSource: 'PubChem', description: 'Simple alcohol. Toxic if ingested. Stable compound but highly flammable.', meltingPoint: -97.6, boilingPoint: 64.7 },
+  { id: 'mol-8', name: 'Sodium Chloride', casNumber: '7647-14-5', smiles: 'NaCl', formula: 'NaCl', molarMass: 58.44, logP: null, stabilityScore: 99, riskLevel: 'low', dataSource: 'Manual', description: 'Common salt. Exceptionally stable. No significant degradation pathways under normal conditions.', meltingPoint: 801, boilingPoint: 1413 },
+  { id: 'mol-9', name: 'Acetic Acid', casNumber: '64-19-7', smiles: 'CC(=O)O', formula: 'C₂H₄O₂', molarMass: 60.05, logP: -0.17, stabilityScore: 85, riskLevel: 'low', dataSource: 'PubChem', description: 'Simple carboxylic acid. Stable under normal conditions. Corrosive at high concentrations.', meltingPoint: 16.6, boilingPoint: 117.9 },
+  { id: 'mol-10', name: 'Hydrogen Peroxide', casNumber: '7722-84-1', smiles: 'OO', formula: 'H₂O₂', molarMass: 34.01, logP: null, stabilityScore: 25, riskLevel: 'critical', dataSource: 'ChEMBL', description: 'Strong oxidizer. Rapidly degrades, especially in presence of light, heat, or contaminants. Requires careful storage.', meltingPoint: -0.43, boilingPoint: 150.2 },
+  { id: 'mol-11', name: 'Glucose', casNumber: '50-99-7', smiles: 'OC[C@H]1OC(O)[C@H](O)[C@@H](O)[C@@H]1O', formula: 'C₆H₁₂O₆', molarMass: 180.16, logP: -3.24, stabilityScore: 78, riskLevel: 'low', dataSource: 'PubChem', description: 'Simple sugar. Relatively stable but can degrade via Maillard reaction and caramelization at elevated temperatures.', meltingPoint: 146, boilingPoint: null },
+  { id: 'mol-12', name: 'Formaldehyde', casNumber: '50-00-0', smiles: 'C=O', formula: 'CH₂O', molarMass: 30.03, logP: 0.35, stabilityScore: 35, riskLevel: 'high', dataSource: 'ChEMBL', description: 'Simple aldehyde. Toxic, carcinogenic. Polymerizes readily. Requires stabilization with methanol.', meltingPoint: -92, boilingPoint: -19 },
+]
+
+export const SAMPLE_STUDIES: StudyData[] = [
+  { id: 'std-1', studyCode: 'STB-2024-001', substanceName: 'Aspirin', studyType: 'long_term', temperatureC: 25, humidityPercent: 60, durationMonths: 24, predictedShelfLifeMonths: 36, status: 'completed', ph: 6.5 },
+  { id: 'std-2', studyCode: 'STB-2024-002', substanceName: 'Acetaminophen', studyType: 'accelerated', temperatureC: 40, humidityPercent: 75, durationMonths: 6, predictedShelfLifeMonths: 48, status: 'in_progress', ph: 5.8 },
+  { id: 'std-3', studyCode: 'STB-2024-003', substanceName: 'Ibuprofen', studyType: 'stress', temperatureC: 60, humidityPercent: null, durationMonths: 3, predictedShelfLifeMonths: null, status: 'draft', ph: 7.0 },
+  { id: 'std-4', studyCode: 'STB-2024-004', substanceName: 'Caffeine', studyType: 'intermediate', temperatureC: 30, humidityPercent: 65, durationMonths: 12, predictedShelfLifeMonths: 60, status: 'under_review', ph: null },
+  { id: 'std-5', studyCode: 'STB-2024-005', substanceName: 'Hydrogen Peroxide', studyType: 'accelerated', temperatureC: 40, humidityPercent: null, durationMonths: 3, predictedShelfLifeMonths: 6, status: 'completed', ph: 4.5 },
+]
+
+export const SAMPLE_USERS: UserData[] = [
+  { id: 'usr-1', name: 'Dr. Sarah Chen', email: 'sarah.chen@chemstab.io', role: 'org_admin', isActive: true, lastLogin: '2024-03-15 09:23' },
+  { id: 'usr-2', name: 'James Rodriguez', email: 'james.r@chemstab.io', role: 'analyst', isActive: true, lastLogin: '2024-03-14 16:45' },
+  { id: 'usr-3', name: 'Aiko Tanaka', email: 'aiko.t@chemstab.io', role: 'project_manager', isActive: true, lastLogin: '2024-03-13 11:30' },
+  { id: 'usr-4', name: 'Mark Thompson', email: 'mark.t@chemstab.io', role: 'viewer', isActive: false, lastLogin: '2024-02-28 08:15' },
+  { id: 'usr-5', name: 'Dr. Elena Volkov', email: 'elena.v@chemstab.io', role: 'analyst', isActive: true, lastLogin: '2024-03-15 14:10' },
+]
+
+export const SAMPLE_AUDIT: AuditEntry[] = [
+  { id: 'aud-1', action: 'create', tableName: 'StabilityStudy', recordId: 'STB-2024-002', details: 'Created accelerated study for Acetaminophen', userName: 'James Rodriguez', createdAt: '2024-03-15 09:23' },
+  { id: 'aud-2', action: 'update', tableName: 'Molecule', recordId: 'mol-10', details: 'Updated risk level from high to critical for Hydrogen Peroxide', userName: 'Dr. Sarah Chen', createdAt: '2024-03-14 14:45' },
+  { id: 'aud-3', action: 'approve', tableName: 'StabilityStudy', recordId: 'STB-2024-001', details: 'Approved long-term stability study for Aspirin', userName: 'Aiko Tanaka', createdAt: '2024-03-13 16:30' },
+  { id: 'aud-4', action: 'sign', tableName: 'ElectronicSignature', recordId: 'STB-2024-005', details: 'Electronically signed H₂O₂ accelerated study results', userName: 'Dr. Elena Volkov', createdAt: '2024-03-12 11:15' },
+  { id: 'aud-5', action: 'delete', tableName: 'TimePoint', recordId: 'tp-old-001', details: 'Removed outlier time point data from study STB-2024-003', userName: 'James Rodriguez', createdAt: '2024-03-11 09:45' },
+  { id: 'aud-6', action: 'create', tableName: 'Report', recordId: 'rpt-ich-001', details: 'Generated ICH Q1A stability protocol report', userName: 'Dr. Sarah Chen', createdAt: '2024-03-10 15:20' },
+]
+
+export const STABILITY_TRENDS_DATA = [
+  { month: 'Jan', aspirin: 72, acetaminophen: 65, caffeine: 88, overall: 75 },
+  { month: 'Feb', aspirin: 71, acetaminophen: 64, caffeine: 87, overall: 74 },
+  { month: 'Mar', aspirin: 70, acetaminophen: 62, caffeine: 88, overall: 73 },
+  { month: 'Apr', aspirin: 69, acetaminophen: 61, caffeine: 87, overall: 72 },
+  { month: 'May', aspirin: 68, acetaminophen: 60, caffeine: 86, overall: 71 },
+  { month: 'Jun', aspirin: 67, acetaminophen: 59, caffeine: 85, overall: 70 },
+  { month: 'Jul', aspirin: 66, acetaminophen: 58, caffeine: 84, overall: 69 },
+  { month: 'Aug', aspirin: 65, acetaminophen: 57, caffeine: 83, overall: 68 },
+]
+
+export const RISK_DISTRIBUTION_DATA = [
+  { level: 'Low', count: 8, fill: '#10b981' },
+  { level: 'Moderate', count: 2, fill: '#f59e0b' },
+  { level: 'High', count: 1, fill: '#ef4444' },
+  { level: 'Critical', count: 1, fill: '#dc2626' },
+]
+
+export const REPORT_TYPES = [
+  { type: 'ich_q1a', title: 'ICH Q1A Stability Protocol', icon: FileCheck, description: 'Comprehensive stability testing protocol per ICH guidelines', color: 'emerald' },
+  { type: 'ctd_module', title: 'CTD Module 3.2.P.8', icon: BookOpen, description: 'Stability data for regulatory submission in CTD format', color: 'teal' },
+  { type: 'fmea', title: 'FMEA Risk Assessment', icon: AlertTriangle, description: 'Failure Mode and Effects Analysis for stability risks', color: 'amber' },
+  { type: 'doe', title: 'DoE Design', icon: GraduationCap, description: 'Design of Experiments for optimization of stability conditions', color: 'cyan' },
+  { type: 'validation_protocol', title: 'Validation Protocol IQ/OQ/PQ', icon: Scale, description: 'Equipment and process validation protocols for stability labs', color: 'rose' },
+]
+
+export const SAMPLE_REPORTS: ReportData[] = [
+  { id: 'rpt-1', title: 'ICH Q1A - Aspirin Long-Term Stability', reportType: 'ich_q1a', status: 'completed', createdAt: '2024-03-12' },
+  { id: 'rpt-2', title: 'CTD Module 3.2.P.8 - Acetaminophen', reportType: 'ctd_module', status: 'draft', createdAt: '2024-03-14' },
+  { id: 'rpt-3', title: 'FMEA Risk Assessment - H₂O₂', reportType: 'fmea', status: 'under_review', createdAt: '2024-03-10' },
+  { id: 'rpt-4', title: 'DoE Optimization - Ibuprofen Formulation', reportType: 'doe', status: 'completed', createdAt: '2024-03-08' },
+  { id: 'rpt-5', title: 'IQ/OQ/PQ Validation - Stability Chamber SC-04', reportType: 'validation_protocol', status: 'in_progress', createdAt: '2024-03-06' },
+]
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+export const statusColors: Record<string, string> = {
+  draft: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
+  in_progress: 'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300',
+  completed: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+  under_review: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+  approved: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+  rejected: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+}
+
+export const riskColors: Record<string, string> = {
+  low: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+  moderate: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+  high: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+  critical: 'bg-red-200 text-red-800 dark:bg-red-900/60 dark:text-red-200',
+}
+
+export const studyTypeLabels: Record<string, string> = {
+  long_term: 'Long-Term',
+  accelerated: 'Accelerated',
+  intermediate: 'Intermediate',
+  stress: 'Stress Testing',
+}
+
+export const roleLabels: Record<string, string> = {
+  super_admin: 'Super Admin',
+  org_admin: 'Org Admin',
+  project_manager: 'Project Manager',
+  analyst: 'Analyst',
+  viewer: 'Viewer',
+}
+
+export function getScoreColor(score: number): string {
+  if (score >= 80) return 'text-emerald-600 dark:text-emerald-400'
+  if (score >= 60) return 'text-teal-600 dark:text-teal-400'
+  if (score >= 40) return 'text-amber-600 dark:text-amber-400'
+  return 'text-red-600 dark:text-red-400'
+}
+
+// ── Shared Global Style/Icon Maps ─────────────────────────────────────────
+
+export const COLOR_MAP: Record<string, string> = {
+  emerald: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400',
+  teal: 'bg-teal-100 text-teal-600 dark:bg-teal-900/40 dark:text-teal-400',
+  cyan: 'bg-cyan-100 text-cyan-600 dark:bg-cyan-900/40 dark:text-cyan-400',
+  amber: 'bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400',
+  red: 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400',
+  rose: 'bg-rose-100 text-rose-600 dark:bg-rose-900/40 dark:text-rose-400',
+}
+
+export const COLOR_MAP_TEXT: Record<string, string> = {
+  emerald: 'text-emerald-600 dark:text-emerald-400', teal: 'text-teal-600 dark:text-teal-400',
+  cyan: 'text-cyan-600 dark:text-cyan-400', amber: 'text-amber-600 dark:text-amber-400',
+  red: 'text-red-600 dark:text-red-400', rose: 'text-rose-600 dark:text-rose-400',
+}
+
+export const GRADIENT_TOP_BAR: Record<string, string> = {
+  emerald: 'bg-gradient-to-r from-emerald-500 to-teal-500', teal: 'bg-gradient-to-r from-teal-500 to-cyan-500',
+  cyan: 'bg-gradient-to-r from-cyan-500 to-sky-500', amber: 'bg-gradient-to-r from-amber-500 to-orange-500',
+  red: 'bg-gradient-to-r from-red-500 to-rose-500',
+}
+
+export const PROGRESS_BAR_MAP: Record<string, string> = {
+  emerald: '[&>div]:bg-emerald-500', teal: '[&>div]:bg-teal-500',
+  cyan: '[&>div]:bg-cyan-500', amber: '[&>div]:bg-amber-500', red: '[&>div]:bg-red-500',
+}
+
+export const ACTION_ICON_MAP: Record<string, React.ElementType> = {
+  create: Plus, update: RefreshCw, delete: Trash2, approve: CheckCircle2, sign: Shield, reject: XCircle,
+}
+
+export const ACTION_COLOR_MAP: Record<string, string> = {
+  create: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400',
+  update: 'bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400',
+  delete: 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400',
+  approve: 'bg-teal-100 text-teal-600 dark:bg-teal-900/40 dark:text-teal-400',
+  sign: 'bg-cyan-100 text-cyan-600 dark:bg-cyan-900/40 dark:text-cyan-400',
+  reject: 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400',
+}
+
+export const ACTION_TEXT_MAP: Record<string, string> = {
+  create: 'text-emerald-600 dark:text-emerald-400', update: 'text-amber-600 dark:text-amber-400',
+  delete: 'text-red-600 dark:text-red-400', approve: 'text-teal-600 dark:text-teal-400',
+  sign: 'text-cyan-600 dark:text-cyan-400', reject: 'text-red-600 dark:text-red-400',
+}
+
+export const HAZARD_BORDER_MAP: Record<string, string> = { low: 'border-l-emerald-500', moderate: 'border-l-amber-500', high: 'border-l-red-500', critical: 'border-l-rose-500' }
+export const HAZARD_BAR_MAP: Record<string, string> = { low: 'from-emerald-400 to-teal-500', moderate: 'from-amber-400 to-orange-500', high: 'from-red-400 to-red-600', critical: 'from-rose-400 to-rose-600' }
+export const HAZARD_OUTLINE_MAP: Record<string, string> = { low: 'border-emerald-500 text-emerald-600', moderate: 'border-amber-500 text-amber-600', high: 'border-red-500 text-red-600' }
+
+export const RISK_PILL_ACTIVE: Record<string, string> = { low: 'bg-emerald-600 text-white', moderate: 'bg-amber-600 text-white hover:bg-amber-700', high: 'bg-red-600 text-white hover:bg-red-700', critical: 'bg-rose-600 text-white hover:bg-rose-700' }
+export const RISK_PILL_OUTLINE: Record<string, string> = { critical: 'border-red-500 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20', high: 'border-orange-500 text-orange-600 hover:bg-orange-50 dark:text-orange-400 dark:hover:bg-orange-900/20', moderate: 'border-amber-500 text-amber-600 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-900/20' }
+
+export const REPORT_GRADIENT: Record<string, string> = { ich_q1a: 'bg-gradient-to-r from-emerald-500 to-teal-500', ctd_module: 'bg-gradient-to-r from-teal-500 to-cyan-500', fmea: 'bg-gradient-to-r from-amber-500 to-orange-500', doe: 'bg-gradient-to-r from-cyan-500 to-sky-500', validation_protocol: 'bg-gradient-to-r from-rose-500 to-pink-500' }
+export const REPORT_ICON_BG: Record<string, string> = { ich_q1a: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400', ctd_module: 'bg-teal-100 text-teal-600 dark:bg-teal-900/40 dark:text-teal-400', fmea: 'bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400', doe: 'bg-cyan-100 text-cyan-600 dark:bg-cyan-900/40 dark:text-cyan-400', validation_protocol: 'bg-rose-100 text-rose-600 dark:bg-rose-900/40 dark:text-rose-400' }
+
+export const HAZARD_CLASS_MAP: Record<string, string> = { critical: 'Severe Hazard', high: 'Significant Hazard', moderate: 'Moderate Hazard', low: 'Low Hazard' }
+export const RISK_BG_MAP: Record<string, string> = {
+  critical: 'bg-red-50/50 dark:bg-red-900/10 border-red-500', high: 'bg-orange-50/50 dark:bg-orange-900/10 border-orange-500',
+  moderate: 'bg-amber-50/50 dark:bg-amber-900/10 border-amber-500', low: 'bg-emerald-50/50 dark:bg-emerald-900/10 border-emerald-500',
+}
+
+export const roleAvatarColors: Record<string, string> = {
+  super_admin: 'from-rose-500 to-red-600', org_admin: 'from-emerald-500 to-teal-600',
+  project_manager: 'from-cyan-500 to-blue-600', analyst: 'from-amber-500 to-orange-600', viewer: 'from-slate-400 to-slate-500',
+}
+
+// ── Sidebar Navigation ────────────────────────────────────────────────────
+
+export const NAV_ITEMS: { id: PageId; label: string; icon: React.ElementType }[] = [
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'molecules', label: 'Molecules', icon: Atom },
+  { id: 'simulator', label: 'Simulator', icon: Beaker },
+  { id: 'studies', label: 'Studies', icon: Microscope },
+  { id: 'degradation', label: 'Degradation', icon: FlaskConical },
+  { id: 'reports', label: 'Reports', icon: FileText },
+  { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+  { id: 'admin', label: 'Admin', icon: ShieldCheck },
+]
+
+// ── Transformers ──────────────────────────────────────────────────────────
+
+export function transformMolecule(m: any): MoleculeData {
+  return {
+    id: m.id, name: m.name, casNumber: m.casNumber || '', smiles: m.smiles || '',
+    formula: m.formula || '', molarMass: m.molarMass ?? 0, logP: m.logP ?? 0,
+    stabilityScore: m.predictedStabilityScore ?? 0, riskLevel: m.riskLevel || 'low',
+    dataSource: m.dataSource || 'Manual', description: m.description || '',
+    meltingPoint: m.meltingPoint ?? null, boilingPoint: m.boilingPoint ?? null,
+  }
+}
+
+export function transformStudy(s: any): StudyData {
+  return {
+    id: s.id, studyCode: s.studyCode || '', substanceName: s.substanceName || '',
+    studyType: s.studyType || 'long_term', temperatureC: s.temperatureC || 25,
+    humidityPercent: s.humidityPercent, durationMonths: s.durationMonths || 24,
+    predictedShelfLifeMonths: s.predictedShelfLifeMonths, status: s.status || 'draft', ph: s.ph,
+  }
+}
+
+// ── CSV Export helper ────────────────────────────────────────────────────
+
+export function exportCSV(data: Record<string, unknown>[], filename: string) {
+  if (!data.length) return
+  const headers = Object.keys(data[0])
+  const csvLines = [headers.join(',')]
+  for (const row of data) {
+    const values = headers.map((h) => {
+      const v = row[h] ?? ''
+      const s = String(v).replace(/"/g, '""')
+      return /[",\n]/.test(s) ? `"${s}"` : s
+    })
+    csvLines.push(values.join(','))
+  }
+  const blob = new Blob([csvLines.join('\n')], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+// Format a number for CSV output (null -> empty string)
+export function fmtNum(v: number | null | undefined): string {
+  return v === null || v === undefined ? '' : String(v)
+}
+
+// ── Chemical formula subscript formatter ──────────────────────────────
+// Converts "C9H8O4" → "C₉H₈O₄", "H2O2" → "H₂O₂", "NaCl" stays "NaCl"
+export const SUBSCRIPT_DIGITS: Record<string, string> = {
+  '0': '₀', '1': '₁', '2': '₂', '3': '₃', '4': '₄',
+  '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉',
+}
+export function formatFormula(formula: string | null | undefined): string {
+  if (!formula) return '—'
+  // If already contains unicode subscripts, leave as-is
+  if (/[₀-₉]/.test(formula)) return formula
+  // Replace any digit that follows a letter (or another digit) with subscript
+  return formula.replace(/(\d+)/g, (m) =>
+    m.split('').map((d) => SUBSCRIPT_DIGITS[d] ?? d).join('')
+  )
+}
+
+// ── Notifications ───────────────────────────────────────────────────────────
+
+export type NotificationCategory = 'study' | 'molecule' | 'report' | 'system' | 'alert'
+export type NotificationSeverity = 'info' | 'success' | 'warning' | 'critical'
+
+export interface AppNotification {
+  id: string
+  title: string
+  message: string
+  category: NotificationCategory
+  severity: NotificationSeverity
+  timestamp: string  // ISO date
+  read: boolean
+  actionLabel?: string  // e.g. "View Study"
+  actionPage?: PageId   // page to navigate to when action clicked
+}
+
+// Category → lucide icon component (used by NotificationsButton)
+export const NOTIF_CATEGORY_ICON: Record<NotificationCategory, React.ElementType> = {
+  study: Microscope,
+  molecule: Atom,
+  report: FileText,
+  system: Cpu,
+  alert: AlertTriangle,
+}
+
+// Category → display label (used by filter pills)
+export const NOTIF_CATEGORY_LABEL: Record<NotificationCategory, string> = {
+  study: 'Studies',
+  molecule: 'Molecules',
+  report: 'Reports',
+  system: 'System',
+  alert: 'Alerts',
+}
+
+// Severity → background / text color for the category icon chip
+export const NOTIF_SEVERITY_BG: Record<NotificationSeverity, string> = {
+  info: 'bg-cyan-100 text-cyan-600 dark:bg-cyan-900/40 dark:text-cyan-300',
+  success: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-300',
+  warning: 'bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-300',
+  critical: 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-300',
+}
+
+// Helper: format an ISO timestamp into a relative-time string ("2h ago", "Yesterday", "3d ago")
+export function formatRelativeTime(timestamp: string): string {
+  const now = Date.now()
+  const then = new Date(timestamp).getTime()
+  if (Number.isNaN(then)) return ''
+  const diffMs = now - then
+  const sec = Math.max(0, Math.floor(diffMs / 1000))
+  if (sec < 60) return 'just now'
+  const min = Math.floor(sec / 60)
+  if (min < 60) return `${min}m ago`
+  const hr = Math.floor(min / 60)
+  if (hr < 24) return `${hr}h ago`
+  const day = Math.floor(hr / 24)
+  if (day === 1) return 'Yesterday'
+  if (day < 7) return `${day}d ago`
+  const wk = Math.floor(day / 7)
+  if (wk < 5) return `${wk}w ago`
+  const mo = Math.floor(day / 30)
+  if (mo < 12) return `${mo}mo ago`
+  return `${Math.floor(day / 365)}y ago`
+}
+
+// Realistic sample notifications. First 5 are marked unread.
+// Timestamps are computed relative to "now" at module load so the relative-time
+// labels stay meaningful whenever the app is opened.
+const _now = Date.now()
+const _mins = (m: number) => new Date(_now - m * 60 * 1000).toISOString()
+const _hrs = (h: number) => new Date(_now - h * 60 * 60 * 1000).toISOString()
+const _days = (d: number) => new Date(_now - d * 24 * 60 * 60 * 1000).toISOString()
+
+export const SAMPLE_NOTIFICATIONS: AppNotification[] = [
+  {
+    id: 'ntf-1',
+    title: 'Critical stability risk detected',
+    message: 'Hydrogen Peroxide (H₂O₂) accelerated study shows 38% degradation at day 30 — exceeds OOS threshold. Immediate review required.',
+    category: 'alert',
+    severity: 'critical',
+    timestamp: _mins(8),
+    read: false,
+    actionLabel: 'View Study',
+    actionPage: 'studies',
+  },
+  {
+    id: 'ntf-2',
+    title: 'Study STB-2024-001 completed',
+    message: 'Aspirin long-term stability study (24 months) has finished data collection. Predicted shelf life: 36 months.',
+    category: 'study',
+    severity: 'success',
+    timestamp: _hrs(2),
+    read: false,
+    actionLabel: 'View Study',
+    actionPage: 'studies',
+  },
+  {
+    id: 'ntf-3',
+    title: 'New molecule added to library',
+    message: 'Formaldehyde (CH₂O) was added by Dr. Sarah Chen. Risk level set to High — review recommended.',
+    category: 'molecule',
+    severity: 'info',
+    timestamp: _hrs(5),
+    read: false,
+    actionLabel: 'View Molecules',
+    actionPage: 'molecules',
+  },
+  {
+    id: 'ntf-4',
+    title: 'Report ready for review',
+    message: 'ICH Q1A — Aspirin Long-Term Stability report has been generated and is awaiting your review before submission.',
+    category: 'report',
+    severity: 'info',
+    timestamp: _hrs(11),
+    read: false,
+    actionLabel: 'Open Reports',
+    actionPage: 'reports',
+  },
+  {
+    id: 'ntf-5',
+    title: 'Low disk space warning',
+    message: 'Stability chamber data partition is at 87% capacity. Consider archiving completed studies older than 12 months.',
+    category: 'system',
+    severity: 'warning',
+    timestamp: _hrs(20),
+    read: false,
+    actionLabel: 'System Admin',
+    actionPage: 'admin',
+  },
+  {
+    id: 'ntf-6',
+    title: 'Study signed electronically',
+    message: 'Dr. Elena Volkov signed STB-2024-005 (H₂O₂ accelerated study). Signature hash recorded per FDA 21 CFR Part 11.',
+    category: 'study',
+    severity: 'success',
+    timestamp: _days(1),
+    read: true,
+  },
+  {
+    id: 'ntf-7',
+    title: 'FMEA report approved',
+    message: 'FMEA Risk Assessment for H₂O₂ has been approved and is now ready for regulatory submission.',
+    category: 'report',
+    severity: 'success',
+    timestamp: _days(2),
+    read: true,
+    actionLabel: 'Open Reports',
+    actionPage: 'reports',
+  },
+  {
+    id: 'ntf-8',
+    title: 'Audit log threshold reached',
+    message: '5000+ audit log entries recorded this quarter. Consider exporting the audit trail for long-term archival.',
+    category: 'system',
+    severity: 'info',
+    timestamp: _days(3),
+    read: true,
+    actionLabel: 'View Audit',
+    actionPage: 'admin',
+  },
+  {
+    id: 'ntf-9',
+    title: 'Caffeine shelf life extended',
+    message: 'Intermediate study confirmed Caffeine stability at 30°C — predicted shelf life extended from 48 to 60 months.',
+    category: 'study',
+    severity: 'success',
+    timestamp: _days(5),
+    read: true,
+  },
+  {
+    id: 'ntf-10',
+    title: 'Scheduled maintenance tonight',
+    message: 'Stability Chamber SC-04 will undergo IQ/OQ/PQ re-validation tonight 02:00–04:00 UTC. Plan study readings accordingly.',
+    category: 'system',
+    severity: 'warning',
+    timestamp: _days(7),
+    read: true,
+  },
+]
+

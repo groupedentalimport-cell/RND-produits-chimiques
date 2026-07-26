@@ -1,0 +1,879 @@
+     1→     1→'use client'
+     2→     2→
+     3→     3→import { useState, useEffect, useRef } from 'react'
+     4→     4→import { motion, AnimatePresence } from 'framer-motion'
+     5→     5→import {
+     6→     6→  Plus, Download, RefreshCw, Search, BarChart3, LayoutGrid,
+     7→     7→  Microscope, AlertTriangle, GitCompareArrows, X, CheckSquare,
+     8→     8→} from 'lucide-react'
+     9→     9→import {
+    10→    10→  Card, CardContent, CardFooter,
+    11→    11→} from '@/components/ui/card'
+    12→    12→import { Button } from '@/components/ui/button'
+    13→    13→import { Badge } from '@/components/ui/badge'
+    14→    14→import { Input } from '@/components/ui/input'
+    15→    15→import {
+    16→    16→  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+    17→    17→} from '@/components/ui/dialog'
+    18→    18→import {
+    19→    19→  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+    20→    20→} from '@/components/ui/select'
+    21→    21→import {
+    22→    22→  Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
+    23→    23→} from '@/components/ui/table'
+    24→    24→import { Progress } from '@/components/ui/progress'
+    25→    25→import { Checkbox } from '@/components/ui/checkbox'
+    26→    26→import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+    27→    27→import { Separator } from '@/components/ui/separator'
+    28→    28→import { Label } from '@/components/ui/label'
+    29→    29→import { Textarea } from '@/components/ui/textarea'
+    30→    30→import { Skeleton } from '@/components/ui/skeleton'
+    31→    31→import {
+    32→    32→  Tooltip as UiTooltip, TooltipTrigger, TooltipContent, TooltipProvider,
+    33→    33→} from '@/components/ui/tooltip'
+    34→    34→import { useAppStore, useCompareStore } from '@/lib/store'
+    35→    35→import { useToast } from '@/hooks/use-toast'
+    36→    36→import {
+    37→    37→  transformMolecule, riskColors, getScoreColor,
+    38→    38→  HAZARD_OUTLINE_MAP, HAZARD_CLASS_MAP, RISK_BG_MAP,
+    39→    39→  RISK_PILL_ACTIVE, RISK_PILL_OUTLINE,
+    40→    40→  formatFormula, exportCSV,
+    41→    41→} from '@/lib/sample-data'
+    42→    42→import type { MoleculeData } from '@/lib/types'
+    43→    43→import { Formula } from '@/components/shared/Formula'
+    44→    44→import { MoleculeComparison } from '@/components/pages/MoleculeComparison'
+    45→    45→
+    46→    46→export function MoleculesPage() {
+    47→    47→  const { toast } = useToast()
+    48→    48→  const { setPage } = useAppStore()
+    49→    49→  const { selectedIds: compareIds, toggleId: toggleCompareId, setCompareOpen, clear: clearCompare } = useCompareStore()
+    50→    50→  const [searchQuery, setSearchQuery] = useState('')
+    51→    51→  const [riskFilter, setRiskFilter] = useState('all')
+    52→    52→  const [sourceFilter, setSourceFilter] = useState('all')
+    53→    53→  const [currentPageNum, setCurrentPageNum] = useState(1)
+    54→    54→  const [selectedMolecule, setSelectedMolecule] = useState<MoleculeData | null>(null)
+    55→    55→  const [detailOpen, setDetailOpen] = useState(false)
+    56→    56→  const [loading, setLoading] = useState(true)
+    57→    57→  const [refreshKey, setRefreshKey] = useState(0)
+    58→    58→  const [apiMolecules, setApiMolecules] = useState<MoleculeData[]>([])
+    59→    59→  const [totalPages, setTotalPages] = useState(1)
+    60→    60→  const [totalCount, setTotalCount] = useState(0)
+    61→    61→  const [addOpen, setAddOpen] = useState(false)
+    62→    62→  const [creating, setCreating] = useState(false)
+    63→    63→  const [exporting, setExporting] = useState(false)
+    64→    64→  const [degradationProducts, setDegradationProducts] = useState<any[]>([])
+    65→    65→  const [degradationLoading, setDegradationLoading] = useState(false)
+    66→    66→  const [newDegradation, setNewDegradation] = useState({ name: '', smiles: '', percentage: 0, hazardLevel: 'low' })
+    67→    67→  const [addingDegradation, setAddingDegradation] = useState(false)
+    68→    68→  const [importing, setImporting] = useState(false)
+    69→    69→  const [sortBy, setSortBy] = useState('name')
+    70→    70→  const [viewMode, setViewMode] = useState<'table' | 'grid'>('table')
+    71→    71→  const fileInputRef = useRef<HTMLInputElement | null>(null)
+    72→    72→  const [newMolecule, setNewMolecule] = useState({
+    73→    73→    name: '',
+    74→    74→    casNumber: '',
+    75→    75→    smiles: '',
+    76→    76→    formula: '',
+    77→    77→    molarMass: 0,
+    78→    78→    logP: 0,
+    79→    79→    predictedStabilityScore: 0,
+    80→    80→    riskLevel: 'low',
+    81→    81→    dataSource: 'manual',
+    82→    82→    description: '',
+    83→    83→  })
+    84→    84→  const pageSize = 5
+    85→    85→
+    86→    86→  useEffect(() => {
+    87→    87→    let cancelled = false
+    88→    88→    const loadData = async () => {
+    89→    89→      const params = new URLSearchParams()
+    90→    90→      if (searchQuery) params.set('q', searchQuery)
+    91→    91→      if (riskFilter !== 'all') params.set('risk', riskFilter)
+    92→    92→      params.set('page', String(currentPageNum))
+    93→    93→      params.set('limit', String(pageSize))
+    94→    94→      try {
+    95→    95→        const res = await fetch(`/api/molecules?${params.toString()}`)
+    96→    96→        if (res.ok && !cancelled) {
+    97→    97→          const data = await res.json()
+    98→    98→          const transformed: MoleculeData[] = (data.molecules || []).map(transformMolecule)
+    99→    99→          if (!cancelled) {
+   100→   100→            setApiMolecules(transformed)
+   101→   101→            setTotalPages(data.pagination?.totalPages ?? 1)
+   102→   102→            setTotalCount(data.pagination?.total ?? 0)
+   103→   103→          }
+   104→   104→        }
+   105→   105→      } catch { /* fallback */ }
+   106→   106→      if (!cancelled) setLoading(false)
+   107→   107→    }
+   108→   108→    loadData()
+   109→   109→    return () => { cancelled = true }
+   110→   110→  }, [searchQuery, riskFilter, currentPageNum, refreshKey])
+   111→   111→
+   112→   112→  // Apply source filter client-side on fetched molecules, then sort
+   113→   113→  const displayed = (() => {
+   114→   114→    let filtered = sourceFilter === 'all'
+   115→   115→      ? apiMolecules
+   116→   116→      : apiMolecules.filter((mol) => mol.dataSource.toLowerCase() === sourceFilter.toLowerCase())
+   117→   117→    // Sort
+   118→   118→    if (sortBy === 'name') filtered.sort((a, b) => a.name.localeCompare(b.name))
+   119→   119→    else if (sortBy === 'stability') filtered.sort((a, b) => b.stabilityScore - a.stabilityScore)
+   120→   120→    else if (sortBy === 'molarMass') filtered.sort((a, b) => b.molarMass - a.molarMass)
+   121→   121→    else if (sortBy === 'risk') {
+   122→   122→      const riskOrder: Record<string, number> = { critical: 0, high: 1, moderate: 2, low: 3 }
+   123→   123→      filtered.sort((a, b) => (riskOrder[a.riskLevel] ?? 4) - (riskOrder[b.riskLevel] ?? 4))
+   124→   124→    }
+   125→   125→    return filtered
+   126→   126→  })()
+   127→   127→
+   128→   128→  // Count per risk level (from apiMolecules for filter pills)
+   129→   129→  const riskCounts = (() => {
+   130→   130→    const counts: Record<string, number> = { low: 0, moderate: 0, high: 0, critical: 0 }
+   131→   131→    apiMolecules.forEach((mol) => { counts[mol.riskLevel] = (counts[mol.riskLevel] || 0) + 1 })
+   132→   132→    return counts
+   133→   133→  })()
+   134→   134→
+   135→   135→  const openDetail = async (mol: MoleculeData) => {
+   136→   136→    setSelectedMolecule(mol)
+   137→   137→    setDetailOpen(true)
+   138→   138→    setDegradationProducts([])
+   139→   139→    setDegradationLoading(true)
+   140→   140→    try {
+   141→   141→      const res = await fetch(`/api/degradation-products?moleculeId=${mol.id}`)
+   142→   142→      if (res.ok) {
+   143→   143→        const data = await res.json()
+   144→   144→        setDegradationProducts(data.products || [])
+   145→   145→      }
+   146→   146→    } catch { /* ignore */ }
+   147→   147→    setDegradationLoading(false)
+   148→   148→  }
+   149→   149→
+   150→   150→  const handleAddDegradation = async () => {
+   151→   151→    if (!selectedMolecule || !newDegradation.name.trim()) {
+   152→   152→      toast({ title: 'Validation error', description: 'Product name is required', variant: 'destructive' })
+   153→   153→      return
+   154→   154→    }
+   155→   155→    setAddingDegradation(true)
+   156→   156→    try {
+   157→   157→      const res = await fetch('/api/degradation-products', {
+   158→   158→        method: 'POST',
+   159→   159→        headers: { 'Content-Type': 'application/json' },
+   160→   160→        body: JSON.stringify({
+   161→   161→          name: newDegradation.name,
+   162→   162→          smiles: newDegradation.smiles || undefined,
+   163→   163→          percentage: newDegradation.percentage || undefined,
+   164→   164→          hazardLevel: newDegradation.hazardLevel,
+   165→   165→          moleculeId: selectedMolecule.id,
+   166→   166→        }),
+   167→   167→      })
+   168→   168→      if (res.ok) {
+   169→   169→        toast({ title: 'Degradation product added', description: `${newDegradation.name} linked to ${selectedMolecule.name}` })
+   170→   170→        setNewDegradation({ name: '', smiles: '', percentage: 0, hazardLevel: 'low' })
+   171→   171→        // Refresh list
+   172→   172→        const refreshRes = await fetch(`/api/degradation-products?moleculeId=${selectedMolecule.id}`)
+   173→   173→        if (refreshRes.ok) {
+   174→   174→          const data = await refreshRes.json()
+   175→   175→          setDegradationProducts(data.products || [])
+   176→   176→        }
+   177→   177→      } else {
+   178→   178→        const err = await res.json().catch(() => ({}))
+   179→   179→        toast({ title: 'Error', description: err.error || 'Failed to add degradation product', variant: 'destructive' })
+   180→   180→      }
+   181→   181→    } catch {
+   182→   182→      toast({ title: 'Error', description: 'Network error', variant: 'destructive' })
+   183→   183→    } finally {
+   184→   184→      setAddingDegradation(false)
+   185→   185→    }
+   186→   186→  }
+   187→   187→
+   188→   188→  const handleImportCSV = async (e: React.ChangeEvent<HTMLInputElement>) => {
+   189→   189→    const file = e.target.files?.[0]
+   190→   190→    if (!file) return
+   191→   191→    setImporting(true)
+   192→   192→    try {
+   193→   193→      const text = await file.text()
+   194→   194→      const lines = text.split(/\r?\n/).filter((l) => l.trim())
+   195→   195→      if (lines.length < 2) {
+   196→   196→        toast({ title: 'Import failed', description: 'CSV must have a header row and at least one data row', variant: 'destructive' })
+   197→   197→        return
+   198→   198→      }
+   199→   199→      const parseCSVLine = (line: string): string[] => {
+   200→   200→        const out: string[] = []
+   201→   201→        let cur = ''
+   202→   202→        let inQ = false
+   203→   203→        for (let i = 0; i < line.length; i++) {
+   204→   204→          const ch = line[i]
+   205→   205→          if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++ }
+   206→   206→          else if (ch === '"') { inQ = !inQ }
+   207→   207→          else if (ch === ',' && !inQ) { out.push(cur); cur = '' }
+   208→   208→          else { cur += ch }
+   209→   209→        }
+   210→   210→        out.push(cur)
+   211→   211→        return out
+   212→   212→      }
+   213→   213→      const headers = parseCSVLine(lines[0]).map((h) => h.trim().toLowerCase())
+   214→   214→      const nameIdx = headers.findIndex((h) => h === 'name')
+   215→   215→      if (nameIdx === -1) {
+   216→   216→        toast({ title: 'Import failed', description: 'CSV must have a "name" column', variant: 'destructive' })
+   217→   217→        return
+   218→   218→      }
+   219→   219→      const casIdx = headers.findIndex((h) => h === 'casnumber' || h === 'cas')
+   220→   220→      const formulaIdx = headers.findIndex((h) => h === 'formula')
+   221→   221→      const smilesIdx = headers.findIndex((h) => h === 'smiles')
+   222→   222→      const mwIdx = headers.findIndex((h) => h === 'molarmass' || h === 'mw')
+   223→   223→      const logPIdx = headers.findIndex((h) => h === 'logp')
+   224→   224→      const scoreIdx = headers.findIndex((h) => h === 'stabilityscore' || h === 'predictedstabilityscore' || h === 'score')
+   225→   225→      const riskIdx = headers.findIndex((h) => h === 'risklevel' || h === 'risk')
+   226→   226→
+   227→   227→      let success = 0, failed = 0
+   228→   228→      for (let i = 1; i < lines.length; i++) {
+   229→   229→        const cells = parseCSVLine(lines[i])
+   230→   230→        const name = cells[nameIdx]?.trim()
+   231→   231→        if (!name) { failed++; continue }
+   232→   232→        try {
+   233→   233→          const res = await fetch('/api/molecules', {
+   234→   234→            method: 'POST',
+   235→   235→            headers: { 'Content-Type': 'application/json' },
+   236→   236→            body: JSON.stringify({
+   237→   237→              name,
+   238→   238→              casNumber: casIdx >= 0 ? cells[casIdx]?.trim() || undefined : undefined,
+   239→   239→              formula: formulaIdx >= 0 ? cells[formulaIdx]?.trim() || undefined : undefined,
+   240→   240→              smiles: smilesIdx >= 0 ? cells[smilesIdx]?.trim() || undefined : undefined,
+   241→   241→              molarMass: mwIdx >= 0 ? parseFloat(cells[mwIdx]) || undefined : undefined,
+   242→   242→              logP: logPIdx >= 0 ? parseFloat(cells[logPIdx]) || undefined : undefined,
+   243→   243→              predictedStabilityScore: scoreIdx >= 0 ? parseFloat(cells[scoreIdx]) || undefined : undefined,
+   244→   244→              riskLevel: riskIdx >= 0 ? cells[riskIdx]?.trim().toLowerCase() || 'low' : 'low',
+   245→   245→            }),
+   246→   246→          })
+   247→   247→          if (res.ok) success++; else failed++
+   248→   248→        } catch { failed++ }
+   249→   249→      }
+   250→   250→      toast({
+   251→   251→        title: 'Import complete',
+   252→   252→        description: `Imported ${success} molecule${success !== 1 ? 's' : ''}${failed ? `, ${failed} failed` : ''}`,
+   253→   253→        variant: failed > 0 ? 'destructive' : 'default',
+   254→   254→      })
+   255→   255→      handleRefresh()
+   256→   256→    } catch {
+   257→   257→      toast({ title: 'Import failed', description: 'Failed to read file', variant: 'destructive' })
+   258→   258→    } finally {
+   259→   259→      setImporting(false)
+   260→   260→      if (fileInputRef.current) fileInputRef.current.value = ''
+   261→   261→    }
+   262→   262→  }
+   263→   263→
+   264→   264→  const handleRefresh = () => {
+   265→   265→    setLoading(true)
+   266→   266→    setRefreshKey(k => k + 1)
+   267→   267→  }
+   268→   268→
+   269→   269→  const resetNewMolecule = () => {
+   270→   270→    setNewMolecule({
+   271→   271→      name: '', casNumber: '', smiles: '', formula: '', molarMass: 0, logP: 0,
+   272→   272→      predictedStabilityScore: 0, riskLevel: 'low', dataSource: 'manual', description: '',
+   273→   273→    })
+   274→   274→  }
+   275→   275→
+   276→   276→  const handleAddMolecule = async () => {
+   277→   277→    if (!newMolecule.name.trim()) {
+   278→   278→      toast({ title: 'Validation error', description: 'Molecule name is required', variant: 'destructive' })
+   279→   279→      return
+   280→   280→    }
+   281→   281→    setCreating(true)
+   282→   282→    try {
+   283→   283→      const res = await fetch('/api/molecules', {
+   284→   284→        method: 'POST',
+   285→   285→        headers: { 'Content-Type': 'application/json' },
+   286→   286→        body: JSON.stringify({
+   287→   287→          name: newMolecule.name,
+   288→   288→          casNumber: newMolecule.casNumber || undefined,
+   289→   289→          smiles: newMolecule.smiles || undefined,
+   290→   290→          formula: newMolecule.formula || undefined,
+   291→   291→          molarMass: newMolecule.molarMass || undefined,
+   292→   292→          logP: newMolecule.logP || undefined,
+   293→   293→          predictedStabilityScore: newMolecule.predictedStabilityScore || undefined,
+   294→   294→          riskLevel: newMolecule.riskLevel,
+   295→   295→          dataSource: newMolecule.dataSource,
+   296→   296→          description: newMolecule.description || undefined,
+   297→   297→        }),
+   298→   298→      })
+   299→   299→      if (res.ok) {
+   300→   300→        toast({ title: 'Molecule added', description: `${newMolecule.name} created successfully` })
+   301→   301→        setAddOpen(false)
+   302→   302→        resetNewMolecule()
+   303→   303→        handleRefresh()
+   304→   304→      } else {
+   305→   305→        const errBody = await res.json().catch(() => ({}))
+   306→   306→        toast({ title: 'Error', description: errBody.error || 'Failed to create molecule', variant: 'destructive' })
+   307→   307→      }
+   308→   308→    } catch {
+   309→   309→      toast({ title: 'Error', description: 'Network error', variant: 'destructive' })
+   310→   310→    } finally {
+   311→   311→      setCreating(false)
+   312→   312→    }
+   313→   313→  }
+   314→   314→
+   315→   315→  const exportMoleculesCSV = async () => {
+   316→   316→    setExporting(true)
+   317→   317→    try {
+   318→   318→      const res = await fetch('/api/molecules?limit=1000')
+   319→   319→      if (res.ok) {
+   320→   320→        const data = await res.json()
+   321→   321→        const rows = (data.molecules || []).map((m: any) => ({
+   322→   322→          id: m.id,
+   323→   323→          name: m.name,
+   324→   324→          casNumber: m.casNumber ?? '',
+   325→   325→          smiles: m.smiles ?? '',
+   326→   326→          formula: m.formula ?? '',
+   327→   327→          molarMass: m.molarMass ?? '',
+   328→   328→          logP: m.logP ?? '',
+   329→   329→          stabilityScore: m.predictedStabilityScore ?? '',
+   330→   330→          riskLevel: m.riskLevel ?? '',
+   331→   331→          dataSource: m.dataSource ?? '',
+   332→   332→          meltingPoint: m.meltingPoint ?? '',
+   333→   333→          boilingPoint: m.boilingPoint ?? '',
+   334→   334→          description: m.description ?? '',
+   335→   335→        }))
+   336→   336→        if (!rows.length) {
+   337→   337→          toast({ title: 'Nothing to export', description: 'No molecules found to export' })
+   338→   338→        } else {
+   339→   339→          exportCSV(rows, `chemstab-molecules-${new Date().toISOString().slice(0, 10)}.csv`)
+   340→   340→          toast({ title: 'Export complete', description: `Exported ${rows.length} molecules to CSV` })
+   341→   341→        }
+   342→   342→      } else {
+   343→   343→        toast({ title: 'Export failed', description: 'Failed to fetch molecules', variant: 'destructive' })
+   344→   344→      }
+   345→   345→    } catch {
+   346→   346→      toast({ title: 'Export failed', description: 'Network error', variant: 'destructive' })
+   347→   347→    } finally {
+   348→   348→      setExporting(false)
+   349→   349→    }
+   350→   350→  }
+   351→   351→
+   352→   352→  return (
+   353→   353→    <motion.div
+   354→   354→      initial={{ opacity: 0, y: 20 }}
+   355→   355→      animate={{ opacity: 1, y: 0 }}
+   356→   356→      transition={{ duration: 0.4 }}
+   357→   357→      className="space-y-6"
+   358→   358→    >
+   359→   359→      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+   360→   360→        <div>
+   361→   361→          <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-400 dark:to-teal-400 bg-clip-text text-transparent">Molecules Database</h1>
+   362→   362→          <p className="text-muted-foreground">Browse and search chemical compounds with stability assessments</p>
+   363→   363→        </div>
+   364→   364→        <div className="flex gap-2 flex-wrap items-center">
+   365→   365→          {/* View Mode Toggle */}
+   366→   366→          <div className="flex gap-1 mr-1">
+   367→   367→            <Button variant={viewMode === 'table' ? 'default' : 'outline'} size="sm" onClick={() => setViewMode('table')} className={viewMode === 'table' ? 'bg-emerald-600 text-white' : ''}>
+   368→   368→              <BarChart3 className="size-4" /> Table
+   369→   369→            </Button>
+   370→   370→            <Button variant={viewMode === 'grid' ? 'default' : 'outline'} size="sm" onClick={() => setViewMode('grid')} className={viewMode === 'grid' ? 'bg-emerald-600 text-white' : ''}>
+   371→   371→              <LayoutGrid className="size-4" /> Grid
+   372→   372→            </Button>
+   373→   373→          </div>
+   374→   374→          <input
+   375→   375→            type="file"
+   376→   376→            accept=".csv"
+   377→   377→            ref={fileInputRef}
+   378→   378→            onChange={handleImportCSV}
+   379→   379→            className="hidden"
+   380→   380→          />
+   381→   381→          <TooltipProvider delayDuration={200}>
+   382→   382→            <UiTooltip>
+   383→   383→              <TooltipTrigger asChild>
+   384→   384→                <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={importing}>
+   385→   385→                  <Download className={`size-4 mr-1 rotate-180 ${importing ? 'animate-pulse' : ''}`} /> Import CSV
+   386→   386→                </Button>
+   387→   387→              </TooltipTrigger>
+   388→   388→              <TooltipContent>Bulk import molecules from a CSV file (name column required)</TooltipContent>
+   389→   389→            </UiTooltip>
+   390→   390→          </TooltipProvider>
+   391→   391→          <TooltipProvider delayDuration={200}>
+   392→   392→            <UiTooltip>
+   393→   393→              <TooltipTrigger asChild>
+   394→   394→                <Button variant="outline" size="sm" onClick={exportMoleculesCSV} disabled={exporting}>
+   395→   395→                  <Download className={`size-4 mr-1 ${exporting ? 'animate-pulse' : ''}`} /> Export CSV
+   396→   396→                </Button>
+   397→   397→              </TooltipTrigger>
+   398→   398→              <TooltipContent>Download all molecules as a CSV file</TooltipContent>
+   399→   399→            </UiTooltip>
+   400→   400→          </TooltipProvider>
+   401→   401→          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={loading}>
+   402→   402→            <RefreshCw className={`size-4 mr-1 ${loading ? 'animate-spin' : ''}`} /> Refresh
+   403→   403→          </Button>
+   404→   404→          <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => setAddOpen(true)}>
+   405→   405→            <Plus className="size-4 mr-2" /> Add Molecule
+   406→   406→          </Button>
+   407→   407→        </div>
+   408→   408→      </div>
+   409→   409→
+   410→   410→      {/* Quick Filter Pills */}
+   411→   411→      <div className="flex flex-wrap gap-2">
+   412→   412→        {['all', 'low', 'moderate', 'high', 'critical'].map((level) => (
+   413→   413→          <Button
+   414→   414→            key={level}
+   415→   415→            variant={riskFilter === level ? 'default' : 'outline'}
+   416→   416→            size="sm"
+   417→   417→            className={`h-7 text-xs rounded-full ${riskFilter === level ? (RISK_PILL_ACTIVE[level] || 'bg-emerald-600 text-white') : ''} ${RISK_PILL_OUTLINE[level] || ''}`}
+   418→   418→            onClick={() => { setRiskFilter(level); setCurrentPageNum(1) }}
+   419→   419→          >
+   420→   420→            {level === 'all' ? 'All' : level.charAt(0).toUpperCase() + level.slice(1)}
+   421→   421→            {level !== 'all' && <span className="ml-1 opacity-60">({riskCounts[level] || 0})</span>}
+   422→   422→          </Button>
+   423→   423→        ))}
+   424→   424→      </div>
+   425→   425→
+   426→   426→      {/* Search & Filters */}
+   427→   427→      <div className="flex flex-col sm:flex-row gap-3">
+   428→   428→        <div className="relative flex-1">
+   429→   429→          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+   430→   430→          <Input
+   431→   431→            placeholder="Search by name, CAS, SMILES..."
+   432→   432→            value={searchQuery}
+   433→   433→            onChange={(e) => { setSearchQuery(e.target.value); setCurrentPageNum(1) }}
+   434→   434→            className="pl-9"
+   435→   435→          />
+   436→   436→        </div>
+   437→   437→        <Select value={sortBy} onValueChange={setSortBy}>
+   438→   438→          <SelectTrigger className="w-[130px]">
+   439→   439→            <SelectValue placeholder="Sort by" />
+   440→   440→          </SelectTrigger>
+   441→   441→          <SelectContent>
+   442→   442→            <SelectItem value="name">Name</SelectItem>
+   443→   443→            <SelectItem value="stability">Stability</SelectItem>
+   444→   444→            <SelectItem value="molarMass">Molar Mass</SelectItem>
+   445→   445→            <SelectItem value="risk">Risk Level</SelectItem>
+   446→   446→          </SelectContent>
+   447→   447→        </Select>
+   448→   448→        <Select value={riskFilter} onValueChange={(v) => { setRiskFilter(v); setCurrentPageNum(1) }}>
+   449→   449→          <SelectTrigger className="w-[140px]">
+   450→   450→            <SelectValue placeholder="Risk Level" />
+   451→   451→          </SelectTrigger>
+   452→   452→          <SelectContent>
+   453→   453→            <SelectItem value="all">All Risks</SelectItem>
+   454→   454→            <SelectItem value="low">Low</SelectItem>
+   455→   455→            <SelectItem value="moderate">Moderate</SelectItem>
+   456→   456→            <SelectItem value="high">High</SelectItem>
+   457→   457→            <SelectItem value="critical">Critical</SelectItem>
+   458→   458→          </SelectContent>
+   459→   459→        </Select>
+   460→   460→        <Select value={sourceFilter} onValueChange={(v) => { setSourceFilter(v); setCurrentPageNum(1) }}>
+   461→   461→          <SelectTrigger className="w-[140px]">
+   462→   462→            <SelectValue placeholder="Data Source" />
+   463→   463→          </SelectTrigger>
+   464→   464→          <SelectContent>
+   465→   465→            <SelectItem value="all">All Sources</SelectItem>
+   466→   466→            <SelectItem value="PubChem">PubChem</SelectItem>
+   467→   467→            <SelectItem value="ChEMBL">ChEMBL</SelectItem>
+   468→   468→            <SelectItem value="Manual">Manual</SelectItem>
+   469→   469→          </SelectContent>
+   470→   470→        </Select>
+   471→   471→      </div>
+   472→   472→
+   473→   473→      {/* Results count */}
+   474→   474→      <p className="text-sm text-muted-foreground">
+   475→   475→        {loading ? 'Loading...' : `Showing ${displayed.length} of ${totalCount} molecules`}
+   476→   476→      </p>
+   477→   477→
+   478→   478→      {/* Table / Grid View */}
+   479→   479→      {viewMode === 'table' ? (
+   480→   480→      <Card className="backdrop-blur-sm bg-card/80">
+   481→   481→        <CardContent className="p-0">
+   482→   482→          <div className="max-h-96 overflow-y-auto">
+   483→   483→            {loading ? (
+   484→   484→              <div className="space-y-2 p-4">
+   485→   485→                {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+   486→   486→              </div>
+   487→   487→            ) : (
+   488→   488→              <Table>
+   489→   489→                <TableHeader>
+   490→   490→                  <TableRow>
+   491→   491→                    <TableHead className="w-[40px]">Compare</TableHead>
+   492→   492→                    <TableHead>Name</TableHead>
+   493→   493→                    <TableHead>Formula</TableHead>
+   494→   494→                    <TableHead>MW</TableHead>
+   495→   495→                    <TableHead>LogP</TableHead>
+   496→   496→                    <TableHead>Stability</TableHead>
+   497→   497→                    <TableHead>Risk Level</TableHead>
+   498→   498→                    <TableHead>Source</TableHead>
+   499→   499→                  </TableRow>
+   500→   500→                </TableHeader>
+   501→   501→                <TableBody>
+   502→   502→                  {displayed.map((mol, idx) => {
+   503→   503→                    const isSelected = compareIds.includes(mol.id)
+   504→   504→                    return (
+   505→   505→                    <TableRow
+   506→   506→                      key={mol.id}
+   507→   507→                      className={`cursor-pointer hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10 transition-colors even:bg-muted/30 ${idx % 2 === 0 ? '' : 'even:bg-muted/30'} ${isSelected ? 'bg-emerald-50/60 dark:bg-emerald-900/15' : ''}`}
+   508→   508→                      onClick={() => openDetail(mol)}
+   509→   509→                    >
+   510→   510→                      <TableCell className="align-middle" onClick={(e) => e.stopPropagation()}>
+   511→   511→                        <Checkbox
+   512→   512→                          checked={isSelected}
+   513→   513→                          onCheckedChange={() => toggleCompareId(mol.id, {
+   514→   514→                            onMaxReached: () => toast({
+   515→   515→                              title: 'Maximum 3 molecules',
+   516→   516→                              description: 'Oldest selection replaced. You can compare up to 3 molecules at a time.',
+   517→   517→                            }),
+   518→   518→                          })}
+   519→   519→                          aria-label={`Select ${mol.name} for comparison`}
+   520→   520→                          className="cursor-pointer"
+   521→   521→                        />
+   522→   522→                      </TableCell>
+   523→   523→                      <TableCell className="font-medium">{mol.name}</TableCell>
+   524→   524→                      <TableCell><Formula>{mol.formula}</Formula></TableCell>
+   525→   525→                      <TableCell>{mol.molarMass ? mol.molarMass.toFixed(2) : '—'}</TableCell>
+   526→   526→                      <TableCell>{mol.logP ? mol.logP.toFixed(2) : '—'}</TableCell>
+   527→   527→                      <TableCell>
+   528→   528→                        <span className={`font-semibold ${getScoreColor(mol.stabilityScore)}`}>
+   529→   529→                          {mol.stabilityScore}
+   530→   530→                        </span>
+   531→   531→                      </TableCell>
+   532→   532→                      <TableCell>
+   533→   533→                        <Badge className={riskColors[mol.riskLevel]}>{mol.riskLevel}</Badge>
+   534→   534→                      </TableCell>
+   535→   535→                      <TableCell>{mol.dataSource}</TableCell>
+   536→   536→                    </TableRow>
+   537→   537→                    )
+   538→   538→                  })}
+   539→   539→                  {displayed.length === 0 && (
+   540→   540→                    <TableRow>
+   541→   541→                      <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+   542→   542→                        No molecules found matching your criteria
+   543→   543→                      </TableCell>
+   544→   544→                    </TableRow>
+   545→   545→                  )}
+   546→   546→                </TableBody>
+   547→   547→              </Table>
+   548→   548→            )}
+   549→   549→          </div>
+   550→   550→        </CardContent>
+   551→   551→        {totalPages > 1 && (
+   552→   552→          <CardFooter className="flex items-center justify-between border-t pt-4">
+   553→   553→            <Button
+   554→   554→              variant="outline"
+   555→   555→              size="sm"
+   556→   556→              disabled={currentPageNum <= 1}
+   557→   557→              onClick={() => setCurrentPageNum(currentPageNum - 1)}
+   558→   558→            >
+   559→   559→              Previous
+   560→   560→            </Button>
+   561→   561→            <span className="text-sm text-muted-foreground">
+   562→   562→              Page {currentPageNum} of {totalPages}
+   563→   563→            </span>
+   564→   564→            <Button
+   565→   565→              variant="outline"
+   566→   566→              size="sm"
+   567→   567→              disabled={currentPageNum >= totalPages}
+   568→   568→              onClick={() => setCurrentPageNum(currentPageNum + 1)}
+   569→   569→            >
+   570→   570→              Next
+   571→   571→            </Button>
+   572→   572→          </CardFooter>
+   573→   573→        )}
+   574→   574→      </Card>
+   575→   575→      ) : (
+   576→   576→        /* Grid View */
+   577→   577→        loading ? (
+   578→   578→          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+   579→   579→            {Array.from({ length: 6 }).map((_, i) => (
+   580→   580→              <Card key={i}><CardContent className="p-4"><div className="h-40 w-full rounded-md bg-muted animate-pulse" /></CardContent></Card>
+   581→   581→            ))}
+   582→   582→          </div>
+   583→   583→        ) : displayed.length === 0 ? (
+   584→   584→          <Card><CardContent className="py-8 text-center text-muted-foreground">No molecules found matching your criteria</CardContent></Card>
+   585→   585→        ) : (
+   586→   586→          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+   587→   587→            {displayed.map((mol) => (
+   588→   588→              <motion.div key={mol.id} whileHover={{ y: -4 }} transition={{ type: 'spring', stiffness: 300 }}>
+   589→   589→                <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => openDetail(mol)}>
+   590→   590→                  <CardContent className="p-4">
+   591→   591→                    <div className="flex items-center justify-between mb-2">
+   592→   592→                      <h3 className="font-semibold">{mol.name}</h3>
+   593→   593→                      <Badge className={`text-[10px] ${riskColors[mol.riskLevel]}`}>{mol.riskLevel}</Badge>
+   594→   594→                    </div>
+   595→   595→                    <Formula>{mol.formula}</Formula>
+   596→   596→                    <div className="mt-3 flex items-center gap-2">
+   597→   597→                      <div className="relative size-8">
+   598→   598→                        <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
+   599→   599→                          <circle cx="18" cy="18" r="15" fill="none" stroke="currentColor" strokeWidth="3" className="text-muted/30" />
+   600→   600→                          <circle cx="18" cy="18" r="15" fill="none" stroke={mol.stabilityScore >= 80 ? '#10b981' : mol.stabilityScore >= 60 ? '#14b8a6' : mol.stabilityScore >= 40 ? '#f59e0b' : '#ef4444'} strokeWidth="3" strokeDasharray={`${(mol.stabilityScore / 100) * 94.25} 94.25`} strokeLinecap="round" />
+   601→   601→                        </svg>
+   602→   602→                        <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold">{mol.stabilityScore}</span>
+   603→   603→                      </div>
+   604→   604→                      <span className="text-xs text-muted-foreground">Stability</span>
+   605→   605→                    </div>
+   606→   606→                    <div className="mt-2 text-xs text-muted-foreground flex items-center gap-1">
+   607→   607→                      <span>MW: {mol.molarMass || '—'}</span>
+   608→   608→                      <span>·</span>
+   609→   609→                      <span>LogP: {mol.logP || '—'}</span>
+   610→   610→                    </div>
+   611→   611→                  </CardContent>
+   612→   612→                </Card>
+   613→   613→              </motion.div>
+   614→   614→            ))}
+   615→   615→          </div>
+   616→   616→        )
+   617→   617→      )}
+   618→   618→
+   619→   619→      {/* Add Molecule Dialog */}
+   620→   620→      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+   621→   621→        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+   622→   622→          <DialogHeader>
+   623→   623→            <DialogTitle className="flex items-center gap-2"><Plus className="size-5 text-emerald-600 dark:text-emerald-400" /> Add New Molecule</DialogTitle>
+   624→   624→            <DialogDescription>Create a new entry in the chemical compounds database</DialogDescription>
+   625→   625→          </DialogHeader>
+   626→   626→          <div className="space-y-3">
+   627→   627→            <div><Label>Name *</Label><Input placeholder="e.g. Acetylsalicylic acid" value={newMolecule.name} onChange={(e) => setNewMolecule({ ...newMolecule, name: e.target.value })} /></div>
+   628→   628→            <div className="grid grid-cols-2 gap-3">
+   629→   629→              <div><Label>CAS Number</Label><Input placeholder="e.g. 50-78-2" value={newMolecule.casNumber} onChange={(e) => setNewMolecule({ ...newMolecule, casNumber: e.target.value })} /></div>
+   630→   630→              <div><Label>Formula</Label><Input placeholder="e.g. C9H8O4" value={newMolecule.formula} onChange={(e) => setNewMolecule({ ...newMolecule, formula: e.target.value })} /></div>
+   631→   631→            </div>
+   632→   632→            <div><Label>SMILES</Label><Input placeholder="e.g. CC(=O)OC1=CC=CC=C1C(=O)O" value={newMolecule.smiles} onChange={(e) => setNewMolecule({ ...newMolecule, smiles: e.target.value })} className="font-mono text-xs" /></div>
+   633→   633→            <div className="grid grid-cols-3 gap-3">
+   634→   634→              <div><Label>Molar Mass</Label><Input type="number" placeholder="0.00" value={newMolecule.molarMass || ''} onChange={(e) => setNewMolecule({ ...newMolecule, molarMass: parseFloat(e.target.value) || 0 })} /></div>
+   635→   635→              <div><Label>LogP</Label><Input type="number" step="0.01" placeholder="0.00" value={newMolecule.logP || ''} onChange={(e) => setNewMolecule({ ...newMolecule, logP: parseFloat(e.target.value) || 0 })} /></div>
+   636→   636→              <div><Label>Stability (0-100)</Label><Input type="number" min="0" max="100" placeholder="0" value={newMolecule.predictedStabilityScore || ''} onChange={(e) => setNewMolecule({ ...newMolecule, predictedStabilityScore: Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)) })} /></div>
+   637→   637→            </div>
+   638→   638→            <div className="grid grid-cols-2 gap-3">
+   639→   639→              <div><Label>Risk Level</Label><Select value={newMolecule.riskLevel} onValueChange={(v) => setNewMolecule({ ...newMolecule, riskLevel: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="low">Low</SelectItem><SelectItem value="moderate">Moderate</SelectItem><SelectItem value="high">High</SelectItem><SelectItem value="critical">Critical</SelectItem></SelectContent></Select></div>
+   640→   640→              <div><Label>Data Source</Label><Select value={newMolecule.dataSource} onValueChange={(v) => setNewMolecule({ ...newMolecule, dataSource: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="manual">Manual</SelectItem><SelectItem value="pubchem">PubChem</SelectItem><SelectItem value="chembl">ChEMBL</SelectItem></SelectContent></Select></div>
+   641→   641→            </div>
+   642→   642→            <div><Label>Description</Label><Textarea placeholder="Brief description of the compound and its stability profile..." value={newMolecule.description} onChange={(e) => setNewMolecule({ ...newMolecule, description: e.target.value })} rows={3} /></div>
+   643→   643→          </div>
+   644→   644→          <DialogFooter>
+   645→   645→            <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
+   646→   646→            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={handleAddMolecule} disabled={creating}>
+   647→   647→              {creating ? <><RefreshCw className="size-4 mr-2 animate-spin" /> Saving...</> : <><Plus className="size-4 mr-2" /> Add Molecule</>}
+   648→   648→            </Button>
+   649→   649→          </DialogFooter>
+   650→   650→        </DialogContent>
+   651→   651→      </Dialog>
+   652→   652→
+   653→   653→      {/* Molecule Detail Dialog (enhanced) */}
+   654→   654→      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
+   655→   655→        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto" aria-describedby={undefined}>
+   656→   656→          <DialogHeader>
+   657→   657→            <DialogTitle>
+   658→   658→              {selectedMolecule ? (
+   659→   659→                <span className="flex items-center gap-2 flex-wrap">
+   660→   660→                  <span className="bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-400 dark:to-teal-400 bg-clip-text text-transparent">
+   661→   661→                    {selectedMolecule.name}
+   662→   662→                  </span>
+   663→   663→                  <Badge className={riskColors[selectedMolecule.riskLevel]}>{selectedMolecule.riskLevel} risk</Badge>
+   664→   664→                  <Badge variant="outline" className="text-xs">{selectedMolecule.dataSource}</Badge>
+   665→   665→                </span>
+   666→   666→              ) : (
+   667→   667→                <span>Molecule Details</span>
+   668→   668→              )}
+   669→   669→            </DialogTitle>
+   670→   670→            {selectedMolecule && (
+   671→   671→              <DialogDescription>
+   672→   672→                CAS: <span className="font-mono">{selectedMolecule.casNumber || '—'}</span>
+   673→   673→              </DialogDescription>
+   674→   674→            )}
+   675→   675→          </DialogHeader>
+   676→   676→          {selectedMolecule && (
+   677→   677→            <>
+   678→   678→              <Tabs defaultValue="properties" className="w-full">
+   679→   679→                <TabsList className="grid w-full grid-cols-3">
+   680→   680→                  <TabsTrigger value="properties">Properties</TabsTrigger>
+   681→   681→                  <TabsTrigger value="degradation">Degradation</TabsTrigger>
+   682→   682→                  <TabsTrigger value="hazards">Hazards</TabsTrigger>
+   683→   683→                </TabsList>
+   684→   684→
+   685→   685→                {/* Properties Tab */}
+   686→   686→                <TabsContent value="properties" className="space-y-4 mt-4">
+   687→   687→                  <div className="grid grid-cols-2 gap-3">
+   688→   688→                    {[
+   689→   689→                      { label: 'Formula', value: formatFormula(selectedMolecule.formula) },
+   690→   690→                      { label: 'Molar Mass', value: selectedMolecule.molarMass ? `${selectedMolecule.molarMass.toFixed(2)} g/mol` : '—' },
+   691→   691→                      { label: 'LogP', value: selectedMolecule.logP !== null ? selectedMolecule.logP.toFixed(2) : '—' },
+   692→   692→                      { label: 'Melting Point', value: selectedMolecule.meltingPoint !== null ? `${selectedMolecule.meltingPoint}°C` : '—' },
+   693→   693→                      { label: 'Boiling Point', value: selectedMolecule.boilingPoint !== null ? `${selectedMolecule.boilingPoint}°C` : '—' },
+   694→   694→                      { label: 'CAS Number', value: selectedMolecule.casNumber || '—' },
+   695→   695→                    ].map((field) => (
+   696→   696→                      <div key={field.label} className="space-y-1 p-2 rounded-lg bg-muted/40">
+   697→   697→                        <p className="text-xs text-muted-foreground">{field.label}</p>
+   698→   698→                        <p className="text-sm font-medium">{field.value}</p>
+   699→   699→                      </div>
+   700→   700→                    ))}
+   701→   701→                  </div>
+   702→   702→
+   703→   703→                  <div className="space-y-1 p-2 rounded-lg bg-muted/40">
+   704→   704→                    <p className="text-xs text-muted-foreground">SMILES</p>
+   705→   705→                    <p className="text-sm font-mono break-all">{selectedMolecule.smiles || '—'}</p>
+   706→   706→                  </div>
+   707→   707→
+   708→   708→                  <Separator />
+   709→   709→
+   710→   710→                  <div className="space-y-2">
+   711→   711→                    <div className="flex items-center justify-between">
+   712→   712→                      <span className="text-sm font-medium">Stability Score</span>
+   713→   713→                      <span className={`text-2xl font-bold ${getScoreColor(selectedMolecule.stabilityScore)}`}>
+   714→   714→                        {selectedMolecule.stabilityScore}<span className="text-sm text-muted-foreground font-normal">/100</span>
+   715→   715→                      </span>
+   716→   716→                    </div>
+   717→   717→                    <div className="relative">
+   718→   718→                      <Progress value={selectedMolecule.stabilityScore} className="h-3" />
+   719→   719→                      <div className="flex justify-between mt-1 text-[10px] text-muted-foreground">
+   720→   720→                        <span>0</span><span>25</span><span>50</span><span>75</span><span>100</span>
+   721→   721→                      </div>
+   722→   722→                    </div>
+   723→   723→                  </div>
+   724→   724→
+   725→   725→                  <Separator />
+   726→   726→
+   727→   727→                  <div className="space-y-1">
+   728→   728→                    <p className="text-sm font-medium">Description</p>
+   729→   729→                    <div className="p-3 rounded-lg bg-emerald-50/50 dark:bg-emerald-900/10 border-l-4 border-emerald-500">
+   730→   730→                      <p className="text-sm text-muted-foreground leading-relaxed">{selectedMolecule.description || 'No description available.'}</p>
+   731→   731→                    </div>
+   732→   732→                  </div>
+   733→   733→                </TabsContent>
+   734→   734→
+   735→   735→                {/* Degradation Tab */}
+   736→   736→                <TabsContent value="degradation" className="space-y-2 mt-4">
+   737→   737→                  <div className="flex items-center justify-between">
+   738→   738→                    <div className="flex items-center gap-2">
+   739→   739→                      <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400" />
+   740→   740→                      <p className="text-sm font-medium">Degradation Products</p>
+   741→   741→                      {degradationProducts.length > 0 && (
+   742→   742→                        <Badge variant="secondary" className="text-[10px]">{degradationProducts.length}</Badge>
+   743→   743→                      )}
+   744→   744→                    </div>
+   745→   745→                  </div>
+   746→   746→                  {degradationLoading ? (
+   747→   747→                    <div className="p-3 space-y-2">
+   748→   748→                      <Skeleton className="h-8 w-full" />
+   749→   749→                      <Skeleton className="h-8 w-full" />
+   750→   750→                    </div>
+   751→   751→                  ) : degradationProducts.length === 0 ? (
+   752→   752→                    <div className="p-3 rounded-lg bg-muted/40 text-sm text-muted-foreground">
+   753→   753→                      No degradation pathway data has been recorded for this molecule yet.
+   754→   754→                      Use the form below to add degradation products.
+   755→   755→                    </div>
+   756→   756→                  ) : (
+   757→   757→                    <div className="space-y-2">
+   758→   758→                      {degradationProducts.map((dp: any) => (
+   759→   759→                        <div key={dp.id} className="flex items-center justify-between p-2 rounded-lg bg-muted/40 border border-border/50">
+   760→   760→                          <div className="flex-1 min-w-0">
+   761→   761→                            <div className="flex items-center gap-2 flex-wrap">
+   762→   762→                              <span className="text-sm font-medium">{dp.name}</span>
+   763→   763→                              <Badge variant="outline" className={`text-[10px] ${HAZARD_OUTLINE_MAP[dp.hazardLevel] || HAZARD_OUTLINE_MAP.low}`}>
+   764→   764→                                {dp.hazardLevel}
+   765→   765→                              </Badge>
+   766→   766→                            </div>
+   767→   767→                            {dp.smiles && (
+   768→   768→                              <p className="text-[10px] font-mono text-muted-foreground mt-0.5 truncate">{dp.smiles}</p>
+   769→   769→                            )}
+   770→   770→                          </div>
+   771→   771→                          {dp.percentage != null && (
+   772→   772→                            <div className="ml-2 flex items-center gap-2 shrink-0">
+   773→   773→                              <div className="w-16 h-2 rounded-full bg-muted overflow-hidden">
+   774→   774→                                <div
+   775→   775→                                  className="h-full bg-gradient-to-r from-amber-400 to-red-500"
+   776→   776→                                  style={{ width: `${Math.min(100, dp.percentage)}%` }}
+   777→   777→                                />
+   778→   778→                              </div>
+   779→   779→                              <span className="text-xs font-semibold tabular-nums w-10 text-right">{dp.percentage}%</span>
+   780→   780→                            </div>
+   781→   781→                          )}
+   782→   782→                        </div>
+   783→   783→                      ))}
+   784→   784→                    </div>
+   785→   785→                  )}
+   786→   786→
+   787→   787→                  {/* Add degradation product form */}
+   788→   788→                  <div className="p-3 rounded-lg bg-emerald-50/50 dark:bg-emerald-900/10 border border-emerald-200/50 dark:border-emerald-800/50 space-y-2">
+   789→   789→                    <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400">Add degradation product</p>
+   790→   790→                    <div className="grid grid-cols-2 gap-2">
+   791→   791→                      <Input placeholder="Product name" value={newDegradation.name} onChange={(e) => setNewDegradation({ ...newDegradation, name: e.target.value })} className="text-xs h-8" />
+   792→   792→                      <Input placeholder="SMILES (optional)" value={newDegradation.smiles} onChange={(e) => setNewDegradation({ ...newDegradation, smiles: e.target.value })} className="text-xs h-8 font-mono" />
+   793→   793→                      <div className="flex items-center gap-2">
+   794→   794→                        <Input type="number" placeholder="%" min="0" max="100" value={newDegradation.percentage || ''} onChange={(e) => setNewDegradation({ ...newDegradation, percentage: parseFloat(e.target.value) || 0 })} className="text-xs h-8 w-20" />
+   795→   795→                        <Select value={newDegradation.hazardLevel} onValueChange={(v) => setNewDegradation({ ...newDegradation, hazardLevel: v })}>
+   796→   796→                          <SelectTrigger className="text-xs h-8 flex-1"><SelectValue /></SelectTrigger>
+   797→   797→                          <SelectContent><SelectItem value="low">Low</SelectItem><SelectItem value="moderate">Moderate</SelectItem><SelectItem value="high">High</SelectItem></SelectContent>
+   798→   798→                        </Select>
+   799→   799→                      </div>
+   800→   800→                      <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white h-8" onClick={handleAddDegradation} disabled={addingDegradation}>
+   801→   801→                        {addingDegradation ? <><RefreshCw className="size-3 mr-1 animate-spin" /> Adding...</> : <><Plus className="size-3 mr-1" /> Add Product</>}
+   802→   802→                      </Button>
+   803→   803→                    </div>
+   804→   804→                  </div>
+   805→   805→                </TabsContent>
+   806→   806→
+   807→   807→                {/* Hazards Tab */}
+   808→   808→                <TabsContent value="hazards" className="space-y-4 mt-4">
+   809→   809→                  <div className="grid grid-cols-2 gap-3">
+   810→   810→                    <div className="space-y-1 p-3 rounded-lg bg-muted/40"><p className="text-xs text-muted-foreground">Risk Level</p><Badge className={riskColors[selectedMolecule.riskLevel]}>{selectedMolecule.riskLevel} risk</Badge></div>
+   811→   811→                    <div className="space-y-1 p-3 rounded-lg bg-muted/40"><p className="text-xs text-muted-foreground">Stability Score</p><p className={`text-lg font-bold ${getScoreColor(selectedMolecule.stabilityScore)}`}>{selectedMolecule.stabilityScore}/100</p></div>
+   812→   812→                    <div className="space-y-1 p-3 rounded-lg bg-muted/40"><p className="text-xs text-muted-foreground">Hazard Class</p><p className="text-sm font-medium">{HAZARD_CLASS_MAP[selectedMolecule.riskLevel] || 'Low Hazard'}</p></div>
+   813→   813→                    <div className="space-y-1 p-3 rounded-lg bg-muted/40"><p className="text-xs text-muted-foreground">Data Source</p><p className="text-sm font-medium">{selectedMolecule.dataSource}</p></div>
+   814→   814→                  </div>
+   815→   815→                  <div className="space-y-1">
+   816→   816→                    <p className="text-sm font-medium">Risk Description</p>
+   817→   817→                    <div className={`p-3 rounded-lg border-l-4 ${RISK_BG_MAP[selectedMolecule.riskLevel] || RISK_BG_MAP.low}`}>
+   818→   818→                      <p className="text-sm text-muted-foreground leading-relaxed">{selectedMolecule.description || 'No hazard description available.'}</p>
+   819→   819→                    </div>
+   820→   820→                  </div>
+   821→   821→                </TabsContent>
+   822→   822→              </Tabs>
+   823→   823→              <DialogFooter className="gap-2">
+   824→   824→                <Button variant="outline" onClick={() => { setDetailOpen(false); setPage('studies') }}><Microscope className="size-4 mr-2" /> Create Study</Button>
+   825→   825→                <Button onClick={() => setDetailOpen(false)}>Close</Button>
+   826→   826→              </DialogFooter>
+   827→   827→            </>
+   828→   828→          )}
+   829→   829→        </DialogContent>
+   830→   830→      </Dialog>
+   831→   831→
+   832→   832→      {/* Floating Compare Action Bar — appears when ≥2 molecules are selected */}
+   833→   833→      <AnimatePresence>
+   834→   834→        {compareIds.length >= 2 && (
+   835→   835→          <motion.div
+   836→   836→            initial={{ y: 80, opacity: 0 }}
+   837→   837→            animate={{ y: 0, opacity: 1 }}
+   838→   838→            exit={{ y: 80, opacity: 0 }}
+   839→   839→            transition={{ type: 'spring', stiffness: 320, damping: 28 }}
+   840→   840→            className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 rounded-xl border border-emerald-200/60 dark:border-emerald-800/60 bg-card/95 backdrop-blur-md shadow-2xl shadow-emerald-900/20 px-4 py-2.5"
+   841→   841→          >
+   842→   842→            <div className="flex items-center gap-2 text-sm">
+   843→   843→              <span className="flex size-7 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+   844→   844→                <GitCompareArrows className="size-4" />
+   845→   845→              </span>
+   846→   846→              <span className="font-medium">
+   847→   847→                Comparing <span className="text-emerald-600 dark:text-emerald-400">{compareIds.length}</span> molecule{compareIds.length !== 1 ? 's' : ''}
+   848→   848→              </span>
+   849→   849→              <span className="hidden md:inline text-xs text-muted-foreground ml-1">
+   850→   850→                (max 3)
+   851→   851→              </span>
+   852→   852→            </div>
+   853→   853→            <div className="h-6 w-px bg-border" />
+   854→   854→            <Button
+   855→   855→              size="sm"
+   856→   856→              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+   857→   857→              onClick={() => setCompareOpen(true)}
+   858→   858→            >
+   859→   859→              <CheckSquare className="size-4 mr-1" /> Compare Now
+   860→   860→            </Button>
+   861→   861→            <Button
+   862→   862→              size="sm"
+   863→   863→              variant="ghost"
+   864→   864→              className="text-red-600 hover:text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+   865→   865→              onClick={() => { clearCompare(); toast({ title: 'Selection cleared' }) }}
+   866→   866→              aria-label="Clear comparison selection"
+   867→   867→            >
+   868→   868→              <X className="size-4" /> Clear
+   869→   869→            </Button>
+   870→   870→          </motion.div>
+   871→   871→        )}
+   872→   872→      </AnimatePresence>
+   873→   873→
+   874→   874→      {/* Molecule Comparison Dialog */}
+   875→   875→      <MoleculeComparison molecules={displayed} />
+   876→   876→    </motion.div>
+   877→   877→  )
+   878→   878→}
+   879→   879→

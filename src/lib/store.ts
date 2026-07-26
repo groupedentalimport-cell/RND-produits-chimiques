@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { SAMPLE_NOTIFICATIONS, type AppNotification } from '@/lib/sample-data'
 
 // ── Navigation State ────────────────────────────────────────────────────
 
@@ -116,3 +117,88 @@ export const useStudyStore = create<StudyState>((set) => ({
   setSelectedStudy: (study) => set({ selectedStudy: study }),
   setLoading: (loading) => set({ loading }),
 }))
+
+// ── Molecule Comparison State ───────────────────────────────────────────
+
+interface CompareState {
+  selectedIds: string[]
+  compareOpen: boolean
+  toggleId: (id: string, opts?: { max?: number; onMaxReached?: () => void }) => void
+  clear: () => void
+  setCompareOpen: (open: boolean) => void
+}
+
+const MAX_COMPARE = 3
+
+export const useCompareStore = create<CompareState>((set, get) => ({
+  selectedIds: [],
+  compareOpen: false,
+  toggleId: (id, opts) => {
+    const max = opts?.max ?? MAX_COMPARE
+    const cur = get().selectedIds
+    if (cur.includes(id)) {
+      set({ selectedIds: cur.filter((x) => x !== id) })
+      return
+    }
+    if (cur.length >= max) {
+      // Replace the oldest selected entry to make room
+      opts?.onMaxReached?.()
+      set({ selectedIds: [...cur.slice(1), id] })
+      return
+    }
+    set({ selectedIds: [...cur, id] })
+  },
+  clear: () => set({ selectedIds: [], compareOpen: false }),
+  setCompareOpen: (open) => set({ compareOpen: open }),
+}))
+
+// ── Notifications State ─────────────────────────────────────────────────
+
+interface NotificationState {
+  notifications: AppNotification[]
+  unreadCount: number
+  markAsRead: (id: string) => void
+  markAllAsRead: () => void
+  removeNotification: (id: string) => void
+  addNotification: (n: AppNotification) => void
+}
+
+// Initialize from SAMPLE_NOTIFICATIONS (first 5 are already marked unread in
+// the sample data) and compute the initial unread count once.
+const _initialNotifications: AppNotification[] = SAMPLE_NOTIFICATIONS.map((n) => ({ ...n }))
+const _initialUnread = _initialNotifications.reduce((acc, n) => acc + (n.read ? 0 : 1), 0)
+
+function _recount(list: AppNotification[]): number {
+  return list.reduce((acc, n) => acc + (n.read ? 0 : 1), 0)
+}
+
+export const useNotificationStore = create<NotificationState>((set, get) => ({
+  notifications: _initialNotifications,
+  unreadCount: _initialUnread,
+  markAsRead: (id) =>
+    set((s) => {
+      const next = s.notifications.map((n) =>
+        n.id === id ? { ...n, read: true } : n
+      )
+      return { notifications: next, unreadCount: _recount(next) }
+    }),
+  markAllAsRead: () =>
+    set((s) => {
+      const next = s.notifications.map((n) => ({ ...n, read: true }))
+      return { notifications: next, unreadCount: 0 }
+    }),
+  removeNotification: (id) =>
+    set((s) => {
+      const next = s.notifications.filter((n) => n.id !== id)
+      return { notifications: next, unreadCount: _recount(next) }
+    }),
+  addNotification: (n) =>
+    set((s) => {
+      const next = [n, ...s.notifications]
+      return {
+        notifications: next,
+        unreadCount: _recount(next),
+      }
+    }),
+}))
+
