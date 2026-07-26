@@ -38,12 +38,19 @@ import {
 } from '@/lib/store'
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, PieChart, Pie, Cell, Legend,
+  ResponsiveContainer, PieChart, Pie, Cell, Legend, ScatterChart, Scatter,
 } from 'recharts'
+import { useToast } from '@/hooks/use-toast'
+import {
+  Tooltip as UiTooltip, TooltipTrigger, TooltipContent, TooltipProvider,
+} from '@/components/ui/tooltip'
+import {
+  Popover, PopoverTrigger, PopoverContent,
+} from '@/components/ui/popover'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-type PageId = 'dashboard' | 'molecules' | 'simulator' | 'studies' | 'reports' | 'admin'
+type PageId = 'dashboard' | 'molecules' | 'simulator' | 'studies' | 'reports' | 'analytics' | 'admin'
 
 interface MoleculeData {
   id: string
@@ -102,6 +109,13 @@ interface AuditEntry {
 }
 
 // ── Sample Data ────────────────────────────────────────────────────────────
+
+// QSPR Model Performance (hardcoded realistic values)
+const QSPR_MODEL_PERFORMANCE = [
+  { model: 'Solubility', r2: 0.82, rmse: 0.54, mae: 0.41, fill: '#10b981' },
+  { model: 'logD', r2: 0.78, rmse: 0.61, mae: 0.47, fill: '#14b8a6' },
+  { model: 'Hydration', r2: 0.75, rmse: 0.72, mae: 0.55, fill: '#06b6d4' },
+]
 
 const SAMPLE_MOLECULES: MoleculeData[] = [
   { id: 'mol-1', name: 'Aspirin', casNumber: '50-78-2', smiles: 'CC(=O)OC1=CC=CC=C1C(=O)O', formula: 'C₉H₈O₄', molarMass: 180.16, logP: 1.19, stabilityScore: 72, riskLevel: 'low', dataSource: 'PubChem', description: 'Acetylsalicylic acid, a common NSAID and antiplatelet agent. Sensitive to moisture and hydrolysis.', meltingPoint: 135, boilingPoint: null },
@@ -217,6 +231,36 @@ function getScoreColor(score: number): string {
   return 'text-red-600 dark:text-red-400'
 }
 
+// ── CSV Export helper ────────────────────────────────────────────────────
+
+function exportCSV(data: Record<string, unknown>[], filename: string) {
+  if (!data.length) return
+  const headers = Object.keys(data[0])
+  const csvLines = [headers.join(',')]
+  for (const row of data) {
+    const values = headers.map((h) => {
+      const v = row[h] ?? ''
+      const s = String(v).replace(/"/g, '""')
+      return /[",\n]/.test(s) ? `"${s}"` : s
+    })
+    csvLines.push(values.join(','))
+  }
+  const blob = new Blob([csvLines.join('\n')], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+// Format a number for CSV output (null -> empty string)
+function fmtNum(v: number | null | undefined): string {
+  return v === null || v === undefined ? '' : String(v)
+}
+
 // ── Sidebar Navigation ────────────────────────────────────────────────────
 
 const NAV_ITEMS: { id: PageId; label: string; icon: React.ElementType }[] = [
@@ -225,6 +269,7 @@ const NAV_ITEMS: { id: PageId; label: string; icon: React.ElementType }[] = [
   { id: 'simulator', label: 'Simulator', icon: Beaker },
   { id: 'studies', label: 'Studies', icon: Microscope },
   { id: 'reports', label: 'Reports', icon: FileText },
+  { id: 'analytics', label: 'Analytics', icon: BarChart3 },
   { id: 'admin', label: 'Admin', icon: ShieldCheck },
 ]
 
@@ -257,14 +302,14 @@ function Sidebar() {
       >
         {/* Logo area */}
         <div className="flex items-center gap-3 p-4 h-16 border-b">
-          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-600 text-white font-bold text-sm">
+          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 text-white font-bold text-sm shadow-md shadow-emerald-500/20">
             CS
           </div>
           {sidebarOpen && (
             <motion.span
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="font-semibold text-lg whitespace-nowrap"
+              className="font-semibold text-lg whitespace-nowrap bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-400 dark:to-teal-400 bg-clip-text text-transparent"
             >
               ChemStab
             </motion.span>
@@ -296,13 +341,15 @@ function Sidebar() {
               <Button
                 key={item.id}
                 variant={isActive ? 'secondary' : 'ghost'}
-                className={`w-full justify-start gap-3 h-10 transition-all
-                  ${isActive ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 font-medium' : ''}
+                className={`w-full justify-start gap-3 h-10 transition-all relative
+                  ${isActive
+                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 font-medium border-l-4 border-emerald-500'
+                    : 'border-l-4 border-transparent'}
                   ${!sidebarOpen ? 'px-0 justify-center' : ''}
                 `}
                 onClick={() => { setPage(item.id); if (window.innerWidth < 1024) toggleSidebar(); }}
               >
-                <Icon className="size-4 shrink-0" />
+                <Icon className={`size-4 shrink-0 transition-transform ${isActive ? 'scale-110' : 'group-hover:rotate-6 group-hover:scale-105'}`} />
                 {sidebarOpen && (
                   <motion.span
                     initial={{ opacity: 0 }}
@@ -440,7 +487,7 @@ function DashboardPage() {
     >
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+          <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-400 dark:to-teal-400 bg-clip-text text-transparent">Dashboard</h1>
           <p className="text-muted-foreground">Overview of your chemical stability assessment platform</p>
         </div>
         <Button variant="outline" size="sm" onClick={handleRefresh} disabled={loading}>
@@ -466,10 +513,11 @@ function DashboardPage() {
           return (
             <motion.div
               key={stat.label}
-              whileHover={{ y: -2, boxShadow: '0 8px 30px rgba(0,0,0,0.12)' }}
+              whileHover={{ y: -4, boxShadow: '0 12px 32px rgba(0,0,0,0.15)' }}
               transition={{ type: 'spring', stiffness: 400 }}
             >
-              <Card className="cursor-pointer">
+              <Card className="cursor-pointer backdrop-blur-sm bg-card/80 transition-transform hover:-translate-y-1 overflow-hidden relative">
+                <div className={`absolute inset-x-0 top-0 h-1 ${stat.color === 'emerald' ? 'bg-gradient-to-r from-emerald-500 to-teal-500' : stat.color === 'teal' ? 'bg-gradient-to-r from-teal-500 to-cyan-500' : stat.color === 'cyan' ? 'bg-gradient-to-r from-cyan-500 to-sky-500' : 'bg-gradient-to-r from-amber-500 to-orange-500'}`} />
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div className="space-y-1">
@@ -616,7 +664,13 @@ function DashboardPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>System Status</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                </span>
+                System Status
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               {[
@@ -629,7 +683,9 @@ function DashboardPage() {
                   <span className="text-muted-foreground">{item.label}</span>
                   <div className="flex items-center gap-2">
                     <span>{item.status}</span>
-                    {item.ok ? <CheckCircle2 className="size-3.5 text-emerald-500" /> : <XCircle className="size-3.5 text-red-500" />}
+                    {item.ok
+                      ? <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" /><span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" /></span>
+                      : <XCircle className="size-3.5 text-red-500" />}
                   </div>
                 </div>
               ))}
@@ -644,6 +700,8 @@ function DashboardPage() {
 // ── Molecules Database Page ────────────────────────────────────────────────
 
 function MoleculesPage() {
+  const { toast } = useToast()
+  const { setPage } = useAppStore()
   const [searchQuery, setSearchQuery] = useState('')
   const [riskFilter, setRiskFilter] = useState('all')
   const [sourceFilter, setSourceFilter] = useState('all')
@@ -651,9 +709,25 @@ function MoleculesPage() {
   const [selectedMolecule, setSelectedMolecule] = useState<MoleculeData | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [refreshKey, setRefreshKey] = useState(0)
   const [apiMolecules, setApiMolecules] = useState<MoleculeData[]>([])
   const [totalPages, setTotalPages] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
+  const [addOpen, setAddOpen] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [newMolecule, setNewMolecule] = useState({
+    name: '',
+    casNumber: '',
+    smiles: '',
+    formula: '',
+    molarMass: 0,
+    logP: 0,
+    predictedStabilityScore: 0,
+    riskLevel: 'low',
+    dataSource: 'manual',
+    description: '',
+  })
   const pageSize = 5
 
   useEffect(() => {
@@ -686,7 +760,7 @@ function MoleculesPage() {
     }
     loadData()
     return () => { cancelled = true }
-  }, [searchQuery, riskFilter, currentPageNum])
+  }, [searchQuery, riskFilter, currentPageNum, refreshKey])
 
   // Apply source filter client-side on fetched molecules
   const displayed = sourceFilter === 'all'
@@ -698,6 +772,94 @@ function MoleculesPage() {
     setDetailOpen(true)
   }
 
+  const handleRefresh = () => {
+    setLoading(true)
+    setRefreshKey(k => k + 1)
+  }
+
+  const resetNewMolecule = () => {
+    setNewMolecule({
+      name: '', casNumber: '', smiles: '', formula: '', molarMass: 0, logP: 0,
+      predictedStabilityScore: 0, riskLevel: 'low', dataSource: 'manual', description: '',
+    })
+  }
+
+  const handleAddMolecule = async () => {
+    if (!newMolecule.name.trim()) {
+      toast({ title: 'Validation error', description: 'Molecule name is required', variant: 'destructive' })
+      return
+    }
+    setCreating(true)
+    try {
+      const res = await fetch('/api/molecules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newMolecule.name,
+          casNumber: newMolecule.casNumber || undefined,
+          smiles: newMolecule.smiles || undefined,
+          formula: newMolecule.formula || undefined,
+          molarMass: newMolecule.molarMass || undefined,
+          logP: newMolecule.logP || undefined,
+          predictedStabilityScore: newMolecule.predictedStabilityScore || undefined,
+          riskLevel: newMolecule.riskLevel,
+          dataSource: newMolecule.dataSource,
+          description: newMolecule.description || undefined,
+        }),
+      })
+      if (res.ok) {
+        toast({ title: 'Molecule added', description: `${newMolecule.name} created successfully` })
+        setAddOpen(false)
+        resetNewMolecule()
+        handleRefresh()
+      } else {
+        const errBody = await res.json().catch(() => ({}))
+        toast({ title: 'Error', description: errBody.error || 'Failed to create molecule', variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'Error', description: 'Network error', variant: 'destructive' })
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const exportMoleculesCSV = async () => {
+    setExporting(true)
+    try {
+      const res = await fetch('/api/molecules?limit=1000')
+      if (res.ok) {
+        const data = await res.json()
+        const rows = (data.molecules || []).map((m: any) => ({
+          id: m.id,
+          name: m.name,
+          casNumber: m.casNumber ?? '',
+          smiles: m.smiles ?? '',
+          formula: m.formula ?? '',
+          molarMass: m.molarMass ?? '',
+          logP: m.logP ?? '',
+          stabilityScore: m.predictedStabilityScore ?? '',
+          riskLevel: m.riskLevel ?? '',
+          dataSource: m.dataSource ?? '',
+          meltingPoint: m.meltingPoint ?? '',
+          boilingPoint: m.boilingPoint ?? '',
+          description: m.description ?? '',
+        }))
+        if (!rows.length) {
+          toast({ title: 'Nothing to export', description: 'No molecules found to export' })
+        } else {
+          exportCSV(rows, `chemstab-molecules-${new Date().toISOString().slice(0, 10)}.csv`)
+          toast({ title: 'Export complete', description: `Exported ${rows.length} molecules to CSV` })
+        }
+      } else {
+        toast({ title: 'Export failed', description: 'Failed to fetch molecules', variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'Export failed', description: 'Network error', variant: 'destructive' })
+    } finally {
+      setExporting(false)
+    }
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -705,14 +867,29 @@ function MoleculesPage() {
       transition={{ duration: 0.4 }}
       className="space-y-6"
     >
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Molecules Database</h1>
+          <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-400 dark:to-teal-400 bg-clip-text text-transparent">Molecules Database</h1>
           <p className="text-muted-foreground">Browse and search chemical compounds with stability assessments</p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => setCurrentPageNum(1)} disabled={loading}>
-          <RefreshCw className={`size-4 mr-1 ${loading ? 'animate-spin' : ''}`} /> Refresh
-        </Button>
+        <div className="flex gap-2">
+          <TooltipProvider delayDuration={200}>
+            <UiTooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="sm" onClick={exportMoleculesCSV} disabled={exporting}>
+                  <Download className={`size-4 mr-1 ${exporting ? 'animate-pulse' : ''}`} /> Export CSV
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Download all molecules as a CSV file</TooltipContent>
+            </UiTooltip>
+          </TooltipProvider>
+          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={loading}>
+            <RefreshCw className={`size-4 mr-1 ${loading ? 'animate-spin' : ''}`} /> Refresh
+          </Button>
+          <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => setAddOpen(true)}>
+            <Plus className="size-4 mr-2" /> Add Molecule
+          </Button>
+        </div>
       </div>
 
       {/* Search & Filters */}
@@ -757,7 +934,7 @@ function MoleculesPage() {
       </p>
 
       {/* Table */}
-      <Card>
+      <Card className="backdrop-blur-sm bg-card/80">
         <CardContent className="p-0">
           <div className="max-h-96 overflow-y-auto">
             {loading ? (
@@ -778,10 +955,10 @@ function MoleculesPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {displayed.map((mol) => (
+                  {displayed.map((mol, idx) => (
                     <TableRow
                       key={mol.id}
-                      className="cursor-pointer hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10"
+                      className={`cursor-pointer hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10 transition-colors even:bg-muted/30 ${idx % 2 === 0 ? '' : 'even:bg-muted/30'}`}
                       onClick={() => openDetail(mol)}
                     >
                       <TableCell className="font-medium">{mol.name}</TableCell>
@@ -836,54 +1013,227 @@ function MoleculesPage() {
         )}
       </Card>
 
-      {/* Molecule Detail Dialog */}
+      {/* Add Molecule Dialog */}
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Plus className="size-5 text-emerald-600 dark:text-emerald-400" />
+              Add New Molecule
+            </DialogTitle>
+            <DialogDescription>Create a new entry in the chemical compounds database</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Name *</Label>
+              <Input
+                placeholder="e.g. Acetylsalicylic acid"
+                value={newMolecule.name}
+                onChange={(e) => setNewMolecule({ ...newMolecule, name: e.target.value })}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>CAS Number</Label>
+                <Input
+                  placeholder="e.g. 50-78-2"
+                  value={newMolecule.casNumber}
+                  onChange={(e) => setNewMolecule({ ...newMolecule, casNumber: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Formula</Label>
+                <Input
+                  placeholder="e.g. C9H8O4"
+                  value={newMolecule.formula}
+                  onChange={(e) => setNewMolecule({ ...newMolecule, formula: e.target.value })}
+                />
+              </div>
+            </div>
+            <div>
+              <Label>SMILES</Label>
+              <Input
+                placeholder="e.g. CC(=O)OC1=CC=CC=C1C(=O)O"
+                value={newMolecule.smiles}
+                onChange={(e) => setNewMolecule({ ...newMolecule, smiles: e.target.value })}
+                className="font-mono text-xs"
+              />
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <Label>Molar Mass</Label>
+                <Input
+                  type="number"
+                  placeholder="0.00"
+                  value={newMolecule.molarMass || ''}
+                  onChange={(e) => setNewMolecule({ ...newMolecule, molarMass: parseFloat(e.target.value) || 0 })}
+                />
+              </div>
+              <div>
+                <Label>LogP</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  placeholder="0.00"
+                  value={newMolecule.logP || ''}
+                  onChange={(e) => setNewMolecule({ ...newMolecule, logP: parseFloat(e.target.value) || 0 })}
+                />
+              </div>
+              <div>
+                <Label>Stability (0-100)</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  max="100"
+                  placeholder="0"
+                  value={newMolecule.predictedStabilityScore || ''}
+                  onChange={(e) => setNewMolecule({ ...newMolecule, predictedStabilityScore: Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)) })}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Risk Level</Label>
+                <Select value={newMolecule.riskLevel} onValueChange={(v) => setNewMolecule({ ...newMolecule, riskLevel: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="moderate">Moderate</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="critical">Critical</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Data Source</Label>
+                <Select value={newMolecule.dataSource} onValueChange={(v) => setNewMolecule({ ...newMolecule, dataSource: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="manual">Manual</SelectItem>
+                    <SelectItem value="pubchem">PubChem</SelectItem>
+                    <SelectItem value="chembl">ChEMBL</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div>
+              <Label>Description</Label>
+              <Textarea
+                placeholder="Brief description of the compound and its stability profile..."
+                value={newMolecule.description}
+                onChange={(e) => setNewMolecule({ ...newMolecule, description: e.target.value })}
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
+            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={handleAddMolecule} disabled={creating}>
+              {creating ? <><RefreshCw className="size-4 mr-2 animate-spin" /> Saving...</> : <><Plus className="size-4 mr-2" /> Add Molecule</>}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Molecule Detail Dialog (enhanced) */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto" aria-describedby={undefined}>
+          <DialogHeader>
+            <DialogTitle>
+              {selectedMolecule ? (
+                <span className="flex items-center gap-2 flex-wrap">
+                  <span className="bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-400 dark:to-teal-400 bg-clip-text text-transparent">
+                    {selectedMolecule.name}
+                  </span>
+                  <Badge className={riskColors[selectedMolecule.riskLevel]}>{selectedMolecule.riskLevel} risk</Badge>
+                  <Badge variant="outline" className="text-xs">{selectedMolecule.dataSource}</Badge>
+                </span>
+              ) : (
+                <span>Molecule Details</span>
+              )}
+            </DialogTitle>
+            {selectedMolecule && (
+              <DialogDescription>
+                CAS: <span className="font-mono">{selectedMolecule.casNumber || '—'}</span>
+              </DialogDescription>
+            )}
+          </DialogHeader>
           {selectedMolecule && (
             <>
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  {selectedMolecule.name}
-                  <Badge className={riskColors[selectedMolecule.riskLevel]}>
-                    {selectedMolecule.riskLevel}
-                  </Badge>
-                </DialogTitle>
-                <DialogDescription>
-                  CAS: {selectedMolecule.casNumber} · Source: {selectedMolecule.dataSource}
-                </DialogDescription>
-              </DialogHeader>
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
                   {[
-                    { label: 'Formula', value: selectedMolecule.formula },
-                    { label: 'Molar Mass', value: `${selectedMolecule.molarMass.toFixed(2)} g/mol` },
+                    { label: 'Formula', value: selectedMolecule.formula || '—' },
+                    { label: 'Molar Mass', value: selectedMolecule.molarMass ? `${selectedMolecule.molarMass.toFixed(2)} g/mol` : '—' },
                     { label: 'LogP', value: selectedMolecule.logP !== null ? selectedMolecule.logP.toFixed(2) : '—' },
-                    { label: 'SMILES', value: selectedMolecule.smiles },
                     { label: 'Melting Point', value: selectedMolecule.meltingPoint !== null ? `${selectedMolecule.meltingPoint}°C` : '—' },
                     { label: 'Boiling Point', value: selectedMolecule.boilingPoint !== null ? `${selectedMolecule.boilingPoint}°C` : '—' },
+                    { label: 'CAS Number', value: selectedMolecule.casNumber || '—' },
                   ].map((field) => (
-                    <div key={field.label} className="space-y-1">
+                    <div key={field.label} className="space-y-1 p-2 rounded-lg bg-muted/40">
                       <p className="text-xs text-muted-foreground">{field.label}</p>
                       <p className="text-sm font-medium">{field.value}</p>
                     </div>
                   ))}
                 </div>
+
+                <div className="space-y-1 p-2 rounded-lg bg-muted/40">
+                  <p className="text-xs text-muted-foreground">SMILES</p>
+                  <p className="text-sm font-mono break-all">{selectedMolecule.smiles || '—'}</p>
+                </div>
+
                 <Separator />
+
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium">Stability Score</span>
-                    <span className={`text-lg font-bold ${getScoreColor(selectedMolecule.stabilityScore)}`}>
-                      {selectedMolecule.stabilityScore}/100
+                    <span className={`text-2xl font-bold ${getScoreColor(selectedMolecule.stabilityScore)}`}>
+                      {selectedMolecule.stabilityScore}<span className="text-sm text-muted-foreground font-normal">/100</span>
                     </span>
                   </div>
-                  <Progress value={selectedMolecule.stabilityScore} className="h-3" />
+                  <div className="relative">
+                    <Progress value={selectedMolecule.stabilityScore} className="h-3" />
+                    <div className="flex justify-between mt-1 text-[10px] text-muted-foreground">
+                      <span>0</span><span>25</span><span>50</span><span>75</span><span>100</span>
+                    </div>
+                  </div>
                 </div>
+
                 <Separator />
+
                 <div className="space-y-1">
                   <p className="text-sm font-medium">Description</p>
-                  <p className="text-sm text-muted-foreground leading-relaxed">{selectedMolecule.description}</p>
+                  <div className="p-3 rounded-lg bg-emerald-50/50 dark:bg-emerald-900/10 border-l-4 border-emerald-500">
+                    <p className="text-sm text-muted-foreground leading-relaxed">{selectedMolecule.description || 'No description available.'}</p>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Degradation Products placeholder */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400" />
+                    <p className="text-sm font-medium">Degradation Products</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-muted/40 text-sm text-muted-foreground">
+                    No degradation pathway data has been recorded for this molecule yet.
+                    Run a stability simulation or link a study to populate this section.
+                  </div>
                 </div>
               </div>
+              <DialogFooter className="gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setDetailOpen(false)
+                    setPage('studies')
+                  }}
+                >
+                  <Microscope className="size-4 mr-2" /> Create Study from this Molecule
+                </Button>
+                <Button onClick={() => setDetailOpen(false)}>Close</Button>
+              </DialogFooter>
             </>
           )}
         </DialogContent>
@@ -957,7 +1307,7 @@ function SimulatorPage() {
       className="space-y-6"
     >
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Stability Simulator</h1>
+        <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-400 dark:to-teal-400 bg-clip-text text-transparent">Stability Simulator</h1>
         <p className="text-muted-foreground">Predict chemical stability under custom environmental conditions</p>
       </div>
 
@@ -1260,6 +1610,7 @@ function SimulatorPage() {
 // ── Studies Management Page ───────────────────────────────────────────────
 
 function StudiesPage() {
+  const { toast } = useToast()
   const [statusFilter, setStatusFilter] = useState('all')
   const [typeFilter, setTypeFilter] = useState('all')
   const [createOpen, setCreateOpen] = useState(false)
@@ -1267,6 +1618,13 @@ function StudiesPage() {
   const [refreshKey, setRefreshKey] = useState(0)
   const [apiStudies, setApiStudies] = useState<StudyData[]>([])
   const [totalCount, setTotalCount] = useState(0)
+  const [creating, setCreating] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [detailOpen, setDetailOpen] = useState(false)
+  const [detailStudy, setDetailStudy] = useState<any | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [signing, setSigning] = useState(false)
+  const [statusUpdating, setStatusUpdating] = useState(false)
   const [newStudy, setNewStudy] = useState({
     substanceName: '',
     studyType: 'long_term',
@@ -1306,10 +1664,163 @@ function StudiesPage() {
 
   const handleRefresh = () => setRefreshKey(k => k + 1)
 
-  const handleCreate = () => {
-    setCreateOpen(false)
-    setNewStudy({ substanceName: '', studyType: 'long_term', temperatureC: 25, humidityPercent: 60, durationMonths: 24 })
-    handleRefresh()
+  const handleCreate = async () => {
+    if (!newStudy.substanceName.trim()) {
+      toast({ title: 'Validation error', description: 'Substance name is required', variant: 'destructive' })
+      return
+    }
+    setCreating(true)
+    // Generate a study code based on substance name + timestamp
+    const code = `STB-${new Date().getFullYear()}-${String(Date.now()).slice(-5)}`
+    try {
+      const res = await fetch('/api/studies', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studyCode: code,
+          substanceName: newStudy.substanceName,
+          studyType: newStudy.studyType,
+          temperatureC: newStudy.temperatureC,
+          humidityPercent: newStudy.humidityPercent,
+          durationMonths: newStudy.durationMonths,
+        }),
+      })
+      if (res.ok) {
+        toast({
+          title: 'Study created',
+          description: `${newStudy.substanceName} study created successfully (${code})`,
+        })
+        setCreateOpen(false)
+        setNewStudy({ substanceName: '', studyType: 'long_term', temperatureC: 25, humidityPercent: 60, durationMonths: 24 })
+        handleRefresh()
+      } else {
+        const errBody = await res.json().catch(() => ({}))
+        toast({ title: 'Error', description: errBody.error || 'Failed to create study', variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'Error', description: 'Network error', variant: 'destructive' })
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const openDetail = async (study: StudyData) => {
+    setDetailOpen(true)
+    setDetailLoading(true)
+    setDetailStudy(null)
+    try {
+      const res = await fetch(`/api/studies/${study.id}`)
+      if (res.ok) {
+        const data = await res.json()
+        if (data.study) {
+          setDetailStudy(data.study)
+        } else {
+          // Fallback: use the row data we already have
+          setDetailStudy(study)
+        }
+      } else {
+        setDetailStudy(study)
+      }
+    } catch {
+      setDetailStudy(study)
+    } finally {
+      setDetailLoading(false)
+    }
+  }
+
+  const updateStudyStatus = async (newStatus: string) => {
+    if (!detailStudy) return
+    setStatusUpdating(true)
+    try {
+      const res = await fetch(`/api/studies/${detailStudy.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: newStatus,
+          rejectionReason: newStatus === 'rejected' ? 'Rejected during review' : undefined,
+        }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        if (data.study) {
+          setDetailStudy((prev: any) => prev ? { ...prev, ...data.study } : prev)
+        }
+        toast({ title: 'Status updated', description: `Study marked as ${newStatus.replace('_', ' ')}` })
+        handleRefresh()
+      } else {
+        toast({ title: 'Error', description: 'Failed to update status', variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'Error', description: 'Network error', variant: 'destructive' })
+    } finally {
+      setStatusUpdating(false)
+    }
+  }
+
+  const signStudy = async () => {
+    if (!detailStudy) return
+    setSigning(true)
+    try {
+      const res = await fetch(`/api/studies/${detailStudy.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          signerName: 'Dr. Sarah Chen',
+          signerRole: 'org_admin',
+          meaning: 'Reviewed and Approved',
+          newStatus: detailStudy.status === 'under_review' ? 'approved' : undefined,
+        }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        // Refresh detail to show new signature
+        if (data.study) {
+          setDetailStudy((prev: any) => prev ? { ...prev, ...data.study, signatures: [...(prev.signatures || []), data.signature] } : prev)
+        }
+        toast({ title: 'Study signed', description: 'Electronic signature recorded (FDA 21 CFR Part 11)' })
+        handleRefresh()
+      } else {
+        toast({ title: 'Error', description: 'Failed to sign study', variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'Error', description: 'Network error', variant: 'destructive' })
+    } finally {
+      setSigning(false)
+    }
+  }
+
+  const exportStudiesCSV = async () => {
+    setExporting(true)
+    try {
+      const res = await fetch('/api/studies?limit=1000')
+      if (res.ok) {
+        const data = await res.json()
+        const rows = (data.studies || []).map((s: any) => ({
+          id: s.id,
+          studyCode: s.studyCode ?? '',
+          substanceName: s.substanceName ?? '',
+          studyType: s.studyType ?? '',
+          status: s.status ?? '',
+          temperatureC: s.temperatureC ?? '',
+          humidityPercent: s.humidityPercent ?? '',
+          durationMonths: s.durationMonths ?? '',
+          predictedShelfLifeMonths: s.predictedShelfLifeMonths ?? '',
+          ph: s.ph ?? '',
+        }))
+        if (!rows.length) {
+          toast({ title: 'Nothing to export', description: 'No studies found to export' })
+        } else {
+          exportCSV(rows, `chemstab-studies-${new Date().toISOString().slice(0, 10)}.csv`)
+          toast({ title: 'Export complete', description: `Exported ${rows.length} studies to CSV` })
+        }
+      } else {
+        toast({ title: 'Export failed', description: 'Failed to fetch studies', variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'Export failed', description: 'Network error', variant: 'destructive' })
+    } finally {
+      setExporting(false)
+    }
   }
 
   return (
@@ -1319,12 +1830,15 @@ function StudiesPage() {
       transition={{ duration: 0.4 }}
       className="space-y-6"
     >
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Studies Management</h1>
+          <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-400 dark:to-teal-400 bg-clip-text text-transparent">Studies Management</h1>
           <p className="text-muted-foreground">Manage and track stability studies across your organization</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" size="sm" onClick={exportStudiesCSV} disabled={exporting}>
+            <Download className={`size-4 mr-1 ${exporting ? 'animate-pulse' : ''}`} /> Export CSV
+          </Button>
           <Button variant="outline" size="sm" onClick={handleRefresh} disabled={loading}>
             <RefreshCw className={`size-4 mr-1 ${loading ? 'animate-spin' : ''}`} /> Refresh
           </Button>
@@ -1364,7 +1878,7 @@ function StudiesPage() {
       </div>
 
       {/* Studies Table */}
-      <Card>
+      <Card className="backdrop-blur-sm bg-card/80">
         <CardContent className="p-0">
           <div className="max-h-96 overflow-y-auto">
             {loading ? (
@@ -1384,9 +1898,13 @@ function StudiesPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {apiStudies.map((std) => (
-                    <TableRow key={std.id} className="cursor-pointer hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10">
-                      <TableCell className="font-medium">{std.studyCode}</TableCell>
+                  {apiStudies.map((std, idx) => (
+                    <TableRow
+                      key={std.id}
+                      className={`cursor-pointer hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10 transition-colors ${idx % 2 === 1 ? 'bg-muted/30' : ''}`}
+                      onClick={() => openDetail(std)}
+                    >
+                      <TableCell className="font-medium font-mono">{std.studyCode}</TableCell>
                       <TableCell>{std.substanceName}</TableCell>
                       <TableCell>{studyTypeLabels[std.studyType]}</TableCell>
                       <TableCell>{std.temperatureC}</TableCell>
@@ -1426,7 +1944,7 @@ function StudiesPage() {
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label>Substance Name</Label>
+              <Label>Substance Name *</Label>
               <Input
                 placeholder="Enter substance name"
                 value={newStudy.substanceName}
@@ -1476,10 +1994,212 @@ function StudiesPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
-            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={handleCreate}>
-              Create Study
+            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={handleCreate} disabled={creating}>
+              {creating ? <><RefreshCw className="size-4 mr-2 animate-spin" /> Creating...</> : 'Create Study'}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Study Detail Dialog */}
+      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto" aria-describedby={undefined}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 flex-wrap">
+              {detailLoading ? (
+                <span>Loading Study Details</span>
+              ) : detailStudy ? (
+                <>
+                  <span className="bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-400 dark:to-teal-400 bg-clip-text text-transparent font-mono">
+                    {detailStudy.studyCode}
+                  </span>
+                  <Badge className={statusColors[detailStudy.status]}>{detailStudy.status.replace('_', ' ')}</Badge>
+                </>
+              ) : (
+                <span>Study Details</span>
+              )}
+            </DialogTitle>
+            {detailStudy && (
+              <DialogDescription>
+                {detailStudy.substanceName} · {studyTypeLabels[detailStudy.studyType] || detailStudy.studyType}
+              </DialogDescription>
+            )}
+          </DialogHeader>
+          {detailLoading ? (
+            <div className="py-12 flex flex-col items-center gap-3">
+              <RefreshCw className="size-8 animate-spin text-emerald-600" />
+              <p className="text-sm text-muted-foreground">Loading study details...</p>
+            </div>
+          ) : detailStudy ? (
+            <>
+
+              <div className="space-y-4">
+                {/* Key info grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {[
+                    { label: 'Temperature', value: `${detailStudy.temperatureC}°C`, icon: Thermometer },
+                    { label: 'Humidity', value: detailStudy.humidityPercent !== null ? `${detailStudy.humidityPercent}%` : '—', icon: Droplets },
+                    { label: 'Duration', value: `${detailStudy.durationMonths} mo`, icon: Clock },
+                    { label: 'pH', value: detailStudy.ph !== null ? detailStudy.ph.toFixed(1) : '—', icon: Beaker },
+                    { label: 'Kinetic Order', value: detailStudy.kineticOrder ? `${detailStudy.kineticOrder}` : '—', icon: Activity },
+                    { label: 'Light Exposure', value: detailStudy.lightExposure || '—', icon: Eye },
+                  ].map((field) => {
+                    const Icon = field.icon
+                    return (
+                      <div key={field.label} className="p-2 rounded-lg bg-muted/40 space-y-1">
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Icon className="size-3" /> {field.label}
+                        </div>
+                        <p className="text-sm font-medium">{field.value}</p>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {/* Highlighted shelf life */}
+                <div className="p-3 rounded-lg bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 border-l-4 border-emerald-500">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Gauge className="size-4 text-emerald-600 dark:text-emerald-400" />
+                      <span className="text-sm font-medium">Predicted Shelf Life</span>
+                    </div>
+                    <span className="text-xl font-bold text-emerald-700 dark:text-emerald-300">
+                      {detailStudy.predictedShelfLifeMonths !== null ? `${detailStudy.predictedShelfLifeMonths} months` : 'Not yet determined'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Kinetics details */}
+                {(detailStudy.activationEnergy !== null && detailStudy.activationEnergy !== undefined) ||
+                 (detailStudy.rateConstant !== null && detailStudy.rateConstant !== undefined) ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="p-2 rounded-lg bg-muted/40">
+                      <p className="text-xs text-muted-foreground">Activation Energy</p>
+                      <p className="text-sm font-medium">{detailStudy.activationEnergy ? `${detailStudy.activationEnergy.toFixed(2)} kJ/mol` : '—'}</p>
+                    </div>
+                    <div className="p-2 rounded-lg bg-muted/40">
+                      <p className="text-xs text-muted-foreground">Rate Constant</p>
+                      <p className="text-sm font-medium">{detailStudy.rateConstant ? detailStudy.rateConstant.toExponential(3) : '—'}</p>
+                    </div>
+                  </div>
+                ) : null}
+
+                <Separator />
+
+                {/* Time points table */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Activity className="size-4 text-emerald-600 dark:text-emerald-400" />
+                    <p className="text-sm font-medium">Time Points ({detailStudy.timePoints?.length || 0})</p>
+                  </div>
+                  {detailStudy.timePoints && detailStudy.timePoints.length > 0 ? (
+                    <div className="max-h-48 overflow-y-auto rounded-lg border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Time (days)</TableHead>
+                            <TableHead>Time (mo)</TableHead>
+                            <TableHead>% Remaining</TableHead>
+                            <TableHead>Degradation</TableHead>
+                            <TableHead>Flags</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {detailStudy.timePoints.map((tp: any, idx: number) => (
+                            <TableRow key={tp.id} className={idx % 2 === 1 ? 'bg-muted/30' : ''}>
+                              <TableCell className="font-mono text-xs">{tp.timeDays}</TableCell>
+                              <TableCell className="font-mono text-xs">{tp.timeMonths?.toFixed(1) ?? '—'}</TableCell>
+                              <TableCell className="font-mono text-xs">{tp.percentRemaining !== null && tp.percentRemaining !== undefined ? `${tp.percentRemaining.toFixed(1)}%` : '—'}</TableCell>
+                              <TableCell className="font-mono text-xs">{tp.degradationPercent !== null && tp.degradationPercent !== undefined ? `${tp.degradationPercent.toFixed(1)}%` : '—'}</TableCell>
+                              <TableCell>
+                                    {tp.isOOS ? <Badge variant="destructive" className="text-[10px] mr-1">OOS</Badge> : null}
+                                    {tp.isOOT ? <Badge variant="outline" className="text-[10px]">OOT</Badge> : null}
+                                    {!tp.isOOS && !tp.isOOT ? <span className="text-xs text-muted-foreground">—</span> : null}
+                                  </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground p-3 rounded-lg bg-muted/30">
+                      No time point data recorded for this study yet.
+                    </p>
+                  )}
+                </div>
+
+                <Separator />
+
+                {/* Electronic signatures */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Shield className="size-4 text-emerald-600 dark:text-emerald-400" />
+                    <p className="text-sm font-medium">Electronic Signatures ({detailStudy.signatures?.length || 0})</p>
+                  </div>
+                  {detailStudy.signatures && detailStudy.signatures.length > 0 ? (
+                    <div className="space-y-2">
+                      {detailStudy.signatures.map((sig: any) => (
+                        <div key={sig.id} className="flex items-center gap-3 p-2 rounded-lg bg-muted/40">
+                          <div className="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center text-xs font-bold shrink-0">
+                            {sig.signerName?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() || '??'}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium">{sig.signerName}</p>
+                            <p className="text-xs text-muted-foreground">{sig.meaning} · {sig.signerRole}</p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="text-xs text-muted-foreground">{sig.signedAt ? new Date(sig.signedAt).toLocaleString() : ''}</p>
+                            <p className="text-[10px] font-mono text-muted-foreground">#{sig.signatureHash?.slice(0, 8)}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground p-3 rounded-lg bg-muted/30">
+                      No electronic signatures recorded yet.
+                    </p>
+                  )}
+                </div>
+
+                <Separator />
+
+                {/* Status action buttons */}
+                {detailStudy.status === 'under_review' && (
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                      onClick={() => updateStudyStatus('approved')}
+                      disabled={statusUpdating}
+                    >
+                      <CheckCircle2 className="size-4 mr-1" /> Approve
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => updateStudyStatus('rejected')}
+                      disabled={statusUpdating}
+                    >
+                      <XCircle className="size-4 mr-1" /> Reject
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              <DialogFooter className="gap-2 flex-wrap">
+                <Button
+                  variant="outline"
+                  onClick={signStudy}
+                  disabled={signing}
+                >
+                  {signing ? <><RefreshCw className="size-4 mr-2 animate-spin" /> Signing...</> : <><Shield className="size-4 mr-2" /> Sign Study</>}
+                </Button>
+                <Button onClick={() => setDetailOpen(false)}>Close</Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <div className="py-12 text-center text-sm text-muted-foreground">Failed to load study details.</div>
+          )}
         </DialogContent>
       </Dialog>
     </motion.div>
@@ -1489,6 +2209,7 @@ function StudiesPage() {
 // ── Reports & Compliance Page ─────────────────────────────────────────────
 
 function ReportsPage() {
+  const { toast } = useToast()
   const [generateOpen, setGenerateOpen] = useState(false)
   const [selectedReportType, setSelectedReportType] = useState('')
   const [selectedStudyId, setSelectedStudyId] = useState('')
@@ -1496,6 +2217,7 @@ function ReportsPage() {
   const [refreshKey, setRefreshKey] = useState(0)
   const [apiReports, setApiReports] = useState<ReportData[]>([])
   const [reportStudies, setReportStudies] = useState<StudyData[]>([])
+  const [generating, setGenerating] = useState(false)
 
   const reportStatusColors: Record<string, string> = {
     draft: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
@@ -1549,6 +2271,41 @@ function ReportsPage() {
 
   const handleRefresh = () => setRefreshKey(k => k + 1)
 
+  const handleGenerateReport = async () => {
+    if (!selectedReportType) {
+      toast({ title: 'Validation error', description: 'Please select a report type', variant: 'destructive' })
+      return
+    }
+    const reportTypeLabel = REPORT_TYPES.find(r => r.type === selectedReportType)?.title || selectedReportType
+    const generatedTitle = `${reportTypeLabel} Report — ${new Date().toLocaleDateString()}`
+    setGenerating(true)
+    try {
+      const res = await fetch('/api/reports', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: generatedTitle,
+          reportType: selectedReportType,
+          studyId: selectedStudyId || undefined,
+        }),
+      })
+      if (res.ok) {
+        toast({ title: 'Report generated', description: generatedTitle })
+        setGenerateOpen(false)
+        setSelectedReportType('')
+        setSelectedStudyId('')
+        handleRefresh()
+      } else {
+        const errBody = await res.json().catch(() => ({}))
+        toast({ title: 'Error', description: errBody.error || 'Failed to generate report', variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'Error', description: 'Network error', variant: 'destructive' })
+    } finally {
+      setGenerating(false)
+    }
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -1558,7 +2315,7 @@ function ReportsPage() {
     >
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Reports & Compliance</h1>
+          <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-400 dark:to-teal-400 bg-clip-text text-transparent">Reports & Compliance</h1>
           <p className="text-muted-foreground">Generate regulatory reports and compliance documentation</p>
         </div>
         <Button variant="outline" size="sm" onClick={handleRefresh} disabled={loading}>
@@ -1573,20 +2330,23 @@ function ReportsPage() {
           return (
             <motion.div
               key={rt.type}
-              whileHover={{ y: -3, boxShadow: '0 8px 30px rgba(0,0,0,0.12)' }}
+              whileHover={{ y: -4, boxShadow: '0 12px 32px rgba(0,0,0,0.15)' }}
               transition={{ type: 'spring', stiffness: 400 }}
             >
-              <Card className="cursor-pointer group">
+              <Card className="cursor-pointer group backdrop-blur-sm bg-card/80 transition-transform hover:-translate-y-1">
                 <CardContent className="p-6 flex flex-col items-center gap-3 text-center">
-                  <div className={`p-3 rounded-xl ${colorMap[rt.color]} group-hover:scale-110 transition-transform`}>
+                  <motion.div
+                    whileHover={{ rotate: 8, scale: 1.1 }}
+                    className={`p-3 rounded-xl ${colorMap[rt.color]}`}
+                  >
                     <Icon className="size-6" />
-                  </div>
+                  </motion.div>
                   <CardTitle className="text-base">{rt.title}</CardTitle>
                   <CardDescription className="text-xs">{rt.description}</CardDescription>
                   <Button
                     size="sm"
                     variant="outline"
-                    className="mt-2"
+                    className="mt-2 transition-transform hover:scale-105"
                     onClick={() => { setSelectedReportType(rt.type); setGenerateOpen(true) }}
                   >
                     <Download className="size-3.5 mr-1" /> Generate
@@ -1599,7 +2359,7 @@ function ReportsPage() {
       </div>
 
       {/* Recent Reports */}
-      <Card>
+      <Card className="backdrop-blur-sm bg-card/80">
         <CardHeader>
           <CardTitle>Recent Reports</CardTitle>
           <CardDescription>Recently generated compliance documents</CardDescription>
@@ -1624,8 +2384,8 @@ function ReportsPage() {
                     </TableRow>
                   ))
                 ) : (
-                  apiReports.map((report) => (
-                    <TableRow key={report.id}>
+                  apiReports.map((report, idx) => (
+                    <TableRow key={report.id} className={idx % 2 === 1 ? 'bg-muted/30' : ''}>
                       <TableCell className="font-medium">{report.title}</TableCell>
                       <TableCell>
                         <Badge variant="outline" className="text-xs">
@@ -1639,9 +2399,16 @@ function ReportsPage() {
                       </TableCell>
                       <TableCell className="text-muted-foreground">{report.createdAt}</TableCell>
                       <TableCell className="text-right">
-                        <Button variant="ghost" size="sm">
-                          <Download className="size-4" />
-                        </Button>
+                        <TooltipProvider delayDuration={200}>
+                          <UiTooltip>
+                            <TooltipTrigger asChild>
+                              <Button variant="ghost" size="sm">
+                                <Download className="size-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Download {report.reportType} report</TooltipContent>
+                          </UiTooltip>
+                        </TooltipProvider>
                       </TableCell>
                     </TableRow>
                   ))
@@ -1661,7 +2428,7 @@ function ReportsPage() {
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label>Report Type</Label>
+              <Label>Report Type *</Label>
               <Select value={selectedReportType} onValueChange={setSelectedReportType}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select report type" />
@@ -1677,7 +2444,7 @@ function ReportsPage() {
               <Label>Associated Study</Label>
               <Select value={selectedStudyId} onValueChange={setSelectedStudyId}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select a study" />
+                  <SelectValue placeholder="Select a study (optional)" />
                 </SelectTrigger>
                 <SelectContent>
                   {reportStudies.map((std) => (
@@ -1690,15 +2457,435 @@ function ReportsPage() {
               <Label>Additional Notes</Label>
               <Textarea placeholder="Any additional context or requirements for this report..." />
             </div>
+            {selectedReportType && (
+              <div className="p-3 rounded-lg bg-emerald-50/50 dark:bg-emerald-900/10 border-l-4 border-emerald-500 text-sm">
+                <p className="text-muted-foreground">Report title preview:</p>
+                <p className="font-medium">
+                  {REPORT_TYPES.find(r => r.type === selectedReportType)?.title || selectedReportType} Report — {new Date().toLocaleDateString()}
+                </p>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setGenerateOpen(false)}>Cancel</Button>
-            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => setGenerateOpen(false)}>
-              <FileText className="size-4 mr-2" /> Generate Report
+            <Button
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              onClick={handleGenerateReport}
+              disabled={!selectedReportType || generating}
+            >
+              {generating
+                ? <><RefreshCw className="size-4 mr-2 animate-spin" /> Generating...</>
+                : <><FileText className="size-4 mr-2" /> Generate Report</>}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </motion.div>
+  )
+}
+
+// ── Analytics Page ────────────────────────────────────────────────────────
+
+function AnalyticsPage() {
+  const [loading, setLoading] = useState(true)
+  const [refreshKey, setRefreshKey] = useState(0)
+  const [statsData, setStatsData] = useState<{
+    totalMolecules: number; activeStudies: number; avgStabilityScore: number;
+    riskDistribution: Record<string, number>; recentActivity: any[];
+    studiesByStatus: { status: string; _count: { status: number } }[];
+    totalReports: number;
+  } | null>(null)
+  const [molecules, setMolecules] = useState<MoleculeData[]>([])
+  const [studies, setStudies] = useState<any[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    const loadData = async () => {
+      try {
+        const [statsRes, molRes, stdRes] = await Promise.all([
+          fetch('/api/stats'),
+          fetch('/api/molecules?limit=1000'),
+          fetch('/api/studies?limit=1000'),
+        ])
+        if (!cancelled && statsRes.ok) {
+          const sd = await statsRes.json()
+          if (!cancelled) setStatsData(sd)
+        }
+        if (!cancelled && molRes.ok) {
+          const md = await molRes.json()
+          const transformed: MoleculeData[] = (md.molecules || []).map((m: any) => ({
+            id: m.id, name: m.name, casNumber: m.casNumber || '', smiles: m.smiles || '',
+            formula: m.formula || '', molarMass: m.molarMass ?? 0, logP: m.logP ?? 0,
+            stabilityScore: m.predictedStabilityScore ?? 0, riskLevel: m.riskLevel || 'low',
+            dataSource: m.dataSource || 'Manual', description: m.description || '',
+            meltingPoint: m.meltingPoint ?? null, boilingPoint: m.boilingPoint ?? null,
+          }))
+          if (!cancelled) setMolecules(transformed)
+        }
+        if (!cancelled && stdRes.ok) {
+          const sd = await stdRes.json()
+          if (!cancelled) setStudies(sd.studies || [])
+        }
+      } catch { /* fallback */ }
+      if (!cancelled) setLoading(false)
+    }
+    loadData()
+    return () => { cancelled = true }
+  }, [refreshKey])
+
+  const handleRefresh = () => { setLoading(true); setRefreshKey(k => k + 1) }
+
+  // Risk distribution pie chart data
+  const riskPieData = statsData ? [
+    { name: 'Low', value: statsData.riskDistribution.low || 0, fill: '#10b981' },
+    { name: 'Moderate', value: statsData.riskDistribution.moderate || 0, fill: '#f59e0b' },
+    { name: 'High', value: statsData.riskDistribution.high || 0, fill: '#ef4444' },
+    { name: 'Critical', value: statsData.riskDistribution.critical || 0, fill: '#dc2626' },
+  ] : []
+
+  // Molecules by data source bar chart
+  const sourceMap: Record<string, number> = {}
+  molecules.forEach((m) => {
+    const src = (m.dataSource || 'manual').toLowerCase()
+    sourceMap[src] = (sourceMap[src] || 0) + 1
+  })
+  const sourceBarData = Object.entries(sourceMap).map(([k, v]) => ({
+    source: k.charAt(0).toUpperCase() + k.slice(1),
+    count: v,
+    fill: k === 'pubchem' ? '#10b981' : k === 'chembl' ? '#14b8a6' : '#06b6d4',
+  }))
+
+  // Stability score distribution histogram (bins of 10)
+  const bins = Array.from({ length: 10 }, (_, i) => ({
+    range: `${i * 10}-${i * 10 + 9}`,
+    count: 0,
+  }))
+  molecules.forEach((m) => {
+    const idx = Math.min(9, Math.max(0, Math.floor(m.stabilityScore / 10)))
+    bins[idx].count += 1
+  })
+
+  // Study status donut chart
+  const statusColors: Record<string, string> = {
+    draft: '#94a3b8',
+    in_progress: '#14b8a6',
+    completed: '#10b981',
+    under_review: '#f59e0b',
+    approved: '#22c55e',
+    rejected: '#ef4444',
+  }
+  const statusDonutData = statsData?.studiesByStatus?.map((s) => ({
+    name: s.status.replace('_', ' '),
+    value: s._count.status,
+    fill: statusColors[s.status] || '#94a3b8',
+  })) || []
+
+  // Temperature vs Shelf Life scatter data
+  const scatterData = studies
+    .filter((s) => s.predictedShelfLifeMonths !== null && s.predictedShelfLifeMonths !== undefined)
+    .map((s) => ({
+      x: s.temperatureC,
+      y: s.predictedShelfLifeMonths,
+      name: s.substanceName,
+      code: s.studyCode,
+    }))
+
+  // Top 5 most / least stable
+  const sortedByStability = [...molecules].sort((a, b) => b.stabilityScore - a.stabilityScore)
+  const top5Stable = sortedByStability.slice(0, 5)
+  const top5Unstable = [...molecules].sort((a, b) => a.stabilityScore - b.stabilityScore).slice(0, 5)
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4 }}
+      className="space-y-6"
+    >
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-400 dark:to-teal-400 bg-clip-text text-transparent">Analytics &amp; Insights</h1>
+          <p className="text-muted-foreground">QSPR model performance and platform-wide chemical stability analytics</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={handleRefresh} disabled={loading}>
+          <RefreshCw className={`size-4 mr-1 ${loading ? 'animate-spin' : ''}`} /> Refresh
+        </Button>
+      </div>
+
+      {/* QSPR Model Performance */}
+      <Card className="backdrop-blur-sm bg-card/80">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Cpu className="size-5 text-emerald-600 dark:text-emerald-400" />
+            QSPR Model Performance
+          </CardTitle>
+          <CardDescription>Prediction accuracy metrics for active quantitative structure-property relationship models</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-32 w-full" />)}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {QSPR_MODEL_PERFORMANCE.map((model) => (
+                <motion.div
+                  key={model.model}
+                  whileHover={{ y: -2 }}
+                  className="p-4 rounded-xl border bg-card relative overflow-hidden"
+                >
+                  <div className="absolute inset-x-0 top-0 h-1" style={{ background: model.fill }} />
+                  <div className="flex items-center gap-2 mb-3">
+                    <Brain className="size-4" style={{ color: model.fill }} />
+                    <p className="font-semibold">{model.model}</p>
+                  </div>
+                  <div className="space-y-1.5 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">R²</span>
+                      <span className="font-bold" style={{ color: model.fill }}>{model.r2.toFixed(2)}</span>
+                    </div>
+                    <Progress value={model.r2 * 100} className="h-1.5" />
+                    <div className="flex items-center justify-between pt-1">
+                      <span className="text-muted-foreground">RMSE</span>
+                      <span className="font-medium">{model.rmse.toFixed(2)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">MAE</span>
+                      <span className="font-medium">{model.mae.toFixed(2)}</span>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Property Distribution Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card className="backdrop-blur-sm bg-card/80">
+          <CardHeader>
+            <CardTitle>Risk Level Distribution</CardTitle>
+            <CardDescription>Molecule count by risk classification</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <Skeleton className="h-[280px] w-full" />
+            ) : riskPieData.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-20 text-center">No data available</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={280}>
+                <PieChart>
+                  <Pie data={riskPieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} label>
+                    {riskPieData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.fill} />
+                    ))}
+                  </Pie>
+                  <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb' }} />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="backdrop-blur-sm bg-card/80">
+          <CardHeader>
+            <CardTitle>Molecules by Data Source</CardTitle>
+            <CardDescription>Origin of molecule records</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <Skeleton className="h-[280px] w-full" />
+            ) : sourceBarData.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-20 text-center">No data available</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={sourceBarData}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <XAxis dataKey="source" className="text-xs" />
+                  <YAxis className="text-xs" allowDecimals={false} />
+                  <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb' }} />
+                  <Bar dataKey="count" radius={[6, 6, 0, 0]}>
+                    {sourceBarData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.fill} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Stability Score Distribution + Study Status */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card className="backdrop-blur-sm bg-card/80">
+          <CardHeader>
+            <CardTitle>Stability Score Distribution</CardTitle>
+            <CardDescription>Histogram of molecule predicted stability scores</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <Skeleton className="h-[280px] w-full" />
+            ) : (
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={bins}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <XAxis dataKey="range" className="text-xs" />
+                  <YAxis className="text-xs" allowDecimals={false} />
+                  <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb' }} />
+                  <Bar dataKey="count" fill="#10b981" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="backdrop-blur-sm bg-card/80">
+          <CardHeader>
+            <CardTitle>Study Status Distribution</CardTitle>
+            <CardDescription>Current state of stability studies</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <Skeleton className="h-[280px] w-full" />
+            ) : statusDonutData.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-20 text-center">No data available</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={280}>
+                <PieChart>
+                  <Pie data={statusDonutData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={90} label>
+                    {statusDonutData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.fill} />
+                    ))}
+                  </Pie>
+                  <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb' }} />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Temperature vs Shelf Life Scatter */}
+      <Card className="backdrop-blur-sm bg-card/80">
+        <CardHeader>
+          <CardTitle>Temperature vs. Predicted Shelf Life</CardTitle>
+          <CardDescription>Relationship between study temperature and predicted shelf life (months)</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <Skeleton className="h-[300px] w-full" />
+          ) : scatterData.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-20 text-center">No shelf life data available</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={300}>
+              <ScatterChart>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                <XAxis type="number" dataKey="x" name="Temperature" unit="°C" className="text-xs" />
+                <YAxis type="number" dataKey="y" name="Shelf Life" unit=" mo" className="text-xs" />
+                <Tooltip
+                  cursor={{ strokeDasharray: '3 3' }}
+                  contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb' }}
+                  formatter={(val: any, name: any) => {
+                    if (name === 'Shelf Life') return [`${val} months`, name]
+                    if (name === 'Temperature') return [`${val}°C`, name]
+                    return [val, name]
+                  }}
+                />
+                <Scatter name="Studies" data={scatterData} fill="#14b8a6" />
+              </ScatterChart>
+            </ResponsiveContainer>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Top 5 Most / Least Stable Tables */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card className="backdrop-blur-sm bg-card/80">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ArrowUpRight className="size-5 text-emerald-600 dark:text-emerald-400" />
+              Top 5 Most Stable Molecules
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="max-h-72 overflow-y-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Formula</TableHead>
+                    <TableHead>Score</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {loading ? (
+                    Array.from({ length: 5 }).map((_, i) => (
+                      <TableRow key={i}><TableCell colSpan={3}><Skeleton className="h-8 w-full" /></TableCell></TableRow>
+                    ))
+                  ) : top5Stable.length === 0 ? (
+                    <TableRow><TableCell colSpan={3} className="text-center text-muted-foreground py-6">No data</TableCell></TableRow>
+                  ) : (
+                    top5Stable.map((mol, idx) => (
+                      <TableRow key={mol.id} className={idx % 2 === 1 ? 'bg-muted/30' : ''}>
+                        <TableCell className="font-medium">{mol.name}</TableCell>
+                        <TableCell className="font-mono text-xs">{mol.formula}</TableCell>
+                        <TableCell>
+                          <span className={`font-bold ${getScoreColor(mol.stabilityScore)}`}>{mol.stabilityScore}</span>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="backdrop-blur-sm bg-card/80">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ArrowDownRight className="size-5 text-amber-600 dark:text-amber-400" />
+              Top 5 Least Stable Molecules
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="max-h-72 overflow-y-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Formula</TableHead>
+                    <TableHead>Score</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {loading ? (
+                    Array.from({ length: 5 }).map((_, i) => (
+                      <TableRow key={i}><TableCell colSpan={3}><Skeleton className="h-8 w-full" /></TableCell></TableRow>
+                    ))
+                  ) : top5Unstable.length === 0 ? (
+                    <TableRow><TableCell colSpan={3} className="text-center text-muted-foreground py-6">No data</TableCell></TableRow>
+                  ) : (
+                    top5Unstable.map((mol, idx) => (
+                      <TableRow key={mol.id} className={idx % 2 === 1 ? 'bg-muted/30' : ''}>
+                        <TableCell className="font-medium">{mol.name}</TableCell>
+                        <TableCell className="font-mono text-xs">{mol.formula}</TableCell>
+                        <TableCell>
+                          <span className={`font-bold ${getScoreColor(mol.stabilityScore)}`}>{mol.stabilityScore}</span>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </motion.div>
   )
 }
@@ -1760,7 +2947,7 @@ function AdminPage() {
     >
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Administration</h1>
+          <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-400 dark:to-teal-400 bg-clip-text text-transparent">Administration</h1>
           <p className="text-muted-foreground">Manage users, audit trail, ML training, and system configuration</p>
         </div>
         <Button variant="outline" size="sm" onClick={handleRefresh} disabled={loading}>
@@ -1982,6 +3169,7 @@ function PageRouter() {
     simulator: <SimulatorPage />,
     studies: <StudiesPage />,
     reports: <ReportsPage />,
+    analytics: <AnalyticsPage />,
     admin: <AdminPage />,
   }
 
@@ -2006,6 +3194,107 @@ function PageRouter() {
   )
 }
 
+// ── Notifications Button (Header) ────────────────────────────────────────
+
+function NotificationsButton() {
+  const [notifications, setNotifications] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    const loadNotifications = async () => {
+      try {
+        const res = await fetch('/api/stats')
+        if (res.ok && !cancelled) {
+          const data = await res.json()
+          if (!cancelled) setNotifications(data.recentActivity || [])
+        }
+      } catch { /* ignore */ }
+      if (!cancelled) setLoading(false)
+    }
+    loadNotifications()
+    return () => { cancelled = true }
+  }, [])
+
+  const unreadCount = Math.min(notifications.length, 5)
+
+  const actionIconMap: Record<string, React.ElementType> = {
+    create: Plus, update: RefreshCw, delete: Trash2,
+    approve: CheckCircle2, sign: Shield, reject: XCircle,
+  }
+  const actionColorMap: Record<string, string> = {
+    create: 'text-emerald-600 dark:text-emerald-400',
+    update: 'text-amber-600 dark:text-amber-400',
+    delete: 'text-red-600 dark:text-red-400',
+    approve: 'text-teal-600 dark:text-teal-400',
+    sign: 'text-cyan-600 dark:text-cyan-400',
+    reject: 'text-red-600 dark:text-red-400',
+  }
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="ghost" size="icon" className="relative">
+          <motion.div
+            animate={unreadCount > 0 ? { rotate: [0, -10, 10, -10, 0] } : {}}
+            transition={{ duration: 0.6, repeat: unreadCount > 0 ? Infinity : 0, repeatDelay: 4 }}
+          >
+            <Bell className="size-4" />
+          </motion.div>
+          {unreadCount > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center font-bold">
+              {unreadCount}
+            </span>
+          )}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-80 p-0">
+        <div className="p-3 border-b">
+          <div className="flex items-center justify-between">
+            <p className="font-semibold text-sm">Notifications</p>
+            {unreadCount > 0 && (
+              <Badge variant="secondary" className="text-[10px]">{unreadCount} new</Badge>
+            )}
+          </div>
+        </div>
+        <div className="max-h-80 overflow-y-auto">
+          {loading ? (
+            <div className="p-3 space-y-2">
+              {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
+            </div>
+          ) : notifications.length === 0 ? (
+            <p className="p-6 text-center text-sm text-muted-foreground">No recent notifications</p>
+          ) : (
+            notifications.map((n) => {
+              const Icon = actionIconMap[n.action] || Activity
+              const color = actionColorMap[n.action] || 'text-emerald-600 dark:text-emerald-400'
+              return (
+                <div key={n.id} className="flex items-start gap-2 p-3 border-b last:border-b-0 hover:bg-muted/50 transition-colors">
+                  <Icon className={`size-4 mt-0.5 shrink-0 ${color}`} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs leading-snug">
+                      <span className="font-medium">{n.user?.name || 'System'}</span>{' '}
+                      <span className="text-muted-foreground">{n.action}</span>{' '}
+                      <span className="font-mono text-[10px]">{n.tableName} #{n.recordId}</span>
+                    </p>
+                    {n.details && (
+                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.details}</p>
+                    )}
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                      {n.createdAt ? new Date(n.createdAt).toLocaleString() : ''}
+                    </p>
+                  </div>
+                </div>
+              )
+            })
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
 // ── Main Layout ───────────────────────────────────────────────────────────
 
 export default function Home() {
@@ -2020,7 +3309,7 @@ export default function Home() {
   }, [darkMode])
 
   return (
-    <div className="min-h-screen flex flex-col bg-background text-foreground">
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-background via-background to-emerald-50/30 dark:from-background dark:via-background dark:to-emerald-950/20 text-foreground">
       {/* Header */}
       <header className="sticky top-0 z-30 h-14 border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/60 flex items-center px-4 gap-3">
         {/* Mobile menu button in header */}
@@ -2033,12 +3322,9 @@ export default function Home() {
           <Menu className="size-4" />
         </Button>
         <div className="flex items-center gap-2 ml-auto">
-          <Button variant="ghost" size="icon" className="relative">
-            <Bell className="size-4" />
-            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full" />
-          </Button>
+          <NotificationsButton />
           <div className="flex items-center gap-2 pl-2">
-            <div className="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center text-sm font-medium">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center text-sm font-medium shadow-md shadow-emerald-500/20">
               SC
             </div>
             <span className="text-sm font-medium hidden sm:inline">Dr. Sarah Chen</span>
@@ -2054,10 +3340,16 @@ export default function Home() {
       </div>
 
       {/* Sticky Footer */}
-      <footer className="mt-auto border-t bg-card py-3 px-4">
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
+      <footer className="mt-auto border-t bg-gradient-to-r from-card via-card to-emerald-50/30 dark:via-card dark:to-emerald-950/20 py-3 px-4">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-1 text-xs text-muted-foreground">
           <span>© 2024 ChemStab Industrial — Chemical Stability Assessment Platform</span>
-          <span>v5.3.0 · FDA 21 CFR Part 11 Compliant</span>
+          <span className="flex items-center gap-2">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+            </span>
+            v5.3.0 · FDA 21 CFR Part 11 Compliant
+          </span>
         </div>
       </footer>
     </div>
