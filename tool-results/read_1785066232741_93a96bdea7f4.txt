@@ -1,0 +1,1002 @@
+  1200→          <p className="text-muted-foreground">Browse and search chemical compounds with stability assessments</p>
+  1201→        </div>
+  1202→        <div className="flex gap-2 flex-wrap items-center">
+  1203→          {/* View Mode Toggle */}
+  1204→          <div className="flex gap-1 mr-1">
+  1205→            <Button variant={viewMode === 'table' ? 'default' : 'outline'} size="sm" onClick={() => setViewMode('table')} className={viewMode === 'table' ? 'bg-emerald-600 text-white' : ''}>
+  1206→              <BarChart3 className="size-4" /> Table
+  1207→            </Button>
+  1208→            <Button variant={viewMode === 'grid' ? 'default' : 'outline'} size="sm" onClick={() => setViewMode('grid')} className={viewMode === 'grid' ? 'bg-emerald-600 text-white' : ''}>
+  1209→              <LayoutGrid className="size-4" /> Grid
+  1210→            </Button>
+  1211→          </div>
+  1212→          <input
+  1213→            type="file"
+  1214→            accept=".csv"
+  1215→            ref={fileInputRef}
+  1216→            onChange={handleImportCSV}
+  1217→            className="hidden"
+  1218→          />
+  1219→          <TooltipProvider delayDuration={200}>
+  1220→            <UiTooltip>
+  1221→              <TooltipTrigger asChild>
+  1222→                <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={importing}>
+  1223→                  <Download className={`size-4 mr-1 rotate-180 ${importing ? 'animate-pulse' : ''}`} /> Import CSV
+  1224→                </Button>
+  1225→              </TooltipTrigger>
+  1226→              <TooltipContent>Bulk import molecules from a CSV file (name column required)</TooltipContent>
+  1227→            </UiTooltip>
+  1228→          </TooltipProvider>
+  1229→          <TooltipProvider delayDuration={200}>
+  1230→            <UiTooltip>
+  1231→              <TooltipTrigger asChild>
+  1232→                <Button variant="outline" size="sm" onClick={exportMoleculesCSV} disabled={exporting}>
+  1233→                  <Download className={`size-4 mr-1 ${exporting ? 'animate-pulse' : ''}`} /> Export CSV
+  1234→                </Button>
+  1235→              </TooltipTrigger>
+  1236→              <TooltipContent>Download all molecules as a CSV file</TooltipContent>
+  1237→            </UiTooltip>
+  1238→          </TooltipProvider>
+  1239→          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={loading}>
+  1240→            <RefreshCw className={`size-4 mr-1 ${loading ? 'animate-spin' : ''}`} /> Refresh
+  1241→          </Button>
+  1242→          <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => setAddOpen(true)}>
+  1243→            <Plus className="size-4 mr-2" /> Add Molecule
+  1244→          </Button>
+  1245→        </div>
+  1246→      </div>
+  1247→
+  1248→      {/* Quick Filter Pills */}
+  1249→      <div className="flex flex-wrap gap-2">
+  1250→        {['all', 'low', 'moderate', 'high', 'critical'].map((level) => (
+  1251→          <Button
+  1252→            key={level}
+  1253→            variant={riskFilter === level ? 'default' : 'outline'}
+  1254→            size="sm"
+  1255→            className={`h-7 text-xs rounded-full ${riskFilter === level ? 'bg-emerald-600 text-white' : ''} ${level === 'critical' ? 'border-red-500 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20' : level === 'high' ? 'border-orange-500 text-orange-600 hover:bg-orange-50 dark:text-orange-400 dark:hover:bg-orange-900/20' : level === 'moderate' ? 'border-amber-500 text-amber-600 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-900/20' : ''}`}
+  1256→            onClick={() => { setRiskFilter(level); setCurrentPageNum(1) }}
+  1257→          >
+  1258→            {level === 'all' ? 'All' : level.charAt(0).toUpperCase() + level.slice(1)}
+  1259→            {level !== 'all' && <span className="ml-1 opacity-60">({riskCounts[level] || 0})</span>}
+  1260→          </Button>
+  1261→        ))}
+  1262→      </div>
+  1263→
+  1264→      {/* Search & Filters */}
+  1265→      <div className="flex flex-col sm:flex-row gap-3">
+  1266→        <div className="relative flex-1">
+  1267→          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+  1268→          <Input
+  1269→            placeholder="Search by name, CAS, SMILES..."
+  1270→            value={searchQuery}
+  1271→            onChange={(e) => { setSearchQuery(e.target.value); setCurrentPageNum(1) }}
+  1272→            className="pl-9"
+  1273→          />
+  1274→        </div>
+  1275→        <Select value={sortBy} onValueChange={setSortBy}>
+  1276→          <SelectTrigger className="w-[130px]">
+  1277→            <SelectValue placeholder="Sort by" />
+  1278→          </SelectTrigger>
+  1279→          <SelectContent>
+  1280→            <SelectItem value="name">Name</SelectItem>
+  1281→            <SelectItem value="stability">Stability</SelectItem>
+  1282→            <SelectItem value="molarMass">Molar Mass</SelectItem>
+  1283→            <SelectItem value="risk">Risk Level</SelectItem>
+  1284→          </SelectContent>
+  1285→        </Select>
+  1286→        <Select value={riskFilter} onValueChange={(v) => { setRiskFilter(v); setCurrentPageNum(1) }}>
+  1287→          <SelectTrigger className="w-[140px]">
+  1288→            <SelectValue placeholder="Risk Level" />
+  1289→          </SelectTrigger>
+  1290→          <SelectContent>
+  1291→            <SelectItem value="all">All Risks</SelectItem>
+  1292→            <SelectItem value="low">Low</SelectItem>
+  1293→            <SelectItem value="moderate">Moderate</SelectItem>
+  1294→            <SelectItem value="high">High</SelectItem>
+  1295→            <SelectItem value="critical">Critical</SelectItem>
+  1296→          </SelectContent>
+  1297→        </Select>
+  1298→        <Select value={sourceFilter} onValueChange={(v) => { setSourceFilter(v); setCurrentPageNum(1) }}>
+  1299→          <SelectTrigger className="w-[140px]">
+  1300→            <SelectValue placeholder="Data Source" />
+  1301→          </SelectTrigger>
+  1302→          <SelectContent>
+  1303→            <SelectItem value="all">All Sources</SelectItem>
+  1304→            <SelectItem value="PubChem">PubChem</SelectItem>
+  1305→            <SelectItem value="ChEMBL">ChEMBL</SelectItem>
+  1306→            <SelectItem value="Manual">Manual</SelectItem>
+  1307→          </SelectContent>
+  1308→        </Select>
+  1309→      </div>
+  1310→
+  1311→      {/* Results count */}
+  1312→      <p className="text-sm text-muted-foreground">
+  1313→        {loading ? 'Loading...' : `Showing ${displayed.length} of ${totalCount} molecules`}
+  1314→      </p>
+  1315→
+  1316→      {/* Table / Grid View */}
+  1317→      {viewMode === 'table' ? (
+  1318→      <Card className="backdrop-blur-sm bg-card/80">
+  1319→        <CardContent className="p-0">
+  1320→          <div className="max-h-96 overflow-y-auto">
+  1321→            {loading ? (
+  1322→              <div className="space-y-2 p-4">
+  1323→                {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+  1324→              </div>
+  1325→            ) : (
+  1326→              <Table>
+  1327→                <TableHeader>
+  1328→                  <TableRow>
+  1329→                    <TableHead>Name</TableHead>
+  1330→                    <TableHead>Formula</TableHead>
+  1331→                    <TableHead>MW</TableHead>
+  1332→                    <TableHead>LogP</TableHead>
+  1333→                    <TableHead>Stability</TableHead>
+  1334→                    <TableHead>Risk Level</TableHead>
+  1335→                    <TableHead>Source</TableHead>
+  1336→                  </TableRow>
+  1337→                </TableHeader>
+  1338→                <TableBody>
+  1339→                  {displayed.map((mol, idx) => (
+  1340→                    <TableRow
+  1341→                      key={mol.id}
+  1342→                      className={`cursor-pointer hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10 transition-colors even:bg-muted/30 ${idx % 2 === 0 ? '' : 'even:bg-muted/30'}`}
+  1343→                      onClick={() => openDetail(mol)}
+  1344→                    >
+  1345→                      <TableCell className="font-medium">{mol.name}</TableCell>
+  1346→                      <TableCell><Formula>{mol.formula}</Formula></TableCell>
+  1347→                      <TableCell>{mol.molarMass ? mol.molarMass.toFixed(2) : '—'}</TableCell>
+  1348→                      <TableCell>{mol.logP ? mol.logP.toFixed(2) : '—'}</TableCell>
+  1349→                      <TableCell>
+  1350→                        <span className={`font-semibold ${getScoreColor(mol.stabilityScore)}`}>
+  1351→                          {mol.stabilityScore}
+  1352→                        </span>
+  1353→                      </TableCell>
+  1354→                      <TableCell>
+  1355→                        <Badge className={riskColors[mol.riskLevel]}>{mol.riskLevel}</Badge>
+  1356→                      </TableCell>
+  1357→                      <TableCell>{mol.dataSource}</TableCell>
+  1358→                    </TableRow>
+  1359→                  ))}
+  1360→                  {displayed.length === 0 && (
+  1361→                    <TableRow>
+  1362→                      <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+  1363→                        No molecules found matching your criteria
+  1364→                      </TableCell>
+  1365→                    </TableRow>
+  1366→                  )}
+  1367→                </TableBody>
+  1368→              </Table>
+  1369→            )}
+  1370→          </div>
+  1371→        </CardContent>
+  1372→        {totalPages > 1 && (
+  1373→          <CardFooter className="flex items-center justify-between border-t pt-4">
+  1374→            <Button
+  1375→              variant="outline"
+  1376→              size="sm"
+  1377→              disabled={currentPageNum <= 1}
+  1378→              onClick={() => setCurrentPageNum(currentPageNum - 1)}
+  1379→            >
+  1380→              Previous
+  1381→            </Button>
+  1382→            <span className="text-sm text-muted-foreground">
+  1383→              Page {currentPageNum} of {totalPages}
+  1384→            </span>
+  1385→            <Button
+  1386→              variant="outline"
+  1387→              size="sm"
+  1388→              disabled={currentPageNum >= totalPages}
+  1389→              onClick={() => setCurrentPageNum(currentPageNum + 1)}
+  1390→            >
+  1391→              Next
+  1392→            </Button>
+  1393→          </CardFooter>
+  1394→        )}
+  1395→      </Card>
+  1396→      ) : (
+  1397→        /* Grid View */
+  1398→        loading ? (
+  1399→          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+  1400→            {Array.from({ length: 6 }).map((_, i) => (
+  1401→              <Card key={i}><CardContent className="p-4"><div className="h-40 w-full rounded-md bg-muted animate-pulse" /></CardContent></Card>
+  1402→            ))}
+  1403→          </div>
+  1404→        ) : displayed.length === 0 ? (
+  1405→          <Card><CardContent className="py-8 text-center text-muted-foreground">No molecules found matching your criteria</CardContent></Card>
+  1406→        ) : (
+  1407→          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+  1408→            {displayed.map((mol) => (
+  1409→              <motion.div key={mol.id} whileHover={{ y: -4 }} transition={{ type: 'spring', stiffness: 300 }}>
+  1410→                <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => openDetail(mol)}>
+  1411→                  <CardContent className="p-4">
+  1412→                    <div className="flex items-center justify-between mb-2">
+  1413→                      <h3 className="font-semibold">{mol.name}</h3>
+  1414→                      <Badge className={`text-[10px] ${riskColors[mol.riskLevel]}`}>{mol.riskLevel}</Badge>
+  1415→                    </div>
+  1416→                    <Formula>{mol.formula}</Formula>
+  1417→                    <div className="mt-3 flex items-center gap-2">
+  1418→                      <div className="relative size-8">
+  1419→                        <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
+  1420→                          <circle cx="18" cy="18" r="15" fill="none" stroke="currentColor" strokeWidth="3" className="text-muted/30" />
+  1421→                          <circle cx="18" cy="18" r="15" fill="none" stroke={mol.stabilityScore >= 80 ? '#10b981' : mol.stabilityScore >= 60 ? '#14b8a6' : mol.stabilityScore >= 40 ? '#f59e0b' : '#ef4444'} strokeWidth="3" strokeDasharray={`${(mol.stabilityScore / 100) * 94.25} 94.25`} strokeLinecap="round" />
+  1422→                        </svg>
+  1423→                        <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold">{mol.stabilityScore}</span>
+  1424→                      </div>
+  1425→                      <span className="text-xs text-muted-foreground">Stability</span>
+  1426→                    </div>
+  1427→                    <div className="mt-2 text-xs text-muted-foreground flex items-center gap-1">
+  1428→                      <span>MW: {mol.molarMass || '—'}</span>
+  1429→                      <span>·</span>
+  1430→                      <span>LogP: {mol.logP || '—'}</span>
+  1431→                    </div>
+  1432→                  </CardContent>
+  1433→                </Card>
+  1434→              </motion.div>
+  1435→            ))}
+  1436→          </div>
+  1437→        )
+  1438→      )}
+  1439→
+  1440→      {/* Add Molecule Dialog */}
+  1441→      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+  1442→        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+  1443→          <DialogHeader>
+  1444→            <DialogTitle className="flex items-center gap-2">
+  1445→              <Plus className="size-5 text-emerald-600 dark:text-emerald-400" />
+  1446→              Add New Molecule
+  1447→            </DialogTitle>
+  1448→            <DialogDescription>Create a new entry in the chemical compounds database</DialogDescription>
+  1449→          </DialogHeader>
+  1450→          <div className="space-y-3">
+  1451→            <div>
+  1452→              <Label>Name *</Label>
+  1453→              <Input
+  1454→                placeholder="e.g. Acetylsalicylic acid"
+  1455→                value={newMolecule.name}
+  1456→                onChange={(e) => setNewMolecule({ ...newMolecule, name: e.target.value })}
+  1457→              />
+  1458→            </div>
+  1459→            <div className="grid grid-cols-2 gap-3">
+  1460→              <div>
+  1461→                <Label>CAS Number</Label>
+  1462→                <Input
+  1463→                  placeholder="e.g. 50-78-2"
+  1464→                  value={newMolecule.casNumber}
+  1465→                  onChange={(e) => setNewMolecule({ ...newMolecule, casNumber: e.target.value })}
+  1466→                />
+  1467→              </div>
+  1468→              <div>
+  1469→                <Label>Formula</Label>
+  1470→                <Input
+  1471→                  placeholder="e.g. C9H8O4"
+  1472→                  value={newMolecule.formula}
+  1473→                  onChange={(e) => setNewMolecule({ ...newMolecule, formula: e.target.value })}
+  1474→                />
+  1475→              </div>
+  1476→            </div>
+  1477→            <div>
+  1478→              <Label>SMILES</Label>
+  1479→              <Input
+  1480→                placeholder="e.g. CC(=O)OC1=CC=CC=C1C(=O)O"
+  1481→                value={newMolecule.smiles}
+  1482→                onChange={(e) => setNewMolecule({ ...newMolecule, smiles: e.target.value })}
+  1483→                className="font-mono text-xs"
+  1484→              />
+  1485→            </div>
+  1486→            <div className="grid grid-cols-3 gap-3">
+  1487→              <div>
+  1488→                <Label>Molar Mass</Label>
+  1489→                <Input
+  1490→                  type="number"
+  1491→                  placeholder="0.00"
+  1492→                  value={newMolecule.molarMass || ''}
+  1493→                  onChange={(e) => setNewMolecule({ ...newMolecule, molarMass: parseFloat(e.target.value) || 0 })}
+  1494→                />
+  1495→              </div>
+  1496→              <div>
+  1497→                <Label>LogP</Label>
+  1498→                <Input
+  1499→                  type="number"
+  1500→                  step="0.01"
+  1501→                  placeholder="0.00"
+  1502→                  value={newMolecule.logP || ''}
+  1503→                  onChange={(e) => setNewMolecule({ ...newMolecule, logP: parseFloat(e.target.value) || 0 })}
+  1504→                />
+  1505→              </div>
+  1506→              <div>
+  1507→                <Label>Stability (0-100)</Label>
+  1508→                <Input
+  1509→                  type="number"
+  1510→                  min="0"
+  1511→                  max="100"
+  1512→                  placeholder="0"
+  1513→                  value={newMolecule.predictedStabilityScore || ''}
+  1514→                  onChange={(e) => setNewMolecule({ ...newMolecule, predictedStabilityScore: Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)) })}
+  1515→                />
+  1516→              </div>
+  1517→            </div>
+  1518→            <div className="grid grid-cols-2 gap-3">
+  1519→              <div>
+  1520→                <Label>Risk Level</Label>
+  1521→                <Select value={newMolecule.riskLevel} onValueChange={(v) => setNewMolecule({ ...newMolecule, riskLevel: v })}>
+  1522→                  <SelectTrigger><SelectValue /></SelectTrigger>
+  1523→                  <SelectContent>
+  1524→                    <SelectItem value="low">Low</SelectItem>
+  1525→                    <SelectItem value="moderate">Moderate</SelectItem>
+  1526→                    <SelectItem value="high">High</SelectItem>
+  1527→                    <SelectItem value="critical">Critical</SelectItem>
+  1528→                  </SelectContent>
+  1529→                </Select>
+  1530→              </div>
+  1531→              <div>
+  1532→                <Label>Data Source</Label>
+  1533→                <Select value={newMolecule.dataSource} onValueChange={(v) => setNewMolecule({ ...newMolecule, dataSource: v })}>
+  1534→                  <SelectTrigger><SelectValue /></SelectTrigger>
+  1535→                  <SelectContent>
+  1536→                    <SelectItem value="manual">Manual</SelectItem>
+  1537→                    <SelectItem value="pubchem">PubChem</SelectItem>
+  1538→                    <SelectItem value="chembl">ChEMBL</SelectItem>
+  1539→                  </SelectContent>
+  1540→                </Select>
+  1541→              </div>
+  1542→            </div>
+  1543→            <div>
+  1544→              <Label>Description</Label>
+  1545→              <Textarea
+  1546→                placeholder="Brief description of the compound and its stability profile..."
+  1547→                value={newMolecule.description}
+  1548→                onChange={(e) => setNewMolecule({ ...newMolecule, description: e.target.value })}
+  1549→                rows={3}
+  1550→              />
+  1551→            </div>
+  1552→          </div>
+  1553→          <DialogFooter>
+  1554→            <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
+  1555→            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={handleAddMolecule} disabled={creating}>
+  1556→              {creating ? <><RefreshCw className="size-4 mr-2 animate-spin" /> Saving...</> : <><Plus className="size-4 mr-2" /> Add Molecule</>}
+  1557→            </Button>
+  1558→          </DialogFooter>
+  1559→        </DialogContent>
+  1560→      </Dialog>
+  1561→
+  1562→      {/* Molecule Detail Dialog (enhanced) */}
+  1563→      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
+  1564→        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto" aria-describedby={undefined}>
+  1565→          <DialogHeader>
+  1566→            <DialogTitle>
+  1567→              {selectedMolecule ? (
+  1568→                <span className="flex items-center gap-2 flex-wrap">
+  1569→                  <span className="bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-400 dark:to-teal-400 bg-clip-text text-transparent">
+  1570→                    {selectedMolecule.name}
+  1571→                  </span>
+  1572→                  <Badge className={riskColors[selectedMolecule.riskLevel]}>{selectedMolecule.riskLevel} risk</Badge>
+  1573→                  <Badge variant="outline" className="text-xs">{selectedMolecule.dataSource}</Badge>
+  1574→                </span>
+  1575→              ) : (
+  1576→                <span>Molecule Details</span>
+  1577→              )}
+  1578→            </DialogTitle>
+  1579→            {selectedMolecule && (
+  1580→              <DialogDescription>
+  1581→                CAS: <span className="font-mono">{selectedMolecule.casNumber || '—'}</span>
+  1582→              </DialogDescription>
+  1583→            )}
+  1584→          </DialogHeader>
+  1585→          {selectedMolecule && (
+  1586→            <>
+  1587→              <Tabs defaultValue="properties" className="w-full">
+  1588→                <TabsList className="grid w-full grid-cols-3">
+  1589→                  <TabsTrigger value="properties">Properties</TabsTrigger>
+  1590→                  <TabsTrigger value="degradation">Degradation</TabsTrigger>
+  1591→                  <TabsTrigger value="hazards">Hazards</TabsTrigger>
+  1592→                </TabsList>
+  1593→
+  1594→                {/* Properties Tab */}
+  1595→                <TabsContent value="properties" className="space-y-4 mt-4">
+  1596→                  <div className="grid grid-cols-2 gap-3">
+  1597→                    {[
+  1598→                      { label: 'Formula', value: formatFormula(selectedMolecule.formula) },
+  1599→                      { label: 'Molar Mass', value: selectedMolecule.molarMass ? `${selectedMolecule.molarMass.toFixed(2)} g/mol` : '—' },
+  1600→                      { label: 'LogP', value: selectedMolecule.logP !== null ? selectedMolecule.logP.toFixed(2) : '—' },
+  1601→                      { label: 'Melting Point', value: selectedMolecule.meltingPoint !== null ? `${selectedMolecule.meltingPoint}°C` : '—' },
+  1602→                      { label: 'Boiling Point', value: selectedMolecule.boilingPoint !== null ? `${selectedMolecule.boilingPoint}°C` : '—' },
+  1603→                      { label: 'CAS Number', value: selectedMolecule.casNumber || '—' },
+  1604→                    ].map((field) => (
+  1605→                      <div key={field.label} className="space-y-1 p-2 rounded-lg bg-muted/40">
+  1606→                        <p className="text-xs text-muted-foreground">{field.label}</p>
+  1607→                        <p className="text-sm font-medium">{field.value}</p>
+  1608→                      </div>
+  1609→                    ))}
+  1610→                  </div>
+  1611→
+  1612→                  <div className="space-y-1 p-2 rounded-lg bg-muted/40">
+  1613→                    <p className="text-xs text-muted-foreground">SMILES</p>
+  1614→                    <p className="text-sm font-mono break-all">{selectedMolecule.smiles || '—'}</p>
+  1615→                  </div>
+  1616→
+  1617→                  <Separator />
+  1618→
+  1619→                  <div className="space-y-2">
+  1620→                    <div className="flex items-center justify-between">
+  1621→                      <span className="text-sm font-medium">Stability Score</span>
+  1622→                      <span className={`text-2xl font-bold ${getScoreColor(selectedMolecule.stabilityScore)}`}>
+  1623→                        {selectedMolecule.stabilityScore}<span className="text-sm text-muted-foreground font-normal">/100</span>
+  1624→                      </span>
+  1625→                    </div>
+  1626→                    <div className="relative">
+  1627→                      <Progress value={selectedMolecule.stabilityScore} className="h-3" />
+  1628→                      <div className="flex justify-between mt-1 text-[10px] text-muted-foreground">
+  1629→                        <span>0</span><span>25</span><span>50</span><span>75</span><span>100</span>
+  1630→                      </div>
+  1631→                    </div>
+  1632→                  </div>
+  1633→
+  1634→                  <Separator />
+  1635→
+  1636→                  <div className="space-y-1">
+  1637→                    <p className="text-sm font-medium">Description</p>
+  1638→                    <div className="p-3 rounded-lg bg-emerald-50/50 dark:bg-emerald-900/10 border-l-4 border-emerald-500">
+  1639→                      <p className="text-sm text-muted-foreground leading-relaxed">{selectedMolecule.description || 'No description available.'}</p>
+  1640→                    </div>
+  1641→                  </div>
+  1642→                </TabsContent>
+  1643→
+  1644→                {/* Degradation Tab */}
+  1645→                <TabsContent value="degradation" className="space-y-2 mt-4">
+  1646→                  <div className="flex items-center justify-between">
+  1647→                    <div className="flex items-center gap-2">
+  1648→                      <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400" />
+  1649→                      <p className="text-sm font-medium">Degradation Products</p>
+  1650→                      {degradationProducts.length > 0 && (
+  1651→                        <Badge variant="secondary" className="text-[10px]">{degradationProducts.length}</Badge>
+  1652→                      )}
+  1653→                    </div>
+  1654→                  </div>
+  1655→                  {degradationLoading ? (
+  1656→                    <div className="p-3 space-y-2">
+  1657→                      <Skeleton className="h-8 w-full" />
+  1658→                      <Skeleton className="h-8 w-full" />
+  1659→                    </div>
+  1660→                  ) : degradationProducts.length === 0 ? (
+  1661→                    <div className="p-3 rounded-lg bg-muted/40 text-sm text-muted-foreground">
+  1662→                      No degradation pathway data has been recorded for this molecule yet.
+  1663→                      Use the form below to add degradation products.
+  1664→                    </div>
+  1665→                  ) : (
+  1666→                    <div className="space-y-2">
+  1667→                      {degradationProducts.map((dp: any) => (
+  1668→                        <div key={dp.id} className="flex items-center justify-between p-2 rounded-lg bg-muted/40 border border-border/50">
+  1669→                          <div className="flex-1 min-w-0">
+  1670→                            <div className="flex items-center gap-2 flex-wrap">
+  1671→                              <span className="text-sm font-medium">{dp.name}</span>
+  1672→                              <Badge variant="outline" className={`text-[10px] ${dp.hazardLevel === 'high' ? 'border-red-500 text-red-600' : dp.hazardLevel === 'moderate' ? 'border-amber-500 text-amber-600' : 'border-emerald-500 text-emerald-600'}`}>
+  1673→                                {dp.hazardLevel}
+  1674→                              </Badge>
+  1675→                            </div>
+  1676→                            {dp.smiles && (
+  1677→                              <p className="text-[10px] font-mono text-muted-foreground mt-0.5 truncate">{dp.smiles}</p>
+  1678→                            )}
+  1679→                          </div>
+  1680→                          {dp.percentage != null && (
+  1681→                            <div className="ml-2 flex items-center gap-2 shrink-0">
+  1682→                              <div className="w-16 h-2 rounded-full bg-muted overflow-hidden">
+  1683→                                <div
+  1684→                                  className="h-full bg-gradient-to-r from-amber-400 to-red-500"
+  1685→                                  style={{ width: `${Math.min(100, dp.percentage)}%` }}
+  1686→                                />
+  1687→                              </div>
+  1688→                              <span className="text-xs font-semibold tabular-nums w-10 text-right">{dp.percentage}%</span>
+  1689→                            </div>
+  1690→                          )}
+  1691→                        </div>
+  1692→                      ))}
+  1693→                    </div>
+  1694→                  )}
+  1695→
+  1696→                  {/* Add degradation product form */}
+  1697→                  <div className="p-3 rounded-lg bg-emerald-50/50 dark:bg-emerald-900/10 border border-emerald-200/50 dark:border-emerald-800/50 space-y-2">
+  1698→                    <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400">Add degradation product</p>
+  1699→                    <div className="grid grid-cols-2 gap-2">
+  1700→                      <Input
+  1701→                        placeholder="Product name"
+  1702→                        value={newDegradation.name}
+  1703→                        onChange={(e) => setNewDegradation({ ...newDegradation, name: e.target.value })}
+  1704→                        className="text-xs h-8"
+  1705→                      />
+  1706→                      <Input
+  1707→                        placeholder="SMILES (optional)"
+  1708→                        value={newDegradation.smiles}
+  1709→                        onChange={(e) => setNewDegradation({ ...newDegradation, smiles: e.target.value })}
+  1710→                        className="text-xs h-8 font-mono"
+  1711→                      />
+  1712→                      <div className="flex items-center gap-2">
+  1713→                        <Input
+  1714→                          type="number"
+  1715→                          placeholder="%"
+  1716→                          min="0"
+  1717→                          max="100"
+  1718→                          value={newDegradation.percentage || ''}
+  1719→                          onChange={(e) => setNewDegradation({ ...newDegradation, percentage: parseFloat(e.target.value) || 0 })}
+  1720→                          className="text-xs h-8 w-20"
+  1721→                        />
+  1722→                        <Select value={newDegradation.hazardLevel} onValueChange={(v) => setNewDegradation({ ...newDegradation, hazardLevel: v })}>
+  1723→                          <SelectTrigger className="text-xs h-8 flex-1"><SelectValue /></SelectTrigger>
+  1724→                          <SelectContent>
+  1725→                            <SelectItem value="low">Low</SelectItem>
+  1726→                            <SelectItem value="moderate">Moderate</SelectItem>
+  1727→                            <SelectItem value="high">High</SelectItem>
+  1728→                          </SelectContent>
+  1729→                        </Select>
+  1730→                      </div>
+  1731→                      <Button
+  1732→                        size="sm"
+  1733→                        className="bg-emerald-600 hover:bg-emerald-700 text-white h-8"
+  1734→                        onClick={handleAddDegradation}
+  1735→                        disabled={addingDegradation}
+  1736→                      >
+  1737→                        {addingDegradation
+  1738→                          ? <><RefreshCw className="size-3 mr-1 animate-spin" /> Adding...</>
+  1739→                          : <><Plus className="size-3 mr-1" /> Add Product</>
+  1740→                        }
+  1741→                      </Button>
+  1742→                    </div>
+  1743→                  </div>
+  1744→                </TabsContent>
+  1745→
+  1746→                {/* Hazards Tab */}
+  1747→                <TabsContent value="hazards" className="space-y-4 mt-4">
+  1748→                  <div className="grid grid-cols-2 gap-3">
+  1749→                    <div className="space-y-1 p-3 rounded-lg bg-muted/40">
+  1750→                      <p className="text-xs text-muted-foreground">Risk Level</p>
+  1751→                      <Badge className={riskColors[selectedMolecule.riskLevel]}>{selectedMolecule.riskLevel} risk</Badge>
+  1752→                    </div>
+  1753→                    <div className="space-y-1 p-3 rounded-lg bg-muted/40">
+  1754→                      <p className="text-xs text-muted-foreground">Stability Score</p>
+  1755→                      <p className={`text-lg font-bold ${getScoreColor(selectedMolecule.stabilityScore)}`}>{selectedMolecule.stabilityScore}/100</p>
+  1756→                    </div>
+  1757→                    <div className="space-y-1 p-3 rounded-lg bg-muted/40">
+  1758→                      <p className="text-xs text-muted-foreground">Hazard Class</p>
+  1759→                      <p className="text-sm font-medium">{selectedMolecule.riskLevel === 'critical' ? 'Severe Hazard' : selectedMolecule.riskLevel === 'high' ? 'Significant Hazard' : selectedMolecule.riskLevel === 'moderate' ? 'Moderate Hazard' : 'Low Hazard'}</p>
+  1760→                    </div>
+  1761→                    <div className="space-y-1 p-3 rounded-lg bg-muted/40">
+  1762→                      <p className="text-xs text-muted-foreground">Data Source</p>
+  1763→                      <p className="text-sm font-medium">{selectedMolecule.dataSource}</p>
+  1764→                    </div>
+  1765→                  </div>
+  1766→                  <div className="space-y-1">
+  1767→                    <p className="text-sm font-medium">Risk Description</p>
+  1768→                    <div className={`p-3 rounded-lg border-l-4 ${selectedMolecule.riskLevel === 'critical' ? 'bg-red-50/50 dark:bg-red-900/10 border-red-500' : selectedMolecule.riskLevel === 'high' ? 'bg-orange-50/50 dark:bg-orange-900/10 border-orange-500' : selectedMolecule.riskLevel === 'moderate' ? 'bg-amber-50/50 dark:bg-amber-900/10 border-amber-500' : 'bg-emerald-50/50 dark:bg-emerald-900/10 border-emerald-500'}`}>
+  1769→                      <p className="text-sm text-muted-foreground leading-relaxed">{selectedMolecule.description || 'No hazard description available.'}</p>
+  1770→                    </div>
+  1771→                  </div>
+  1772→                </TabsContent>
+  1773→              </Tabs>
+  1774→              <DialogFooter className="gap-2">
+  1775→                <Button
+  1776→                  variant="outline"
+  1777→                  onClick={() => {
+  1778→                    setDetailOpen(false)
+  1779→                    setPage('studies')
+  1780→                  }}
+  1781→                >
+  1782→                  <Microscope className="size-4 mr-2" /> Create Study from this Molecule
+  1783→                </Button>
+  1784→                <Button onClick={() => setDetailOpen(false)}>Close</Button>
+  1785→              </DialogFooter>
+  1786→            </>
+  1787→          )}
+  1788→        </DialogContent>
+  1789→      </Dialog>
+  1790→    </motion.div>
+  1791→  )
+  1792→}
+  1793→
+  1794→// ── Stability Simulator Page ──────────────────────────────────────────────
+  1795→
+  1796→const SIM_STEPS = ['Analyzing substances...', 'Computing kinetics...', 'Evaluating risk factors...', 'Generating recommendations...']
+  1797→
+  1798→const getConditionSeverity = (type: string, value: number): { color: string; label: string } => {
+  1799→  switch (type) {
+  1800→    case 'temperature': return value > 50 ? { color: 'red', label: 'Extreme' } : value > 30 ? { color: 'amber', label: 'Elevated' } : { color: 'emerald', label: 'Normal' }
+  1801→    case 'ph': return value < 3 || value > 11 ? { color: 'red', label: 'Extreme' } : value < 5 || value > 9 ? { color: 'amber', label: 'Elevated' } : { color: 'emerald', label: 'Normal' }
+  1802→    case 'dissolvedOxygen': return value > 12 ? { color: 'amber', label: 'High' } : { color: 'emerald', label: 'Normal' }
+  1803→    case 'lightExposure': return value > 10000 ? { color: 'red', label: 'UV' } : value > 300 ? { color: 'amber', label: 'Indoor' } : { color: 'emerald', label: 'Protected' }
+  1804→    default: return { color: 'emerald', label: 'Normal' }
+  1805→  }
+  1806→}
+  1807→
+  1808→function SimulatorPage() {
+  1809→  const analysisStore = useAnalysisStore()
+  1810→  const [simDone, setSimDone] = useState(false)
+  1811→  const [currentStep, setCurrentStep] = useState(0)
+  1812→
+  1813→  const degradationCurveData = useMemo(() => {
+  1814→    if (!analysisStore.result) return []
+  1815→    const shelfLife = analysisStore.result.kinetics.shelfLifeMonths
+  1816→    const months = Array.from({ length: 12 }, (_, i) => ({
+  1817→      month: `${Math.round(i * (shelfLife / 12))}mo`,
+  1818→      concentration: Math.max(0, 100 * Math.exp(-0.05 * i * (shelfLife / 12))),
+  1819→      threshold: 90,
+  1820→    }))
+  1821→    return months
+  1822→  }, [analysisStore.result])
+  1823→
+  1824→  const runSimulation = useCallback(async () => {
+  1825→    analysisStore.setRunning(true)
+  1826→    setSimDone(false)
+  1827→    setCurrentStep(0)
+  1828→    // Increment through simulation progress steps
+  1829→    const stepTimers = SIM_STEPS.map((_, i) =>
+  1830→      setTimeout(() => setCurrentStep(i), (i + 1) * 600)
+  1831→    )
+  1832→    try {
+  1833→      // Map light exposure number to API string values
+  1834→      const lightStr = analysisStore.conditions.lightExposure === 0 ? 'protected'
+  1835→        : analysisStore.conditions.lightExposure < 300 ? 'indoor'
+  1836→        : analysisStore.conditions.lightExposure < 10000 ? 'outdoor'
+  1837→        : 'uv'
+  1838→      const res = await fetch('/api/analysis', {
+  1839→        method: 'POST',
+  1840→        headers: { 'Content-Type': 'application/json' },
+  1841→        body: JSON.stringify({
+  1842→          substances: analysisStore.substances,
+  1843→          conditions: {
+  1844→            ph: analysisStore.conditions.ph,
+  1845→            temperature: analysisStore.conditions.temperature,
+  1846→            dissolvedOxygen: analysisStore.conditions.dissolvedOxygen,
+  1847→            lightExposure: lightStr,
+  1848→          },
+  1849→        }),
+  1850→      })
+  1851→      if (res.ok) {
+  1852→        const data = await res.json()
+  1853→        const apiResult = data.result
+  1854→        // Transform API response to match frontend format
+  1855→        const risksObj: Record<string, { score: number; level: string }> = {}
+  1856→        for (const item of apiResult.riskBreakdown) {
+  1857→          const key = item.factor.toLowerCase()
+  1858→          const level = item.score >= 80 ? 'low' : item.score >= 60 ? 'moderate' : item.score >= 40 ? 'high' : 'critical'
+  1859→          risksObj[key] = { score: item.score, level }
+  1860→        }
+  1861→        const firstKinetics = apiResult.kineticsPredictions?.[0] || {}
+  1862→        analysisStore.setResult({
+  1863→          analysisId: `SIM-${Date.now()}`,
+  1864→          overallScore: apiResult.overallScore,
+  1865→          riskLevel: apiResult.riskLevel,
+  1866→          risks: risksObj,
+  1867→          kinetics: {
+  1868→            shelfLifeMonths: firstKinetics.estimatedShelfLifeMonths ?? 0,
+  1869→            q10: firstKinetics.q10 ?? 0,
+  1870→            activationEnergy: firstKinetics.activationEnergyKjPerMol ?? 0,
+  1871→          },
+  1872→          recommendations: apiResult.recommendations.map((r: any) => `${r.action}: ${r.detail}`),
+  1873→        })
+  1874→      }
+  1875→    } catch { /* on error, set no result */ }
+  1876→    // Clear step timers
+  1877→    stepTimers.forEach((t) => clearTimeout(t))
+  1878→    setCurrentStep(SIM_STEPS.length)
+  1879→    analysisStore.setRunning(false)
+  1880→    setSimDone(true)
+  1881→  }, [analysisStore])
+  1882→
+  1883→  return (
+  1884→    <motion.div
+  1885→      initial={{ opacity: 0, y: 20 }}
+  1886→      animate={{ opacity: 1, y: 0 }}
+  1887→      transition={{ duration: 0.4 }}
+  1888→      className="space-y-6"
+  1889→    >
+  1890→      <div>
+  1891→        <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-400 dark:to-teal-400 bg-clip-text text-transparent">Stability Simulator</h1>
+  1892→        <p className="text-muted-foreground">Predict chemical stability under custom environmental conditions</p>
+  1893→      </div>
+  1894→
+  1895→      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+  1896→        {/* Input Form */}
+  1897→        <div className="space-y-4">
+  1898→          <Card>
+  1899→            <CardHeader>
+  1900→              <CardTitle className="flex items-center gap-2">
+  1901→                <Beaker className="size-5 text-emerald-600 dark:text-emerald-400" />
+  1902→                Substances
+  1903→              </CardTitle>
+  1904→              <CardDescription>Add substances to analyze</CardDescription>
+  1905→            </CardHeader>
+  1906→            <CardContent className="space-y-3">
+  1907→              {analysisStore.substances.map((sub, i) => (
+  1908→                <motion.div
+  1909→                  key={i}
+  1910→                  initial={{ opacity: 0, y: 10 }}
+  1911→                  animate={{ opacity: 1, y: 0 }}
+  1912→                  className="flex gap-2 items-end"
+  1913→                >
+  1914→                  <div className="flex-1">
+  1915→                    <Label className="text-xs">Name</Label>
+  1916→                    <Input
+  1917→                      placeholder="Substance name"
+  1918→                      value={sub.name}
+  1919→                      onChange={(e) => analysisStore.updateSubstance(i, 'name', e.target.value)}
+  1920→                    />
+  1921→                  </div>
+  1922→                  <div className="w-20">
+  1923→                    <Label className="text-xs">Conc.</Label>
+  1924→                    <Input
+  1925→                      type="number"
+  1926→                      value={sub.concentration}
+  1927→                      onChange={(e) => analysisStore.updateSubstance(i, 'concentration', parseFloat(e.target.value) || 0)}
+  1928→                    />
+  1929→                  </div>
+  1930→                  <div className="w-24">
+  1931→                    <Label className="text-xs">Unit</Label>
+  1932→                    <Select
+  1933→                      value={sub.unit}
+  1934→                      onValueChange={(v) => analysisStore.updateSubstance(i, 'unit', v)}
+  1935→                    >
+  1936→                      <SelectTrigger>
+  1937→                        <SelectValue />
+  1938→                      </SelectTrigger>
+  1939→                      <SelectContent>
+  1940→                        <SelectItem value="g/L">g/L</SelectItem>
+  1941→                        <SelectItem value="mg/mL">mg/mL</SelectItem>
+  1942→                        <SelectItem value="mol/L">mol/L</SelectItem>
+  1943→                        <SelectItem value="%w/v">%w/v</SelectItem>
+  1944→                      </SelectContent>
+  1945→                    </Select>
+  1946→                  </div>
+  1947→                  {analysisStore.substances.length > 1 && (
+  1948→                    <Button
+  1949→                      variant="ghost"
+  1950→                      size="icon"
+  1951→                      className="text-red-500 hover:text-red-700"
+  1952→                      onClick={() => analysisStore.removeSubstance(i)}
+  1953→                    >
+  1954→                      <Trash2 className="size-4" />
+  1955→                    </Button>
+  1956→                  )}
+  1957→                </motion.div>
+  1958→              ))}
+  1959→              <Button
+  1960→                variant="outline"
+  1961→                size="sm"
+  1962→                className="w-full"
+  1963→                onClick={analysisStore.addSubstance}
+  1964→              >
+  1965→                <Plus className="size-4 mr-1" /> Add Substance
+  1966→              </Button>
+  1967→            </CardContent>
+  1968→          </Card>
+  1969→
+  1970→          <Card>
+  1971→            <CardHeader>
+  1972→              <CardTitle className="flex items-center gap-2">
+  1973→                <Thermometer className="size-5 text-teal-600 dark:text-teal-400" />
+  1974→                Environmental Conditions
+  1975→              </CardTitle>
+  1976→            </CardHeader>
+  1977→            <CardContent className="space-y-3">
+  1978→              <div className="grid grid-cols-2 gap-3">
+  1979→                <div>
+  1980→                  <div className="flex items-center gap-2 mb-1">
+  1981→                    <Label className="text-xs">pH</Label>
+  1982→                    {(() => {
+  1983→                      const sev = getConditionSeverity('ph', analysisStore.conditions.ph)
+  1984→                      return (
+  1985→                        <>
+  1986→                          <span className={`size-2 rounded-full ${sev.color === 'red' ? 'bg-red-500' : sev.color === 'amber' ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+  1987→                          <span className="text-[10px] text-muted-foreground">{sev.label}</span>
+  1988→                        </>
+  1989→                      )
+  1990→                    })()}
+  1991→                  </div>
+  1992→                  <Input
+  1993→                    type="number"
+  1994→                    step="0.1"
+  1995→                    value={analysisStore.conditions.ph}
+  1996→                    onChange={(e) => analysisStore.setConditions({ ph: parseFloat(e.target.value) || 0 })}
+  1997→                  />
+  1998→                </div>
+  1999→                <div>
+  2000→                  <div className="flex items-center gap-2 mb-1">
+  2001→                    <Label className="text-xs">Temperature (°C)</Label>
+  2002→                    {(() => {
+  2003→                      const sev = getConditionSeverity('temperature', analysisStore.conditions.temperature)
+  2004→                      return (
+  2005→                        <>
+  2006→                          <span className={`size-2 rounded-full ${sev.color === 'red' ? 'bg-red-500' : sev.color === 'amber' ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+  2007→                          <span className="text-[10px] text-muted-foreground">{sev.label}</span>
+  2008→                        </>
+  2009→                      )
+  2010→                    })()}
+  2011→                  </div>
+  2012→                  <Input
+  2013→                    type="number"
+  2014→                    value={analysisStore.conditions.temperature}
+  2015→                    onChange={(e) => analysisStore.setConditions({ temperature: parseFloat(e.target.value) || 0 })}
+  2016→                  />
+  2017→                </div>
+  2018→                <div>
+  2019→                  <div className="flex items-center gap-2 mb-1">
+  2020→                    <Label className="text-xs">Dissolved O₂ (mg/L)</Label>
+  2021→                    {(() => {
+  2022→                      const sev = getConditionSeverity('dissolvedOxygen', analysisStore.conditions.dissolvedOxygen)
+  2023→                      return (
+  2024→                        <>
+  2025→                          <span className={`size-2 rounded-full ${sev.color === 'red' ? 'bg-red-500' : sev.color === 'amber' ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+  2026→                          <span className="text-[10px] text-muted-foreground">{sev.label}</span>
+  2027→                        </>
+  2028→                      )
+  2029→                    })()}
+  2030→                  </div>
+  2031→                  <Input
+  2032→                    type="number"
+  2033→                    step="0.1"
+  2034→                    value={analysisStore.conditions.dissolvedOxygen}
+  2035→                    onChange={(e) => analysisStore.setConditions({ dissolvedOxygen: parseFloat(e.target.value) || 0 })}
+  2036→                  />
+  2037→                </div>
+  2038→                <div>
+  2039→                  <div className="flex items-center gap-2 mb-1">
+  2040→                    <Label className="text-xs">Light Exposure (lux)</Label>
+  2041→                    {(() => {
+  2042→                      const sev = getConditionSeverity('lightExposure', analysisStore.conditions.lightExposure)
+  2043→                      return (
+  2044→                        <>
+  2045→                          <span className={`size-2 rounded-full ${sev.color === 'red' ? 'bg-red-500' : sev.color === 'amber' ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+  2046→                          <span className="text-[10px] text-muted-foreground">{sev.label}</span>
+  2047→                        </>
+  2048→                      )
+  2049→                    })()}
+  2050→                  </div>
+  2051→                  <Input
+  2052→                    type="number"
+  2053→                    value={analysisStore.conditions.lightExposure}
+  2054→                    onChange={(e) => analysisStore.setConditions({ lightExposure: parseFloat(e.target.value) || 0 })}
+  2055→                  />
+  2056→                </div>
+  2057→              </div>
+  2058→            </CardContent>
+  2059→          </Card>
+  2060→
+  2061→          <div className="flex gap-3">
+  2062→            <Button
+  2063→              className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+  2064→              onClick={runSimulation}
+  2065→              disabled={analysisStore.running}
+  2066→            >
+  2067→              {analysisStore.running ? (
+  2068→                <>
+  2069→                  <RefreshCw className="size-4 animate-spin mr-2" /> Analyzing...
+  2070→                </>
+  2071→              ) : (
+  2072→                <>
+  2073→                  <Play className="size-4 mr-2" /> Run Analysis
+  2074→                </>
+  2075→              )}
+  2076→            </Button>
+  2077→            <Button variant="outline" onClick={analysisStore.reset}>
+  2078→              Reset
+  2079→            </Button>
+  2080→          </div>
+  2081→        </div>
+  2082→
+  2083→        {/* Results */}
+  2084→        <div className="space-y-4">
+  2085→          <AnimatePresence mode="wait">
+  2086→            {analysisStore.running && (
+  2087→              <motion.div
+  2088→                key="loading"
+  2089→                initial={{ opacity: 0 }}
+  2090→                animate={{ opacity: 1 }}
+  2091→                exit={{ opacity: 0 }}
+  2092→                className="flex items-center justify-center py-8"
+  2093→              >
+  2094→                <div className="flex flex-col items-center gap-4">
+  2095→                  {SIM_STEPS.map((step, i) => (
+  2096→                    <motion.div
+  2097→                      key={step}
+  2098→                      initial={{ opacity: 0, x: -20 }}
+  2099→                      animate={{ opacity: currentStep >= i ? 1 : 0.3, x: 0 }}
+  2100→                      transition={{ delay: i * 0.2 }}
+  2101→                      className="flex items-center gap-3"
+  2102→                    >
+  2103→                      {currentStep > i ? (
+  2104→                        <CheckCircle2 className="size-4 text-emerald-500" />
+  2105→                      ) : currentStep === i ? (
+  2106→                        <RefreshCw className="size-4 text-emerald-500 animate-spin" />
+  2107→                      ) : (
+  2108→                        <Clock className="size-4 text-muted-foreground" />
+  2109→                      )}
+  2110→                      <span className={`text-sm ${currentStep >= i ? 'font-medium' : 'text-muted-foreground'}`}>
+  2111→                        {step}
+  2112→                      </span>
+  2113→                    </motion.div>
+  2114→                  ))}
+  2115→                  <Progress value={(currentStep / SIM_STEPS.length) * 100} className="w-64 h-2 [&>div]:bg-emerald-500" />
+  2116→                </div>
+  2117→              </motion.div>
+  2118→            )}
+  2119→
+  2120→            {analysisStore.result && !analysisStore.running && (
+  2121→              <motion.div
+  2122→                key="results"
+  2123→                initial={{ opacity: 0, y: 20 }}
+  2124→                animate={{ opacity: 1, y: 0 }}
+  2125→                className="space-y-4"
+  2126→              >
+  2127→                {/* Overall Score Gauge */}
+  2128→                <Card>
+  2129→                  <CardHeader>
+  2130→                    <CardTitle>Overall Stability Score</CardTitle>
+  2131→                  </CardHeader>
+  2132→                  <CardContent className="flex flex-col items-center gap-3">
+  2133→                    <div className="relative w-32 h-32">
+  2134→                      <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+  2135→                        <circle cx="50" cy="50" r="40" fill="none" stroke="currentColor" strokeWidth="8" className="text-muted/30" />
+  2136→                        <circle
+  2137→                          cx="50" cy="50" r="40" fill="none"
+  2138→                          stroke={analysisStore.result.overallScore >= 80 ? '#10b981' : analysisStore.result.overallScore >= 60 ? '#14b8a6' : analysisStore.result.overallScore >= 40 ? '#f59e0b' : '#ef4444'}
+  2139→                          strokeWidth="8"
+  2140→                          strokeDasharray={`${(analysisStore.result.overallScore / 100) * 251.33} 251.33`}
+  2141→                          strokeLinecap="round"
+  2142→                        />
+  2143→                      </svg>
+  2144→                      <div className="absolute inset-0 flex items-center justify-center">
+  2145→                        <span className={`text-3xl font-bold ${getScoreColor(analysisStore.result.overallScore)}`}>
+  2146→                          {analysisStore.result.overallScore}
+  2147→                        </span>
+  2148→                      </div>
+  2149→                    </div>
+  2150→                    <Badge className={riskColors[analysisStore.result.riskLevel]}>
+  2151→                      Risk: {analysisStore.result.riskLevel}
+  2152→                    </Badge>
+  2153→                  </CardContent>
+  2154→                </Card>
+  2155→
+  2156→                {/* Risk Breakdown */}
+  2157→                <Card>
+  2158→                  <CardHeader>
+  2159→                    <CardTitle>Risk Breakdown</CardTitle>
+  2160→                    <CardDescription>Degradation pathway risk assessment</CardDescription>
+  2161→                  </CardHeader>
+  2162→                  <CardContent className="space-y-3">
+  2163→                    {Object.entries(analysisStore.result.risks).map(([key, val]: [string, any]) => {
+  2164→                      const labelMap: Record<string, string> = {
+  2165→                        hydrolysis: 'Hydrolysis',
+  2166→                        oxidation: 'Oxidation',
+  2167→                        photolysis: 'Photolysis',
+  2168→                        thermal: 'Thermal',
+  2169→                      }
+  2170→                      return (
+  2171→                        <div key={key} className="space-y-1">
+  2172→                          <div className="flex items-center justify-between text-sm">
+  2173→                            <span className="font-medium">{labelMap[key]}</span>
+  2174→                            <Badge className={riskColors[val.level]}>{val.level}</Badge>
+  2175→                          </div>
+  2176→                          <Progress value={val.score} className="h-2" />
+  2177→                        </div>
+  2178→                      )
+  2179→                    })}
+  2180→                    <Separator className="my-3" />
+  2181→                    <ResponsiveContainer width="100%" height={250}>
+  2182→                      <RadarChart data={Object.entries(analysisStore.result.risks).map(([key, val]: [string, any]) => {
+  2183→                        const labelMap: Record<string, string> = {
+  2184→                          hydrolysis: 'Hydrolysis',
+  2185→                          oxidation: 'Oxidation',
+  2186→                          photolysis: 'Photolysis',
+  2187→                          thermal: 'Thermal',
+  2188→                        }
+  2189→                        return { risk: labelMap[key], score: val.score }
+  2190→                      })}>
+  2191→                        <PolarGrid className="stroke-muted" />
+  2192→                        <PolarAngleAxis dataKey="risk" className="text-xs" />
+  2193→                        <PolarRadiusAxis domain={[0, 100]} className="text-xs" />
+  2194→                        <Radar name="Risk Score" dataKey="score" stroke="#10b981" fill="#10b981" fillOpacity={0.3} />
+  2195→                        <Tooltip contentStyle={{ borderRadius: 8 }} />
+  2196→                      </RadarChart>
+  2197→                    </ResponsiveContainer>
+  2198→                  </CardContent>
+  2199→                </Card>
+
+[showing lines 1200-2199 of 5705; use offset=2200 with limit to continue reading]

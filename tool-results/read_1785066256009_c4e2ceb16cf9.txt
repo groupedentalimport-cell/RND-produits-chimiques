@@ -1,0 +1,602 @@
+  4015→function AnalyticsPage() {
+  4016→  const [loading, setLoading] = useState(true)
+  4017→  const [refreshKey, setRefreshKey] = useState(0)
+  4018→  const [statsData, setStatsData] = useState<{
+  4019→    totalMolecules: number; activeStudies: number; avgStabilityScore: number;
+  4020→    riskDistribution: Record<string, number>; recentActivity: any[];
+  4021→    studiesByStatus: { status: string; _count: { status: number } }[];
+  4022→    totalReports: number;
+  4023→  } | null>(null)
+  4024→  const [molecules, setMolecules] = useState<MoleculeData[]>([])
+  4025→  const [studies, setStudies] = useState<any[]>([])
+  4026→
+  4027→  useEffect(() => {
+  4028→    let cancelled = false
+  4029→    const loadData = async () => {
+  4030→      try {
+  4031→        const [statsRes, molRes, stdRes] = await Promise.all([
+  4032→          fetch('/api/stats'),
+  4033→          fetch('/api/molecules?limit=1000'),
+  4034→          fetch('/api/studies?limit=1000'),
+  4035→        ])
+  4036→        if (!cancelled && statsRes.ok) {
+  4037→          const sd = await statsRes.json()
+  4038→          if (!cancelled) setStatsData(sd)
+  4039→        }
+  4040→        if (!cancelled && molRes.ok) {
+  4041→          const md = await molRes.json()
+  4042→          const transformed: MoleculeData[] = (md.molecules || []).map((m: any) => ({
+  4043→            id: m.id, name: m.name, casNumber: m.casNumber || '', smiles: m.smiles || '',
+  4044→            formula: m.formula || '', molarMass: m.molarMass ?? 0, logP: m.logP ?? 0,
+  4045→            stabilityScore: m.predictedStabilityScore ?? 0, riskLevel: m.riskLevel || 'low',
+  4046→            dataSource: m.dataSource || 'Manual', description: m.description || '',
+  4047→            meltingPoint: m.meltingPoint ?? null, boilingPoint: m.boilingPoint ?? null,
+  4048→          }))
+  4049→          if (!cancelled) setMolecules(transformed)
+  4050→        }
+  4051→        if (!cancelled && stdRes.ok) {
+  4052→          const sd = await stdRes.json()
+  4053→          if (!cancelled) setStudies(sd.studies || [])
+  4054→        }
+  4055→      } catch { /* fallback */ }
+  4056→      if (!cancelled) setLoading(false)
+  4057→    }
+  4058→    loadData()
+  4059→    return () => { cancelled = true }
+  4060→  }, [refreshKey])
+  4061→
+  4062→  const handleRefresh = () => { setLoading(true); setRefreshKey(k => k + 1) }
+  4063→
+  4064→  // Risk distribution pie chart data
+  4065→  const riskPieData = statsData ? [
+  4066→    { name: 'Low', value: statsData.riskDistribution.low || 0, fill: '#10b981' },
+  4067→    { name: 'Moderate', value: statsData.riskDistribution.moderate || 0, fill: '#f59e0b' },
+  4068→    { name: 'High', value: statsData.riskDistribution.high || 0, fill: '#ef4444' },
+  4069→    { name: 'Critical', value: statsData.riskDistribution.critical || 0, fill: '#dc2626' },
+  4070→  ] : []
+  4071→
+  4072→  // Molecules by data source bar chart
+  4073→  const sourceMap: Record<string, number> = {}
+  4074→  molecules.forEach((m) => {
+  4075→    const src = (m.dataSource || 'manual').toLowerCase()
+  4076→    sourceMap[src] = (sourceMap[src] || 0) + 1
+  4077→  })
+  4078→  const sourceBarData = Object.entries(sourceMap).map(([k, v]) => ({
+  4079→    source: k.charAt(0).toUpperCase() + k.slice(1),
+  4080→    count: v,
+  4081→    fill: k === 'pubchem' ? '#10b981' : k === 'chembl' ? '#14b8a6' : '#06b6d4',
+  4082→  }))
+  4083→
+  4084→  // Stability score distribution histogram (bins of 10)
+  4085→  const bins = Array.from({ length: 10 }, (_, i) => ({
+  4086→    range: `${i * 10}-${i * 10 + 9}`,
+  4087→    count: 0,
+  4088→  }))
+  4089→  molecules.forEach((m) => {
+  4090→    const idx = Math.min(9, Math.max(0, Math.floor(m.stabilityScore / 10)))
+  4091→    bins[idx].count += 1
+  4092→  })
+  4093→
+  4094→  // Study status donut chart
+  4095→  const statusColors: Record<string, string> = {
+  4096→    draft: '#94a3b8',
+  4097→    in_progress: '#14b8a6',
+  4098→    completed: '#10b981',
+  4099→    under_review: '#f59e0b',
+  4100→    approved: '#22c55e',
+  4101→    rejected: '#ef4444',
+  4102→  }
+  4103→  const statusDonutData = statsData?.studiesByStatus?.map((s) => ({
+  4104→    name: s.status.replace('_', ' '),
+  4105→    value: s._count.status,
+  4106→    fill: statusColors[s.status] || '#94a3b8',
+  4107→  })) || []
+  4108→
+  4109→  // Temperature vs Shelf Life scatter data
+  4110→  const scatterData = studies
+  4111→    .filter((s) => s.predictedShelfLifeMonths !== null && s.predictedShelfLifeMonths !== undefined)
+  4112→    .map((s) => ({
+  4113→      x: s.temperatureC,
+  4114→      y: s.predictedShelfLifeMonths,
+  4115→      name: s.substanceName,
+  4116→      code: s.studyCode,
+  4117→    }))
+  4118→
+  4119→  // Top 5 most / least stable
+  4120→  const sortedByStability = [...molecules].sort((a, b) => b.stabilityScore - a.stabilityScore)
+  4121→  const top5Stable = sortedByStability.slice(0, 5)
+  4122→  const top5Unstable = [...molecules].sort((a, b) => a.stabilityScore - b.stabilityScore).slice(0, 5)
+  4123→
+  4124→  // Scatter data: Stability Score vs Molar Mass
+  4125→  const mwScatterData = molecules
+  4126→    .filter((m) => m.molarMass > 0 && m.stabilityScore > 0)
+  4127→    .map((m) => ({ molarMass: m.molarMass, stabilityScore: m.stabilityScore, name: m.name }))
+  4128→
+  4129→  // Radar data: Multi-property comparison for top 4 molecules
+  4130→  const radarMolecules = sortedByStability.slice(0, 4)
+  4131→  const radarProperties = ['Hydrolysis', 'Thermal', 'Photolytic', 'Oxidative', 'Solubility', 'LogP']
+  4132→  const radarData = radarProperties.map((prop) => {
+  4133→    const entry: Record<string, string | number> = { property: prop }
+  4134→    radarMolecules.forEach((mol) => {
+  4135→      let val = 0
+  4136→      if (prop === 'Hydrolysis') val = mol.stabilityScore * 0.72
+  4137→      else if (prop === 'Thermal') val = Math.min(100, mol.stabilityScore * 1.05 + (mol.molarMass > 150 ? 8 : 0))
+  4138→      else if (prop === 'Photolytic') val = mol.stabilityScore * 0.65 + Math.random() * 5
+  4139→      else if (prop === 'Oxidative') val = mol.stabilityScore * 0.80
+  4140→      else if (prop === 'Solubility') val = Math.min(100, Math.max(0, 100 - (mol.logP ?? 0) * 20))
+  4141→      else if (prop === 'LogP') val = Math.min(100, Math.max(0, (mol.logP ?? 0) * 25 + 30))
+  4142→      entry[mol.name] = Math.round(Math.min(100, Math.max(0, val)))
+  4143→    })
+  4144→    return entry
+  4145→  })
+  4146→  const RADAR_COLORS = ['#10b981', '#14b8a6', '#06b6d4', '#f59e0b']
+  4147→
+  4148→  // Correlation matrix (hardcoded realistic values for molecular properties)
+  4149→  const corrLabels = ['MW', 'LogP', 'Solubility', 'Hydrolysis', 'Thermal', 'Stability']
+  4150→  const correlationMatrix = [
+  4151→    [ 1.00,  0.42, -0.55,  0.18,  0.30,  0.25],
+  4152→    [ 0.42,  1.00, -0.78, -0.15,  0.22,  0.08],
+  4153→    [-0.55, -0.78,  1.00,  0.12, -0.35,  0.45],
+  4154→    [ 0.18, -0.15,  0.12,  1.00,  0.72,  0.82],
+  4155→    [ 0.30,  0.22, -0.35,  0.72,  1.00,  0.75],
+  4156→    [ 0.25,  0.08,  0.45,  0.82,  0.75,  1.00],
+  4157→  ]
+  4158→
+  4159→  // Export analytics CSV
+  4160→  const exportAnalyticsCSV = () => {
+  4161→    const rows: string[] = ['Name,CAS,MW,LogP,Stability,Risk']
+  4162→    molecules.forEach((m) => {
+  4163→      rows.push(`${m.name},${m.casNumber},${m.molarMass},${m.logP ?? ''},${m.stabilityScore},${m.riskLevel}`)
+  4164→    })
+  4165→    rows.push('')
+  4166→    rows.push('--- QSPR Model Performance ---')
+  4167→    QSPR_MODEL_PERFORMANCE.forEach((model) => {
+  4168→      rows.push(`${model.model},R2=${model.r2},RMSE=${model.rmse},MAE=${model.mae}`)
+  4169→    })
+  4170→    rows.push('')
+  4171→    rows.push('--- Correlation Matrix ---')
+  4172→    rows.push(corrLabels.join(','))
+  4173→    correlationMatrix.forEach((row) => {
+  4174→      rows.push(row.map((v) => v.toFixed(2)).join(','))
+  4175→    })
+  4176→    const blob = new Blob([rows.join('\n')], { type: 'text/csv' })
+  4177→    const url = URL.createObjectURL(blob)
+  4178→    const a = document.createElement('a')
+  4179→    a.href = url
+  4180→    a.download = 'chemstab-analytics.csv'
+  4181→    a.click()
+  4182→    URL.revokeObjectURL(url)
+  4183→  }
+  4184→
+  4185→  return (
+  4186→    <motion.div
+  4187→      initial={{ opacity: 0, y: 20 }}
+  4188→      animate={{ opacity: 1, y: 0 }}
+  4189→      transition={{ duration: 0.4 }}
+  4190→      className="space-y-6"
+  4191→    >
+  4192→      <div className="flex items-center justify-between">
+  4193→        <div>
+  4194→          <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-400 dark:to-teal-400 bg-clip-text text-transparent">Analytics &amp; Insights</h1>
+  4195→          <p className="text-muted-foreground">QSPR model performance and platform-wide chemical stability analytics</p>
+  4196→        </div>
+  4197→        <div className="flex items-center gap-2">
+  4198→          <Button variant="outline" size="sm" onClick={exportAnalyticsCSV} className="gap-2">
+  4199→            <Download className="size-4" /> Export Analytics
+  4200→          </Button>
+  4201→          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={loading}>
+  4202→            <RefreshCw className={`size-4 mr-1 ${loading ? 'animate-spin' : ''}`} /> Refresh
+  4203→          </Button>
+  4204→        </div>
+  4205→      </div>
+  4206→
+  4207→      {/* QSPR Model Performance */}
+  4208→      <Card className="backdrop-blur-sm bg-card/80">
+  4209→        <CardHeader>
+  4210→          <CardTitle className="flex items-center gap-2">
+  4211→            <Cpu className="size-5 text-emerald-600 dark:text-emerald-400" />
+  4212→            QSPR Model Performance
+  4213→          </CardTitle>
+  4214→          <CardDescription>Prediction accuracy metrics for active quantitative structure-property relationship models</CardDescription>
+  4215→        </CardHeader>
+  4216→        <CardContent>
+  4217→          {loading ? (
+  4218→            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+  4219→              {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-32 w-full" />)}
+  4220→            </div>
+  4221→          ) : (
+  4222→            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+  4223→              {QSPR_MODEL_PERFORMANCE.map((model) => (
+  4224→                <motion.div
+  4225→                  key={model.model}
+  4226→                  whileHover={{ y: -2 }}
+  4227→                  className="p-4 rounded-xl border bg-card relative overflow-hidden"
+  4228→                >
+  4229→                  <div className="absolute inset-x-0 top-0 h-1" style={{ background: model.fill }} />
+  4230→                  <div className="flex items-center gap-2 mb-3">
+  4231→                    <Brain className="size-4" style={{ color: model.fill }} />
+  4232→                    <p className="font-semibold">{model.model}</p>
+  4233→                  </div>
+  4234→                  <div className="space-y-1.5 text-sm">
+  4235→                    <div className="flex items-center justify-between">
+  4236→                      <span className="text-muted-foreground">R²</span>
+  4237→                      <span className="font-bold" style={{ color: model.fill }}>{model.r2.toFixed(2)}</span>
+  4238→                    </div>
+  4239→                    <Progress value={model.r2 * 100} className="h-1.5" />
+  4240→                    <div className="flex items-center justify-between pt-1">
+  4241→                      <span className="text-muted-foreground">RMSE</span>
+  4242→                      <span className="font-medium">{model.rmse.toFixed(2)}</span>
+  4243→                    </div>
+  4244→                    <div className="flex items-center justify-between">
+  4245→                      <span className="text-muted-foreground">MAE</span>
+  4246→                      <span className="font-medium">{model.mae.toFixed(2)}</span>
+  4247→                    </div>
+  4248→                  </div>
+  4249→                </motion.div>
+  4250→              ))}
+  4251→            </div>
+  4252→          )}
+  4253→        </CardContent>
+  4254→      </Card>
+  4255→
+  4256→      {/* Property Distribution Charts */}
+  4257→      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+  4258→        <Card className="backdrop-blur-sm bg-card/80">
+  4259→          <CardHeader>
+  4260→            <CardTitle>Risk Level Distribution</CardTitle>
+  4261→            <CardDescription>Molecule count by risk classification</CardDescription>
+  4262→          </CardHeader>
+  4263→          <CardContent>
+  4264→            {loading ? (
+  4265→              <Skeleton className="h-[280px] w-full" />
+  4266→            ) : riskPieData.length === 0 ? (
+  4267→              <p className="text-sm text-muted-foreground py-20 text-center">No data available</p>
+  4268→            ) : (
+  4269→              <ResponsiveContainer width="100%" height={280}>
+  4270→                <PieChart>
+  4271→                  <Pie data={riskPieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} label>
+  4272→                    {riskPieData.map((entry, index) => (
+  4273→                      <Cell key={`cell-${index}`} fill={entry.fill} />
+  4274→                    ))}
+  4275→                  </Pie>
+  4276→                  <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb' }} />
+  4277→                  <Legend />
+  4278→                </PieChart>
+  4279→              </ResponsiveContainer>
+  4280→            )}
+  4281→          </CardContent>
+  4282→        </Card>
+  4283→
+  4284→        <Card className="backdrop-blur-sm bg-card/80">
+  4285→          <CardHeader>
+  4286→            <CardTitle>Molecules by Data Source</CardTitle>
+  4287→            <CardDescription>Origin of molecule records</CardDescription>
+  4288→          </CardHeader>
+  4289→          <CardContent>
+  4290→            {loading ? (
+  4291→              <Skeleton className="h-[280px] w-full" />
+  4292→            ) : sourceBarData.length === 0 ? (
+  4293→              <p className="text-sm text-muted-foreground py-20 text-center">No data available</p>
+  4294→            ) : (
+  4295→              <ResponsiveContainer width="100%" height={280}>
+  4296→                <BarChart data={sourceBarData}>
+  4297→                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+  4298→                  <XAxis dataKey="source" className="text-xs" />
+  4299→                  <YAxis className="text-xs" allowDecimals={false} />
+  4300→                  <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb' }} />
+  4301→                  <Bar dataKey="count" radius={[6, 6, 0, 0]}>
+  4302→                    {sourceBarData.map((entry, index) => (
+  4303→                      <Cell key={`cell-${index}`} fill={entry.fill} />
+  4304→                    ))}
+  4305→                  </Bar>
+  4306→                </BarChart>
+  4307→              </ResponsiveContainer>
+  4308→            )}
+  4309→          </CardContent>
+  4310→        </Card>
+  4311→      </div>
+  4312→
+  4313→      {/* Stability Score Distribution + Study Status */}
+  4314→      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+  4315→        <Card className="backdrop-blur-sm bg-card/80">
+  4316→          <CardHeader>
+  4317→            <CardTitle>Stability Score Distribution</CardTitle>
+  4318→            <CardDescription>Histogram of molecule predicted stability scores</CardDescription>
+  4319→          </CardHeader>
+  4320→          <CardContent>
+  4321→            {loading ? (
+  4322→              <Skeleton className="h-[280px] w-full" />
+  4323→            ) : (
+  4324→              <ResponsiveContainer width="100%" height={280}>
+  4325→                <BarChart data={bins}>
+  4326→                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+  4327→                  <XAxis dataKey="range" className="text-xs" />
+  4328→                  <YAxis className="text-xs" allowDecimals={false} />
+  4329→                  <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb' }} />
+  4330→                  <Bar dataKey="count" fill="#10b981" radius={[6, 6, 0, 0]} />
+  4331→                </BarChart>
+  4332→              </ResponsiveContainer>
+  4333→            )}
+  4334→          </CardContent>
+  4335→        </Card>
+  4336→
+  4337→        <Card className="backdrop-blur-sm bg-card/80">
+  4338→          <CardHeader>
+  4339→            <CardTitle>Study Status Distribution</CardTitle>
+  4340→            <CardDescription>Current state of stability studies</CardDescription>
+  4341→          </CardHeader>
+  4342→          <CardContent>
+  4343→            {loading ? (
+  4344→              <Skeleton className="h-[280px] w-full" />
+  4345→            ) : statusDonutData.length === 0 ? (
+  4346→              <p className="text-sm text-muted-foreground py-20 text-center">No data available</p>
+  4347→            ) : (
+  4348→              <ResponsiveContainer width="100%" height={280}>
+  4349→                <PieChart>
+  4350→                  <Pie data={statusDonutData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={90} label>
+  4351→                    {statusDonutData.map((entry, index) => (
+  4352→                      <Cell key={`cell-${index}`} fill={entry.fill} />
+  4353→                    ))}
+  4354→                  </Pie>
+  4355→                  <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb' }} />
+  4356→                  <Legend />
+  4357→                </PieChart>
+  4358→              </ResponsiveContainer>
+  4359→            )}
+  4360→          </CardContent>
+  4361→        </Card>
+  4362→      </div>
+  4363→
+  4364→      {/* Temperature vs Shelf Life Scatter */}
+  4365→      <Card className="backdrop-blur-sm bg-card/80">
+  4366→        <CardHeader>
+  4367→          <CardTitle>Temperature vs. Predicted Shelf Life</CardTitle>
+  4368→          <CardDescription>Relationship between study temperature and predicted shelf life (months)</CardDescription>
+  4369→        </CardHeader>
+  4370→        <CardContent>
+  4371→          {loading ? (
+  4372→            <Skeleton className="h-[300px] w-full" />
+  4373→          ) : scatterData.length === 0 ? (
+  4374→            <p className="text-sm text-muted-foreground py-20 text-center">No shelf life data available</p>
+  4375→          ) : (
+  4376→            <ResponsiveContainer width="100%" height={300}>
+  4377→              <ScatterChart>
+  4378→                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+  4379→                <XAxis type="number" dataKey="x" name="Temperature" unit="°C" className="text-xs" />
+  4380→                <YAxis type="number" dataKey="y" name="Shelf Life" unit=" mo" className="text-xs" />
+  4381→                <Tooltip
+  4382→                  cursor={{ strokeDasharray: '3 3' }}
+  4383→                  contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb' }}
+  4384→                  formatter={(val: any, name: any) => {
+  4385→                    if (name === 'Shelf Life') return [`${val} months`, name]
+  4386→                    if (name === 'Temperature') return [`${val}°C`, name]
+  4387→                    return [val, name]
+  4388→                  }}
+  4389→                />
+  4390→                <Scatter name="Studies" data={scatterData} fill="#14b8a6" />
+  4391→              </ScatterChart>
+  4392→            </ResponsiveContainer>
+  4393→          )}
+  4394→        </CardContent>
+  4395→      </Card>
+  4396→
+  4397→      {/* Top 5 Most / Least Stable Tables */}
+  4398→      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+  4399→        <Card className="backdrop-blur-sm bg-card/80">
+  4400→          <CardHeader>
+  4401→            <CardTitle className="flex items-center gap-2">
+  4402→              <ArrowUpRight className="size-5 text-emerald-600 dark:text-emerald-400" />
+  4403→              Top 5 Most Stable Molecules
+  4404→            </CardTitle>
+  4405→          </CardHeader>
+  4406→          <CardContent className="p-0">
+  4407→            <div className="max-h-72 overflow-y-auto">
+  4408→              <Table>
+  4409→                <TableHeader>
+  4410→                  <TableRow>
+  4411→                    <TableHead>Name</TableHead>
+  4412→                    <TableHead>Formula</TableHead>
+  4413→                    <TableHead>Score</TableHead>
+  4414→                  </TableRow>
+  4415→                </TableHeader>
+  4416→                <TableBody>
+  4417→                  {loading ? (
+  4418→                    Array.from({ length: 5 }).map((_, i) => (
+  4419→                      <TableRow key={i}><TableCell colSpan={3}><Skeleton className="h-8 w-full" /></TableCell></TableRow>
+  4420→                    ))
+  4421→                  ) : top5Stable.length === 0 ? (
+  4422→                    <TableRow><TableCell colSpan={3} className="text-center text-muted-foreground py-6">No data</TableCell></TableRow>
+  4423→                  ) : (
+  4424→                    top5Stable.map((mol, idx) => (
+  4425→                      <TableRow key={mol.id} className={idx % 2 === 1 ? 'bg-muted/30' : ''}>
+  4426→                        <TableCell className="font-medium">{mol.name}</TableCell>
+  4427→                        <TableCell className="font-mono text-xs"><Formula>{mol.formula}</Formula></TableCell>
+  4428→                        <TableCell>
+  4429→                          <span className={`font-bold ${getScoreColor(mol.stabilityScore)}`}>{mol.stabilityScore}</span>
+  4430→                        </TableCell>
+  4431→                      </TableRow>
+  4432→                    ))
+  4433→                  )}
+  4434→                </TableBody>
+  4435→              </Table>
+  4436→            </div>
+  4437→          </CardContent>
+  4438→        </Card>
+  4439→
+  4440→        <Card className="backdrop-blur-sm bg-card/80">
+  4441→          <CardHeader>
+  4442→            <CardTitle className="flex items-center gap-2">
+  4443→              <ArrowDownRight className="size-5 text-amber-600 dark:text-amber-400" />
+  4444→              Top 5 Least Stable Molecules
+  4445→            </CardTitle>
+  4446→          </CardHeader>
+  4447→          <CardContent className="p-0">
+  4448→            <div className="max-h-72 overflow-y-auto">
+  4449→              <Table>
+  4450→                <TableHeader>
+  4451→                  <TableRow>
+  4452→                    <TableHead>Name</TableHead>
+  4453→                    <TableHead>Formula</TableHead>
+  4454→                    <TableHead>Score</TableHead>
+  4455→                  </TableRow>
+  4456→                </TableHeader>
+  4457→                <TableBody>
+  4458→                  {loading ? (
+  4459→                    Array.from({ length: 5 }).map((_, i) => (
+  4460→                      <TableRow key={i}><TableCell colSpan={3}><Skeleton className="h-8 w-full" /></TableCell></TableRow>
+  4461→                    ))
+  4462→                  ) : top5Unstable.length === 0 ? (
+  4463→                    <TableRow><TableCell colSpan={3} className="text-center text-muted-foreground py-6">No data</TableCell></TableRow>
+  4464→                  ) : (
+  4465→                    top5Unstable.map((mol, idx) => (
+  4466→                      <TableRow key={mol.id} className={idx % 2 === 1 ? 'bg-muted/30' : ''}>
+  4467→                        <TableCell className="font-medium">{mol.name}</TableCell>
+  4468→                        <TableCell className="font-mono text-xs"><Formula>{mol.formula}</Formula></TableCell>
+  4469→                        <TableCell>
+  4470→                          <span className={`font-bold ${getScoreColor(mol.stabilityScore)}`}>{mol.stabilityScore}</span>
+  4471→                        </TableCell>
+  4472→                      </TableRow>
+  4473→                    ))
+  4474→                  )}
+  4475→                </TableBody>
+  4476→              </Table>
+  4477→            </div>
+  4478→          </CardContent>
+  4479→        </Card>
+  4480→      </div>
+  4481→
+  4482→      {/* Stability vs Molecular Weight Scatter */}
+  4483→      <Card className="backdrop-blur-sm bg-card/80">
+  4484→        <CardHeader>
+  4485→          <CardTitle className="flex items-center gap-2">
+  4486→            <TrendingUp className="size-5 text-emerald-600 dark:text-emerald-400" />
+  4487→            Stability vs Molecular Weight
+  4488→          </CardTitle>
+  4489→          <CardDescription>Correlation between molecular weight and predicted stability</CardDescription>
+  4490→        </CardHeader>
+  4491→        <CardContent>
+  4492→          {loading ? (
+  4493→            <Skeleton className="h-[300px] w-full" />
+  4494→          ) : mwScatterData.length === 0 ? (
+  4495→            <p className="text-sm text-muted-foreground py-20 text-center">No data available</p>
+  4496→          ) : (
+  4497→            <ResponsiveContainer width="100%" height={300}>
+  4498→              <ScatterChart>
+  4499→                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+  4500→                <XAxis dataKey="molarMass" name="MW" type="number" className="text-xs" label={{ value: 'MW (g/mol)', position: 'insideBottom', offset: -5 }} />
+  4501→                <YAxis dataKey="stabilityScore" name="Score" type="number" domain={[0, 100]} className="text-xs" label={{ value: 'Stability', angle: -90, position: 'insideLeft' }} />
+  4502→                <Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb' }} />
+  4503→                <Scatter name="Molecules" data={mwScatterData} fill="#10b981" />
+  4504→              </ScatterChart>
+  4505→            </ResponsiveContainer>
+  4506→          )}
+  4507→        </CardContent>
+  4508→      </Card>
+  4509→
+  4510→      {/* Property Comparison Radar */}
+  4511→      <Card className="backdrop-blur-sm bg-card/80">
+  4512→        <CardHeader>
+  4513→          <CardTitle className="flex items-center gap-2">
+  4514→            <Activity className="size-5 text-teal-600 dark:text-teal-400" />
+  4515→            Property Comparison Radar
+  4516→          </CardTitle>
+  4517→          <CardDescription>Compare molecules across multiple stability dimensions</CardDescription>
+  4518→        </CardHeader>
+  4519→        <CardContent>
+  4520→          {loading ? (
+  4521→            <Skeleton className="h-[300px] w-full" />
+  4522→          ) : radarData.length === 0 ? (
+  4523→            <p className="text-sm text-muted-foreground py-20 text-center">No data available</p>
+  4524→          ) : (
+  4525→            <ResponsiveContainer width="100%" height={300}>
+  4526→              <RadarChart data={radarData}>
+  4527→                <PolarGrid className="stroke-muted" />
+  4528→                <PolarAngleAxis dataKey="property" className="text-xs" />
+  4529→                <PolarRadiusAxis domain={[0, 100]} className="text-xs" />
+  4530→                {radarMolecules.map((mol, i) => (
+  4531→                  <Radar key={mol.name} name={mol.name} dataKey={mol.name} stroke={RADAR_COLORS[i]} fill={RADAR_COLORS[i]} fillOpacity={0.15} />
+  4532→                ))}
+  4533→                <Legend />
+  4534→                <Tooltip contentStyle={{ borderRadius: 8 }} />
+  4535→              </RadarChart>
+  4536→            </ResponsiveContainer>
+  4537→          )}
+  4538→        </CardContent>
+  4539→      </Card>
+  4540→
+  4541→      {/* Property Correlation Heatmap */}
+  4542→      <Card className="backdrop-blur-sm bg-card/80">
+  4543→        <CardHeader>
+  4544→          <CardTitle className="flex items-center gap-2">
+  4545→            <BarChart3 className="size-5 text-cyan-600 dark:text-cyan-400" />
+  4546→            Property Correlation Matrix
+  4547→          </CardTitle>
+  4548→          <CardDescription>Heatmap showing correlations between molecular properties</CardDescription>
+  4549→        </CardHeader>
+  4550→        <CardContent>
+  4551→          <div className="space-y-1">
+  4552→            {/* Header row */}
+  4553→            <div className="flex gap-1">
+  4554→              <div className="size-12" />
+  4555→              {corrLabels.map((label) => (
+  4556→                <div key={label} className="size-12 flex items-center justify-center text-xs font-medium text-muted-foreground">{label}</div>
+  4557→              ))}
+  4558→            </div>
+  4559→            {correlationMatrix.map((row, i) => (
+  4560→              <div key={i} className="flex gap-1">
+  4561→                <div className="size-12 flex items-center justify-center text-xs font-medium text-muted-foreground">{corrLabels[i]}</div>
+  4562→                {row.map((cell, j) => (
+  4563→                  <div
+  4564→                    key={j}
+  4565→                    className={`size-12 rounded flex items-center justify-center text-xs font-mono cursor-default transition-colors ${
+  4566→                      cell > 0.7 ? 'bg-emerald-500 text-white' :
+  4567→                      cell > 0.4 ? 'bg-emerald-200 text-emerald-800 dark:bg-emerald-800/40 dark:text-emerald-200' :
+  4568→                      cell > 0.1 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300' :
+  4569→                      cell < -0.4 ? 'bg-red-200 text-red-800 dark:bg-red-800/40 dark:text-red-200' :
+  4570→                      cell < -0.1 ? 'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-300' :
+  4571→                      'bg-muted text-muted-foreground'
+  4572→                    }`}
+  4573→                    title={`${corrLabels[i]} ↔ ${corrLabels[j]}: ${cell.toFixed(2)}`}
+  4574→                  >
+  4575→                    {cell.toFixed(1)}
+  4576→                  </div>
+  4577→                ))}
+  4578→              </div>
+  4579→            ))}
+  4580→          </div>
+  4581→          <div className="flex items-center justify-center gap-2 mt-3 text-xs text-muted-foreground">
+  4582→            <span className="flex items-center gap-1"><span className="size-3 rounded bg-emerald-500" /> Strong positive</span>
+  4583→            <span className="flex items-center gap-1"><span className="size-3 rounded bg-emerald-200 dark:bg-emerald-800/40" /> Moderate</span>
+  4584→            <span className="flex items-center gap-1"><span className="size-3 rounded bg-muted" /> Weak</span>
+  4585→            <span className="flex items-center gap-1"><span className="size-3 rounded bg-red-200 dark:bg-red-800/40" /> Negative</span>
+  4586→          </div>
+  4587→        </CardContent>
+  4588→      </Card>
+  4589→    </motion.div>
+  4590→  )
+  4591→}
+  4592→
+  4593→// ── Admin Page ────────────────────────────────────────────────────────────
+  4594→
+  4595→function AdminPage() {
+  4596→  const { toast } = useToast()
+  4597→  const [trainingStatus, setTrainingStatus] = useState<'idle' | 'running' | 'done'>('idle')
+  4598→  const [loading, setLoading] = useState(true)
+  4599→  const [refreshKey, setRefreshKey] = useState(0)
+  4600→  const [auditData, setAuditData] = useState<any[]>([])
+  4601→  const [auditTotal, setAuditTotal] = useState(0)
+  4602→  const [auditFacets, setAuditFacets] = useState<{ actions: any[]; tables: any[] }>({ actions: [], tables: [] })
+  4603→  const [auditFilterAction, setAuditFilterAction] = useState('all')
+  4604→  const [auditFilterTable, setAuditFilterTable] = useState('all')
+  4605→  const [auditSearch, setAuditSearch] = useState('')
+  4606→  const [auditLoading, setAuditLoading] = useState(false)
+  4607→  const [users, setUsers] = useState<any[]>([])
+  4608→  const [usersLoading, setUsersLoading] = useState(true)
+  4609→  const [userDialogOpen, setUserDialogOpen] = useState(false)
+  4610→  const [editingUser, setEditingUser] = useState<any | null>(null)
+  4611→  const [savingUser, setSavingUser] = useState(false)
+  4612→  const [userForm, setUserForm] = useState({ name: '', email: '', role: 'viewer', isActive: true })
+  4613→  const [statsInfo, setStatsInfo] = useState<{ totalMolecules: number; activeStudies: number; totalReports: number; auditCount: number }>({ totalMolecules: 10, activeStudies: 3, totalReports: 5, auditCount: 6 })
+  4614→
+
+[showing lines 4015-4614 of 5705; use offset=4615 with limit to continue reading]

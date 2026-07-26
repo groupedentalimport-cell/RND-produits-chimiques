@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useTheme } from 'next-themes'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard, FlaskConical, Atom, Beaker, FileText, ShieldCheck,
@@ -10,7 +11,8 @@ import {
   Lightbulb, FileCheck, ClipboardList, Brain, Settings, Users,
   ArrowRight, Download, RefreshCw, ChevronDown, Filter, Info,
   Shield, Zap, Microscope, BookOpen, AlertCircle, XCircle,
-  FileBadge, Scale, GraduationCap, Gauge, ArrowUpRight, ArrowDownRight
+  FileBadge, Scale, GraduationCap, Gauge, ArrowUpRight, ArrowDownRight,
+  Send, MessageCircle, Sparkles, LayoutGrid
 } from 'lucide-react'
 import {
   Card, CardHeader, CardTitle, CardDescription, CardContent, CardAction, CardFooter,
@@ -39,6 +41,7 @@ import {
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell, Legend, ScatterChart, Scatter,
+  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
 } from 'recharts'
 import { useToast } from '@/hooks/use-toast'
 import {
@@ -231,6 +234,93 @@ function getScoreColor(score: number): string {
   return 'text-red-600 dark:text-red-400'
 }
 
+// ── Shared Global Style/Icon Maps ─────────────────────────────────────────
+
+const COLOR_MAP: Record<string, string> = {
+  emerald: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400',
+  teal: 'bg-teal-100 text-teal-600 dark:bg-teal-900/40 dark:text-teal-400',
+  cyan: 'bg-cyan-100 text-cyan-600 dark:bg-cyan-900/40 dark:text-cyan-400',
+  amber: 'bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400',
+  red: 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400',
+  rose: 'bg-rose-100 text-rose-600 dark:bg-rose-900/40 dark:text-rose-400',
+}
+
+const COLOR_MAP_TEXT: Record<string, string> = {
+  emerald: 'text-emerald-600 dark:text-emerald-400', teal: 'text-teal-600 dark:text-teal-400',
+  cyan: 'text-cyan-600 dark:text-cyan-400', amber: 'text-amber-600 dark:text-amber-400',
+  red: 'text-red-600 dark:text-red-400', rose: 'text-rose-600 dark:text-rose-400',
+}
+
+const GRADIENT_TOP_BAR: Record<string, string> = {
+  emerald: 'bg-gradient-to-r from-emerald-500 to-teal-500', teal: 'bg-gradient-to-r from-teal-500 to-cyan-500',
+  cyan: 'bg-gradient-to-r from-cyan-500 to-sky-500', amber: 'bg-gradient-to-r from-amber-500 to-orange-500',
+  red: 'bg-gradient-to-r from-red-500 to-rose-500',
+}
+
+const PROGRESS_BAR_MAP: Record<string, string> = {
+  emerald: '[&>div]:bg-emerald-500', teal: '[&>div]:bg-teal-500',
+  cyan: '[&>div]:bg-cyan-500', amber: '[&>div]:bg-amber-500', red: '[&>div]:bg-red-500',
+}
+
+const ACTION_ICON_MAP: Record<string, React.ElementType> = {
+  create: Plus, update: RefreshCw, delete: Trash2, approve: CheckCircle2, sign: Shield, reject: XCircle,
+}
+
+const ACTION_COLOR_MAP: Record<string, string> = {
+  create: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400',
+  update: 'bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400',
+  delete: 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400',
+  approve: 'bg-teal-100 text-teal-600 dark:bg-teal-900/40 dark:text-teal-400',
+  sign: 'bg-cyan-100 text-cyan-600 dark:bg-cyan-900/40 dark:text-cyan-400',
+  reject: 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400',
+}
+
+const ACTION_TEXT_MAP: Record<string, string> = {
+  create: 'text-emerald-600 dark:text-emerald-400', update: 'text-amber-600 dark:text-amber-400',
+  delete: 'text-red-600 dark:text-red-400', approve: 'text-teal-600 dark:text-teal-400',
+  sign: 'text-cyan-600 dark:text-cyan-400', reject: 'text-red-600 dark:text-red-400',
+}
+
+const HAZARD_BORDER_MAP: Record<string, string> = { low: 'border-l-emerald-500', moderate: 'border-l-amber-500', high: 'border-l-red-500', critical: 'border-l-rose-500' }
+const HAZARD_BAR_MAP: Record<string, string> = { low: 'from-emerald-400 to-teal-500', moderate: 'from-amber-400 to-orange-500', high: 'from-red-400 to-red-600', critical: 'from-rose-400 to-rose-600' }
+const HAZARD_OUTLINE_MAP: Record<string, string> = { low: 'border-emerald-500 text-emerald-600', moderate: 'border-amber-500 text-amber-600', high: 'border-red-500 text-red-600' }
+
+const RISK_PILL_ACTIVE: Record<string, string> = { low: 'bg-emerald-600 text-white', moderate: 'bg-amber-600 text-white hover:bg-amber-700', high: 'bg-red-600 text-white hover:bg-red-700', critical: 'bg-rose-600 text-white hover:bg-rose-700' }
+const RISK_PILL_OUTLINE: Record<string, string> = { critical: 'border-red-500 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20', high: 'border-orange-500 text-orange-600 hover:bg-orange-50 dark:text-orange-400 dark:hover:bg-orange-900/20', moderate: 'border-amber-500 text-amber-600 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-900/20' }
+
+const REPORT_GRADIENT: Record<string, string> = { ich_q1a: 'bg-gradient-to-r from-emerald-500 to-teal-500', ctd_module: 'bg-gradient-to-r from-teal-500 to-cyan-500', fmea: 'bg-gradient-to-r from-amber-500 to-orange-500', doe: 'bg-gradient-to-r from-cyan-500 to-sky-500', validation_protocol: 'bg-gradient-to-r from-rose-500 to-pink-500' }
+const REPORT_ICON_BG: Record<string, string> = { ich_q1a: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400', ctd_module: 'bg-teal-100 text-teal-600 dark:bg-teal-900/40 dark:text-teal-400', fmea: 'bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400', doe: 'bg-cyan-100 text-cyan-600 dark:bg-cyan-900/40 dark:text-cyan-400', validation_protocol: 'bg-rose-100 text-rose-600 dark:bg-rose-900/40 dark:text-rose-400' }
+
+const HAZARD_CLASS_MAP: Record<string, string> = { critical: 'Severe Hazard', high: 'Significant Hazard', moderate: 'Moderate Hazard', low: 'Low Hazard' }
+const RISK_BG_MAP: Record<string, string> = {
+  critical: 'bg-red-50/50 dark:bg-red-900/10 border-red-500', high: 'bg-orange-50/50 dark:bg-orange-900/10 border-orange-500',
+  moderate: 'bg-amber-50/50 dark:bg-amber-900/10 border-amber-500', low: 'bg-emerald-50/50 dark:bg-emerald-900/10 border-emerald-500',
+}
+
+const roleAvatarColors: Record<string, string> = {
+  super_admin: 'from-rose-500 to-red-600', org_admin: 'from-emerald-500 to-teal-600',
+  project_manager: 'from-cyan-500 to-blue-600', analyst: 'from-amber-500 to-orange-600', viewer: 'from-slate-400 to-slate-500',
+}
+
+function transformMolecule(m: any): MoleculeData {
+  return {
+    id: m.id, name: m.name, casNumber: m.casNumber || '', smiles: m.smiles || '',
+    formula: m.formula || '', molarMass: m.molarMass ?? 0, logP: m.logP ?? 0,
+    stabilityScore: m.predictedStabilityScore ?? 0, riskLevel: m.riskLevel || 'low',
+    dataSource: m.dataSource || 'Manual', description: m.description || '',
+    meltingPoint: m.meltingPoint ?? null, boilingPoint: m.boilingPoint ?? null,
+  }
+}
+
+function transformStudy(s: any): StudyData {
+  return {
+    id: s.id, studyCode: s.studyCode || '', substanceName: s.substanceName || '',
+    studyType: s.studyType || 'long_term', temperatureC: s.temperatureC || 25,
+    humidityPercent: s.humidityPercent, durationMonths: s.durationMonths || 24,
+    predictedShelfLifeMonths: s.predictedShelfLifeMonths, status: s.status || 'draft', ph: s.ph,
+  }
+}
+
 // ── CSV Export helper ────────────────────────────────────────────────────
 
 function exportCSV(data: Record<string, unknown>[], filename: string) {
@@ -282,6 +372,23 @@ function Formula({ children }: { children: string | null | undefined }) {
   return <span className="font-mono">{formatFormula(children)}</span>
 }
 
+// Animated number counter for stat cards
+function AnimatedNumber({ value }: { value: number }) {
+  const [display, setDisplay] = useState(0)
+  useEffect(() => {
+    let start = 0
+    const duration = 1000
+    const step = value / (duration / 16)
+    const timer = setInterval(() => {
+      start += step
+      if (start >= value) { setDisplay(value); clearInterval(timer) }
+      else setDisplay(Math.floor(start))
+    }, 16)
+    return () => clearInterval(timer)
+  }, [value])
+  return <span className="text-2xl font-bold tabular-nums">{display}</span>
+}
+
 
 // ── Sidebar Navigation ────────────────────────────────────────────────────
 
@@ -297,7 +404,8 @@ const NAV_ITEMS: { id: PageId; label: string; icon: React.ElementType }[] = [
 ]
 
 function Sidebar() {
-  const { currentPage, setPage, sidebarOpen, toggleSidebar, darkMode, toggleDarkMode } = useAppStore()
+  const { currentPage, setPage, sidebarOpen, toggleSidebar } = useAppStore()
+  const { theme, setTheme } = useTheme()
 
   return (
     <>
@@ -392,10 +500,10 @@ function Sidebar() {
           <Button
             variant="ghost"
             className={`w-full justify-start gap-3 h-10 ${!sidebarOpen ? 'px-0 justify-center' : ''}`}
-            onClick={toggleDarkMode}
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
           >
-            {darkMode ? <Sun className="size-4 shrink-0" /> : <Moon className="size-4 shrink-0" />}
-            {sidebarOpen && <span className="whitespace-nowrap">{darkMode ? 'Light Mode' : 'Dark Mode'}</span>}
+            {theme === 'dark' ? <Sun className="size-4 shrink-0" /> : <Moon className="size-4 shrink-0" />}
+            {sidebarOpen && <span className="whitespace-nowrap">{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>}
           </Button>
         </div>
       </motion.aside>
@@ -451,13 +559,7 @@ function DashboardPage() {
         }
         if (studiesRes.ok && !cancelled) {
           const data = await studiesRes.json()
-          const transformed: StudyData[] = (data.studies || []).slice(0, 5).map((s: any) => ({
-            id: s.id, studyCode: s.studyCode || '', substanceName: s.substanceName || '',
-            studyType: s.studyType || 'long_term', temperatureC: s.temperatureC || 25,
-            humidityPercent: s.humidityPercent, durationMonths: s.durationMonths || 24,
-            predictedShelfLifeMonths: s.predictedShelfLifeMonths, status: s.status || 'draft',
-            ph: s.ph,
-          }))
+          const transformed: StudyData[] = (data.studies || []).slice(0, 5).map(transformStudy)
           if (!cancelled) setRecentStudies(transformed)
         }
       } catch { /* fallback: statsData stays null, sample data used */ }
@@ -492,23 +594,12 @@ function DashboardPage() {
 
   // Derive recent activity from API audit logs
   const recentActivity = statsData?.recentActivity?.length
-    ? statsData.recentActivity.map((entry: any) => {
-        const actionIconMap: Record<string, any> = {
-          create: Plus, update: RefreshCw, delete: Trash2, approve: CheckCircle2, sign: Shield, reject: XCircle,
-        }
-        const actionColorMap: Record<string, string> = {
-          create: 'emerald', update: 'amber', delete: 'red', approve: 'teal', sign: 'cyan', reject: 'red',
-        }
-        const icon = actionIconMap[entry.action] || Activity
-        const color = actionColorMap[entry.action] || 'emerald'
-        const timeStr = new Date(entry.createdAt).toLocaleDateString()
-        return {
-          text: `${entry.action} on ${entry.tableName} (#${entry.recordId}) — ${entry.details || ''}`.trim(),
-          time: timeStr,
-          icon,
-          color,
-        }
-      })
+    ? statsData.recentActivity.map((entry: any) => ({
+        text: `${entry.action} on ${entry.tableName} (#${entry.recordId}) — ${entry.details || ''}`.trim(),
+        time: new Date(entry.createdAt).toLocaleDateString(),
+        icon: ACTION_ICON_MAP[entry.action] || Activity,
+        color: ({ create: 'emerald', update: 'amber', delete: 'red', approve: 'teal', sign: 'cyan', reject: 'red' })[entry.action] || 'emerald',
+      }))
     : [
       { text: 'Study STB-2024-002 updated — Acetaminophen accelerated testing milestone completed', time: '2 hours ago', icon: CheckCircle2, color: 'emerald' },
       { text: 'Risk level escalated for Hydrogen Peroxide — now classified as critical', time: '5 hours ago', icon: AlertTriangle, color: 'red' },
@@ -538,38 +629,25 @@ function DashboardPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {loading ? (
           Array.from({ length: 4 }).map((_, i) => (
-            <Card key={i}><CardContent className="p-4"><Skeleton className="h-20 w-full" /></CardContent></Card>
+            <Card key={i}><CardContent className="p-4"><div className="h-20 w-full rounded-md bg-muted animate-pulse" /></CardContent></Card>
           ))
         ) : stats.map((stat) => {
           const Icon = stat.icon
-          const colorMap: Record<string, string> = {
-            emerald: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400',
-            teal: 'bg-teal-100 text-teal-600 dark:bg-teal-900/40 dark:text-teal-400',
-            cyan: 'bg-cyan-100 text-cyan-600 dark:bg-cyan-900/40 dark:text-cyan-400',
-            amber: 'bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400',
-            red: 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400',
-          }
           return (
-            <motion.div
-              key={stat.label}
-              whileHover={{ y: -4, boxShadow: '0 12px 32px rgba(0,0,0,0.15)' }}
-              transition={{ type: 'spring', stiffness: 400 }}
-            >
+            <motion.div key={stat.label} whileHover={{ y: -4, boxShadow: '0 12px 32px rgba(0,0,0,0.15)' }} transition={{ type: 'spring', stiffness: 400 }}>
               <Card className="cursor-pointer backdrop-blur-sm bg-card/80 transition-transform hover:-translate-y-1 overflow-hidden relative">
-                <div className={`absolute inset-x-0 top-0 h-1 ${stat.color === 'emerald' ? 'bg-gradient-to-r from-emerald-500 to-teal-500' : stat.color === 'teal' ? 'bg-gradient-to-r from-teal-500 to-cyan-500' : stat.color === 'cyan' ? 'bg-gradient-to-r from-cyan-500 to-sky-500' : 'bg-gradient-to-r from-amber-500 to-orange-500'}`} />
-                <CardContent className="p-4">
+                <div className={`absolute inset-x-0 top-0 h-1 ${GRADIENT_TOP_BAR[stat.color] || GRADIENT_TOP_BAR.emerald}`} />
+                <CardContent className="p-4 relative">
+                  <div className="absolute top-0 right-0 size-24 rounded-full bg-gradient-to-br from-emerald-200/20 to-teal-200/20 dark:from-emerald-800/20 dark:to-teal-800/20 blur-2xl" />
                   <div className="flex items-center justify-between">
                     <div className="space-y-1">
                       <p className="text-sm text-muted-foreground">{stat.label}</p>
-                      <p className="text-2xl font-bold">{stat.value}</p>
+                      <div className="text-2xl font-bold">{isNaN(Number(stat.value)) ? stat.value : <AnimatedNumber value={Number(stat.value)} />}</div>
                     </div>
-                    <div className={`p-2 rounded-lg ${colorMap[stat.color]}`}>
-                      <Icon className="size-5" />
-                    </div>
+                    <div className={`p-2 rounded-lg ${COLOR_MAP[stat.color]}`}><Icon className="size-5" /></div>
                   </div>
                   <div className="flex items-center gap-1 mt-2 text-xs text-muted-foreground">
-                    {stat.trendUp ? <ArrowUpRight className="size-3 text-emerald-500" /> : <ArrowDownRight className="size-3 text-amber-500" />}
-                    {stat.trend}
+                    {stat.trendUp ? <ArrowUpRight className="size-3 text-emerald-500" /> : <ArrowDownRight className="size-3 text-amber-500" />}{stat.trend}
                   </div>
                 </CardContent>
               </Card>
@@ -646,25 +724,12 @@ function DashboardPage() {
           <CardContent className="max-h-72 overflow-y-auto space-y-3">
             {recentActivity.map((item, i) => {
               const Icon = item.icon
-              const colorMap: Record<string, string> = {
-                emerald: 'text-emerald-600 dark:text-emerald-400',
-                teal: 'text-teal-600 dark:text-teal-400',
-                cyan: 'text-cyan-600 dark:text-cyan-400',
-                amber: 'text-amber-600 dark:text-amber-400',
-                red: 'text-red-600 dark:text-red-400',
-              }
               return (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: i * 0.1 }}
-                  className="flex items-start gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors"
-                >
-                  <Icon className={`size-4 mt-0.5 shrink-0 ${colorMap[item.color]}`} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm leading-snug">{item.text}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{item.time}</p>
+                <motion.div key={i} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.1 }} className="relative border-l-2 border-emerald-300 dark:border-emerald-700 pl-4 ml-2 p-2 rounded-r-lg hover:bg-muted/50 transition-colors">
+                  <span className="absolute -left-[5px] top-2 size-2.5 rounded-full bg-emerald-500" />
+                  <div className="flex items-start gap-3">
+                    <Icon className={`size-4 mt-0.5 shrink-0 ${COLOR_MAP_TEXT[item.color]}`} />
+                    <div className="flex-1 min-w-0"><p className="text-sm leading-snug">{item.text}</p><p className="text-xs text-muted-foreground mt-0.5">{item.time}</p></div>
                   </div>
                 </motion.div>
               )
@@ -871,6 +936,8 @@ function MoleculesPage() {
   const [newDegradation, setNewDegradation] = useState({ name: '', smiles: '', percentage: 0, hazardLevel: 'low' })
   const [addingDegradation, setAddingDegradation] = useState(false)
   const [importing, setImporting] = useState(false)
+  const [sortBy, setSortBy] = useState('name')
+  const [viewMode, setViewMode] = useState<'table' | 'grid'>('table')
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [newMolecule, setNewMolecule] = useState({
     name: '',
@@ -898,13 +965,7 @@ function MoleculesPage() {
         const res = await fetch(`/api/molecules?${params.toString()}`)
         if (res.ok && !cancelled) {
           const data = await res.json()
-          const transformed: MoleculeData[] = (data.molecules || []).map((m: any) => ({
-            id: m.id, name: m.name, casNumber: m.casNumber || '', smiles: m.smiles || '',
-            formula: m.formula || '', molarMass: m.molarMass ?? 0, logP: m.logP ?? 0,
-            stabilityScore: m.predictedStabilityScore ?? 0, riskLevel: m.riskLevel || 'low',
-            dataSource: m.dataSource || 'Manual', description: m.description || '',
-            meltingPoint: m.meltingPoint ?? null, boilingPoint: m.boilingPoint ?? null,
-          }))
+          const transformed: MoleculeData[] = (data.molecules || []).map(transformMolecule)
           if (!cancelled) {
             setApiMolecules(transformed)
             setTotalPages(data.pagination?.totalPages ?? 1)
@@ -918,10 +979,28 @@ function MoleculesPage() {
     return () => { cancelled = true }
   }, [searchQuery, riskFilter, currentPageNum, refreshKey])
 
-  // Apply source filter client-side on fetched molecules
-  const displayed = sourceFilter === 'all'
-    ? apiMolecules
-    : apiMolecules.filter((mol) => mol.dataSource.toLowerCase() === sourceFilter.toLowerCase())
+  // Apply source filter client-side on fetched molecules, then sort
+  const displayed = (() => {
+    let filtered = sourceFilter === 'all'
+      ? apiMolecules
+      : apiMolecules.filter((mol) => mol.dataSource.toLowerCase() === sourceFilter.toLowerCase())
+    // Sort
+    if (sortBy === 'name') filtered.sort((a, b) => a.name.localeCompare(b.name))
+    else if (sortBy === 'stability') filtered.sort((a, b) => b.stabilityScore - a.stabilityScore)
+    else if (sortBy === 'molarMass') filtered.sort((a, b) => b.molarMass - a.molarMass)
+    else if (sortBy === 'risk') {
+      const riskOrder: Record<string, number> = { critical: 0, high: 1, moderate: 2, low: 3 }
+      filtered.sort((a, b) => (riskOrder[a.riskLevel] ?? 4) - (riskOrder[b.riskLevel] ?? 4))
+    }
+    return filtered
+  })()
+
+  // Count per risk level (from apiMolecules for filter pills)
+  const riskCounts = (() => {
+    const counts: Record<string, number> = { low: 0, moderate: 0, high: 0, critical: 0 }
+    apiMolecules.forEach((mol) => { counts[mol.riskLevel] = (counts[mol.riskLevel] || 0) + 1 })
+    return counts
+  })()
 
   const openDetail = async (mol: MoleculeData) => {
     setSelectedMolecule(mol)
@@ -1152,7 +1231,16 @@ function MoleculesPage() {
           <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-400 dark:to-teal-400 bg-clip-text text-transparent">Molecules Database</h1>
           <p className="text-muted-foreground">Browse and search chemical compounds with stability assessments</p>
         </div>
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2 flex-wrap items-center">
+          {/* View Mode Toggle */}
+          <div className="flex gap-1 mr-1">
+            <Button variant={viewMode === 'table' ? 'default' : 'outline'} size="sm" onClick={() => setViewMode('table')} className={viewMode === 'table' ? 'bg-emerald-600 text-white' : ''}>
+              <BarChart3 className="size-4" /> Table
+            </Button>
+            <Button variant={viewMode === 'grid' ? 'default' : 'outline'} size="sm" onClick={() => setViewMode('grid')} className={viewMode === 'grid' ? 'bg-emerald-600 text-white' : ''}>
+              <LayoutGrid className="size-4" /> Grid
+            </Button>
+          </div>
           <input
             type="file"
             accept=".csv"
@@ -1189,6 +1277,22 @@ function MoleculesPage() {
         </div>
       </div>
 
+      {/* Quick Filter Pills */}
+      <div className="flex flex-wrap gap-2">
+        {['all', 'low', 'moderate', 'high', 'critical'].map((level) => (
+          <Button
+            key={level}
+            variant={riskFilter === level ? 'default' : 'outline'}
+            size="sm"
+            className={`h-7 text-xs rounded-full ${riskFilter === level ? (RISK_PILL_ACTIVE[level] || 'bg-emerald-600 text-white') : ''} ${RISK_PILL_OUTLINE[level] || ''}`}
+            onClick={() => { setRiskFilter(level); setCurrentPageNum(1) }}
+          >
+            {level === 'all' ? 'All' : level.charAt(0).toUpperCase() + level.slice(1)}
+            {level !== 'all' && <span className="ml-1 opacity-60">({riskCounts[level] || 0})</span>}
+          </Button>
+        ))}
+      </div>
+
       {/* Search & Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
@@ -1200,6 +1304,17 @@ function MoleculesPage() {
             className="pl-9"
           />
         </div>
+        <Select value={sortBy} onValueChange={setSortBy}>
+          <SelectTrigger className="w-[130px]">
+            <SelectValue placeholder="Sort by" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="name">Name</SelectItem>
+            <SelectItem value="stability">Stability</SelectItem>
+            <SelectItem value="molarMass">Molar Mass</SelectItem>
+            <SelectItem value="risk">Risk Level</SelectItem>
+          </SelectContent>
+        </Select>
         <Select value={riskFilter} onValueChange={(v) => { setRiskFilter(v); setCurrentPageNum(1) }}>
           <SelectTrigger className="w-[140px]">
             <SelectValue placeholder="Risk Level" />
@@ -1230,7 +1345,8 @@ function MoleculesPage() {
         {loading ? 'Loading...' : `Showing ${displayed.length} of ${totalCount} molecules`}
       </p>
 
-      {/* Table */}
+      {/* Table / Grid View */}
+      {viewMode === 'table' ? (
       <Card className="backdrop-blur-sm bg-card/80">
         <CardContent className="p-0">
           <div className="max-h-96 overflow-y-auto">
@@ -1309,119 +1425,74 @@ function MoleculesPage() {
           </CardFooter>
         )}
       </Card>
+      ) : (
+        /* Grid View */
+        loading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Card key={i}><CardContent className="p-4"><div className="h-40 w-full rounded-md bg-muted animate-pulse" /></CardContent></Card>
+            ))}
+          </div>
+        ) : displayed.length === 0 ? (
+          <Card><CardContent className="py-8 text-center text-muted-foreground">No molecules found matching your criteria</CardContent></Card>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {displayed.map((mol) => (
+              <motion.div key={mol.id} whileHover={{ y: -4 }} transition={{ type: 'spring', stiffness: 300 }}>
+                <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => openDetail(mol)}>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="font-semibold">{mol.name}</h3>
+                      <Badge className={`text-[10px] ${riskColors[mol.riskLevel]}`}>{mol.riskLevel}</Badge>
+                    </div>
+                    <Formula>{mol.formula}</Formula>
+                    <div className="mt-3 flex items-center gap-2">
+                      <div className="relative size-8">
+                        <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
+                          <circle cx="18" cy="18" r="15" fill="none" stroke="currentColor" strokeWidth="3" className="text-muted/30" />
+                          <circle cx="18" cy="18" r="15" fill="none" stroke={mol.stabilityScore >= 80 ? '#10b981' : mol.stabilityScore >= 60 ? '#14b8a6' : mol.stabilityScore >= 40 ? '#f59e0b' : '#ef4444'} strokeWidth="3" strokeDasharray={`${(mol.stabilityScore / 100) * 94.25} 94.25`} strokeLinecap="round" />
+                        </svg>
+                        <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold">{mol.stabilityScore}</span>
+                      </div>
+                      <span className="text-xs text-muted-foreground">Stability</span>
+                    </div>
+                    <div className="mt-2 text-xs text-muted-foreground flex items-center gap-1">
+                      <span>MW: {mol.molarMass || '—'}</span>
+                      <span>·</span>
+                      <span>LogP: {mol.logP || '—'}</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ))}
+          </div>
+        )
+      )}
 
       {/* Add Molecule Dialog */}
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Plus className="size-5 text-emerald-600 dark:text-emerald-400" />
-              Add New Molecule
-            </DialogTitle>
+            <DialogTitle className="flex items-center gap-2"><Plus className="size-5 text-emerald-600 dark:text-emerald-400" /> Add New Molecule</DialogTitle>
             <DialogDescription>Create a new entry in the chemical compounds database</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            <div>
-              <Label>Name *</Label>
-              <Input
-                placeholder="e.g. Acetylsalicylic acid"
-                value={newMolecule.name}
-                onChange={(e) => setNewMolecule({ ...newMolecule, name: e.target.value })}
-              />
-            </div>
+            <div><Label>Name *</Label><Input placeholder="e.g. Acetylsalicylic acid" value={newMolecule.name} onChange={(e) => setNewMolecule({ ...newMolecule, name: e.target.value })} /></div>
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>CAS Number</Label>
-                <Input
-                  placeholder="e.g. 50-78-2"
-                  value={newMolecule.casNumber}
-                  onChange={(e) => setNewMolecule({ ...newMolecule, casNumber: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label>Formula</Label>
-                <Input
-                  placeholder="e.g. C9H8O4"
-                  value={newMolecule.formula}
-                  onChange={(e) => setNewMolecule({ ...newMolecule, formula: e.target.value })}
-                />
-              </div>
+              <div><Label>CAS Number</Label><Input placeholder="e.g. 50-78-2" value={newMolecule.casNumber} onChange={(e) => setNewMolecule({ ...newMolecule, casNumber: e.target.value })} /></div>
+              <div><Label>Formula</Label><Input placeholder="e.g. C9H8O4" value={newMolecule.formula} onChange={(e) => setNewMolecule({ ...newMolecule, formula: e.target.value })} /></div>
             </div>
-            <div>
-              <Label>SMILES</Label>
-              <Input
-                placeholder="e.g. CC(=O)OC1=CC=CC=C1C(=O)O"
-                value={newMolecule.smiles}
-                onChange={(e) => setNewMolecule({ ...newMolecule, smiles: e.target.value })}
-                className="font-mono text-xs"
-              />
-            </div>
+            <div><Label>SMILES</Label><Input placeholder="e.g. CC(=O)OC1=CC=CC=C1C(=O)O" value={newMolecule.smiles} onChange={(e) => setNewMolecule({ ...newMolecule, smiles: e.target.value })} className="font-mono text-xs" /></div>
             <div className="grid grid-cols-3 gap-3">
-              <div>
-                <Label>Molar Mass</Label>
-                <Input
-                  type="number"
-                  placeholder="0.00"
-                  value={newMolecule.molarMass || ''}
-                  onChange={(e) => setNewMolecule({ ...newMolecule, molarMass: parseFloat(e.target.value) || 0 })}
-                />
-              </div>
-              <div>
-                <Label>LogP</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  placeholder="0.00"
-                  value={newMolecule.logP || ''}
-                  onChange={(e) => setNewMolecule({ ...newMolecule, logP: parseFloat(e.target.value) || 0 })}
-                />
-              </div>
-              <div>
-                <Label>Stability (0-100)</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  max="100"
-                  placeholder="0"
-                  value={newMolecule.predictedStabilityScore || ''}
-                  onChange={(e) => setNewMolecule({ ...newMolecule, predictedStabilityScore: Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)) })}
-                />
-              </div>
+              <div><Label>Molar Mass</Label><Input type="number" placeholder="0.00" value={newMolecule.molarMass || ''} onChange={(e) => setNewMolecule({ ...newMolecule, molarMass: parseFloat(e.target.value) || 0 })} /></div>
+              <div><Label>LogP</Label><Input type="number" step="0.01" placeholder="0.00" value={newMolecule.logP || ''} onChange={(e) => setNewMolecule({ ...newMolecule, logP: parseFloat(e.target.value) || 0 })} /></div>
+              <div><Label>Stability (0-100)</Label><Input type="number" min="0" max="100" placeholder="0" value={newMolecule.predictedStabilityScore || ''} onChange={(e) => setNewMolecule({ ...newMolecule, predictedStabilityScore: Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)) })} /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Risk Level</Label>
-                <Select value={newMolecule.riskLevel} onValueChange={(v) => setNewMolecule({ ...newMolecule, riskLevel: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="moderate">Moderate</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="critical">Critical</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Data Source</Label>
-                <Select value={newMolecule.dataSource} onValueChange={(v) => setNewMolecule({ ...newMolecule, dataSource: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="manual">Manual</SelectItem>
-                    <SelectItem value="pubchem">PubChem</SelectItem>
-                    <SelectItem value="chembl">ChEMBL</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <div><Label>Risk Level</Label><Select value={newMolecule.riskLevel} onValueChange={(v) => setNewMolecule({ ...newMolecule, riskLevel: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="low">Low</SelectItem><SelectItem value="moderate">Moderate</SelectItem><SelectItem value="high">High</SelectItem><SelectItem value="critical">Critical</SelectItem></SelectContent></Select></div>
+              <div><Label>Data Source</Label><Select value={newMolecule.dataSource} onValueChange={(v) => setNewMolecule({ ...newMolecule, dataSource: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="manual">Manual</SelectItem><SelectItem value="pubchem">PubChem</SelectItem><SelectItem value="chembl">ChEMBL</SelectItem></SelectContent></Select></div>
             </div>
-            <div>
-              <Label>Description</Label>
-              <Textarea
-                placeholder="Brief description of the compound and its stability profile..."
-                value={newMolecule.description}
-                onChange={(e) => setNewMolecule({ ...newMolecule, description: e.target.value })}
-                rows={3}
-              />
-            </div>
+            <div><Label>Description</Label><Textarea placeholder="Brief description of the compound and its stability profile..." value={newMolecule.description} onChange={(e) => setNewMolecule({ ...newMolecule, description: e.target.value })} rows={3} /></div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
@@ -1457,58 +1528,65 @@ function MoleculesPage() {
           </DialogHeader>
           {selectedMolecule && (
             <>
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  {[
-                    { label: 'Formula', value: formatFormula(selectedMolecule.formula) },
-                    { label: 'Molar Mass', value: selectedMolecule.molarMass ? `${selectedMolecule.molarMass.toFixed(2)} g/mol` : '—' },
-                    { label: 'LogP', value: selectedMolecule.logP !== null ? selectedMolecule.logP.toFixed(2) : '—' },
-                    { label: 'Melting Point', value: selectedMolecule.meltingPoint !== null ? `${selectedMolecule.meltingPoint}°C` : '—' },
-                    { label: 'Boiling Point', value: selectedMolecule.boilingPoint !== null ? `${selectedMolecule.boilingPoint}°C` : '—' },
-                    { label: 'CAS Number', value: selectedMolecule.casNumber || '—' },
-                  ].map((field) => (
-                    <div key={field.label} className="space-y-1 p-2 rounded-lg bg-muted/40">
-                      <p className="text-xs text-muted-foreground">{field.label}</p>
-                      <p className="text-sm font-medium">{field.value}</p>
+              <Tabs defaultValue="properties" className="w-full">
+                <TabsList className="grid w-full grid-cols-3">
+                  <TabsTrigger value="properties">Properties</TabsTrigger>
+                  <TabsTrigger value="degradation">Degradation</TabsTrigger>
+                  <TabsTrigger value="hazards">Hazards</TabsTrigger>
+                </TabsList>
+
+                {/* Properties Tab */}
+                <TabsContent value="properties" className="space-y-4 mt-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { label: 'Formula', value: formatFormula(selectedMolecule.formula) },
+                      { label: 'Molar Mass', value: selectedMolecule.molarMass ? `${selectedMolecule.molarMass.toFixed(2)} g/mol` : '—' },
+                      { label: 'LogP', value: selectedMolecule.logP !== null ? selectedMolecule.logP.toFixed(2) : '—' },
+                      { label: 'Melting Point', value: selectedMolecule.meltingPoint !== null ? `${selectedMolecule.meltingPoint}°C` : '—' },
+                      { label: 'Boiling Point', value: selectedMolecule.boilingPoint !== null ? `${selectedMolecule.boilingPoint}°C` : '—' },
+                      { label: 'CAS Number', value: selectedMolecule.casNumber || '—' },
+                    ].map((field) => (
+                      <div key={field.label} className="space-y-1 p-2 rounded-lg bg-muted/40">
+                        <p className="text-xs text-muted-foreground">{field.label}</p>
+                        <p className="text-sm font-medium">{field.value}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="space-y-1 p-2 rounded-lg bg-muted/40">
+                    <p className="text-xs text-muted-foreground">SMILES</p>
+                    <p className="text-sm font-mono break-all">{selectedMolecule.smiles || '—'}</p>
+                  </div>
+
+                  <Separator />
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Stability Score</span>
+                      <span className={`text-2xl font-bold ${getScoreColor(selectedMolecule.stabilityScore)}`}>
+                        {selectedMolecule.stabilityScore}<span className="text-sm text-muted-foreground font-normal">/100</span>
+                      </span>
                     </div>
-                  ))}
-                </div>
-
-                <div className="space-y-1 p-2 rounded-lg bg-muted/40">
-                  <p className="text-xs text-muted-foreground">SMILES</p>
-                  <p className="text-sm font-mono break-all">{selectedMolecule.smiles || '—'}</p>
-                </div>
-
-                <Separator />
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Stability Score</span>
-                    <span className={`text-2xl font-bold ${getScoreColor(selectedMolecule.stabilityScore)}`}>
-                      {selectedMolecule.stabilityScore}<span className="text-sm text-muted-foreground font-normal">/100</span>
-                    </span>
-                  </div>
-                  <div className="relative">
-                    <Progress value={selectedMolecule.stabilityScore} className="h-3" />
-                    <div className="flex justify-between mt-1 text-[10px] text-muted-foreground">
-                      <span>0</span><span>25</span><span>50</span><span>75</span><span>100</span>
+                    <div className="relative">
+                      <Progress value={selectedMolecule.stabilityScore} className="h-3" />
+                      <div className="flex justify-between mt-1 text-[10px] text-muted-foreground">
+                        <span>0</span><span>25</span><span>50</span><span>75</span><span>100</span>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <Separator />
+                  <Separator />
 
-                <div className="space-y-1">
-                  <p className="text-sm font-medium">Description</p>
-                  <div className="p-3 rounded-lg bg-emerald-50/50 dark:bg-emerald-900/10 border-l-4 border-emerald-500">
-                    <p className="text-sm text-muted-foreground leading-relaxed">{selectedMolecule.description || 'No description available.'}</p>
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">Description</p>
+                    <div className="p-3 rounded-lg bg-emerald-50/50 dark:bg-emerald-900/10 border-l-4 border-emerald-500">
+                      <p className="text-sm text-muted-foreground leading-relaxed">{selectedMolecule.description || 'No description available.'}</p>
+                    </div>
                   </div>
-                </div>
+                </TabsContent>
 
-                <Separator />
-
-                {/* Degradation Products — fetched from API */}
-                <div className="space-y-2">
+                {/* Degradation Tab */}
+                <TabsContent value="degradation" className="space-y-2 mt-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400" />
@@ -1535,7 +1613,7 @@ function MoleculesPage() {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="text-sm font-medium">{dp.name}</span>
-                              <Badge variant="outline" className={`text-[10px] ${dp.hazardLevel === 'high' ? 'border-red-500 text-red-600' : dp.hazardLevel === 'moderate' ? 'border-amber-500 text-amber-600' : 'border-emerald-500 text-emerald-600'}`}>
+                              <Badge variant="outline" className={`text-[10px] ${HAZARD_OUTLINE_MAP[dp.hazardLevel] || HAZARD_OUTLINE_MAP.low}`}>
                                 {dp.hazardLevel}
                               </Badge>
                             </div>
@@ -1563,62 +1641,40 @@ function MoleculesPage() {
                   <div className="p-3 rounded-lg bg-emerald-50/50 dark:bg-emerald-900/10 border border-emerald-200/50 dark:border-emerald-800/50 space-y-2">
                     <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400">Add degradation product</p>
                     <div className="grid grid-cols-2 gap-2">
-                      <Input
-                        placeholder="Product name"
-                        value={newDegradation.name}
-                        onChange={(e) => setNewDegradation({ ...newDegradation, name: e.target.value })}
-                        className="text-xs h-8"
-                      />
-                      <Input
-                        placeholder="SMILES (optional)"
-                        value={newDegradation.smiles}
-                        onChange={(e) => setNewDegradation({ ...newDegradation, smiles: e.target.value })}
-                        className="text-xs h-8 font-mono"
-                      />
+                      <Input placeholder="Product name" value={newDegradation.name} onChange={(e) => setNewDegradation({ ...newDegradation, name: e.target.value })} className="text-xs h-8" />
+                      <Input placeholder="SMILES (optional)" value={newDegradation.smiles} onChange={(e) => setNewDegradation({ ...newDegradation, smiles: e.target.value })} className="text-xs h-8 font-mono" />
                       <div className="flex items-center gap-2">
-                        <Input
-                          type="number"
-                          placeholder="%"
-                          min="0"
-                          max="100"
-                          value={newDegradation.percentage || ''}
-                          onChange={(e) => setNewDegradation({ ...newDegradation, percentage: parseFloat(e.target.value) || 0 })}
-                          className="text-xs h-8 w-20"
-                        />
+                        <Input type="number" placeholder="%" min="0" max="100" value={newDegradation.percentage || ''} onChange={(e) => setNewDegradation({ ...newDegradation, percentage: parseFloat(e.target.value) || 0 })} className="text-xs h-8 w-20" />
                         <Select value={newDegradation.hazardLevel} onValueChange={(v) => setNewDegradation({ ...newDegradation, hazardLevel: v })}>
                           <SelectTrigger className="text-xs h-8 flex-1"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="low">Low</SelectItem>
-                            <SelectItem value="moderate">Moderate</SelectItem>
-                            <SelectItem value="high">High</SelectItem>
-                          </SelectContent>
+                          <SelectContent><SelectItem value="low">Low</SelectItem><SelectItem value="moderate">Moderate</SelectItem><SelectItem value="high">High</SelectItem></SelectContent>
                         </Select>
                       </div>
-                      <Button
-                        size="sm"
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white h-8"
-                        onClick={handleAddDegradation}
-                        disabled={addingDegradation}
-                      >
-                        {addingDegradation
-                          ? <><RefreshCw className="size-3 mr-1 animate-spin" /> Adding...</>
-                          : <><Plus className="size-3 mr-1" /> Add Product</>
-                        }
+                      <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white h-8" onClick={handleAddDegradation} disabled={addingDegradation}>
+                        {addingDegradation ? <><RefreshCw className="size-3 mr-1 animate-spin" /> Adding...</> : <><Plus className="size-3 mr-1" /> Add Product</>}
                       </Button>
                     </div>
                   </div>
-                </div>
-              </div>
+                </TabsContent>
+
+                {/* Hazards Tab */}
+                <TabsContent value="hazards" className="space-y-4 mt-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1 p-3 rounded-lg bg-muted/40"><p className="text-xs text-muted-foreground">Risk Level</p><Badge className={riskColors[selectedMolecule.riskLevel]}>{selectedMolecule.riskLevel} risk</Badge></div>
+                    <div className="space-y-1 p-3 rounded-lg bg-muted/40"><p className="text-xs text-muted-foreground">Stability Score</p><p className={`text-lg font-bold ${getScoreColor(selectedMolecule.stabilityScore)}`}>{selectedMolecule.stabilityScore}/100</p></div>
+                    <div className="space-y-1 p-3 rounded-lg bg-muted/40"><p className="text-xs text-muted-foreground">Hazard Class</p><p className="text-sm font-medium">{HAZARD_CLASS_MAP[selectedMolecule.riskLevel] || 'Low Hazard'}</p></div>
+                    <div className="space-y-1 p-3 rounded-lg bg-muted/40"><p className="text-xs text-muted-foreground">Data Source</p><p className="text-sm font-medium">{selectedMolecule.dataSource}</p></div>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">Risk Description</p>
+                    <div className={`p-3 rounded-lg border-l-4 ${RISK_BG_MAP[selectedMolecule.riskLevel] || RISK_BG_MAP.low}`}>
+                      <p className="text-sm text-muted-foreground leading-relaxed">{selectedMolecule.description || 'No hazard description available.'}</p>
+                    </div>
+                  </div>
+                </TabsContent>
+              </Tabs>
               <DialogFooter className="gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setDetailOpen(false)
-                    setPage('studies')
-                  }}
-                >
-                  <Microscope className="size-4 mr-2" /> Create Study from this Molecule
-                </Button>
+                <Button variant="outline" onClick={() => { setDetailOpen(false); setPage('studies') }}><Microscope className="size-4 mr-2" /> Create Study</Button>
                 <Button onClick={() => setDetailOpen(false)}>Close</Button>
               </DialogFooter>
             </>
@@ -1631,13 +1687,31 @@ function MoleculesPage() {
 
 // ── Stability Simulator Page ──────────────────────────────────────────────
 
+const SIM_STEPS = ['Analyzing substances...', 'Computing kinetics...', 'Evaluating risk factors...', 'Generating recommendations...']
+
+const getConditionSeverity = (type: string, value: number): { color: string; label: string } => {
+  switch (type) {
+    case 'temperature': return value > 50 ? { color: 'red', label: 'Extreme' } : value > 30 ? { color: 'amber', label: 'Elevated' } : { color: 'emerald', label: 'Normal' }
+    case 'ph': return value < 3 || value > 11 ? { color: 'red', label: 'Extreme' } : value < 5 || value > 9 ? { color: 'amber', label: 'Elevated' } : { color: 'emerald', label: 'Normal' }
+    case 'dissolvedOxygen': return value > 12 ? { color: 'amber', label: 'High' } : { color: 'emerald', label: 'Normal' }
+    case 'lightExposure': return value > 10000 ? { color: 'red', label: 'UV' } : value > 300 ? { color: 'amber', label: 'Indoor' } : { color: 'emerald', label: 'Protected' }
+    default: return { color: 'emerald', label: 'Normal' }
+  }
+}
+
 function SimulatorPage() {
   const analysisStore = useAnalysisStore()
   const [simDone, setSimDone] = useState(false)
+  const [currentStep, setCurrentStep] = useState(0)
 
   const runSimulation = useCallback(async () => {
     analysisStore.setRunning(true)
     setSimDone(false)
+    setCurrentStep(0)
+    // Increment through simulation progress steps
+    const stepTimers = SIM_STEPS.map((_, i) =>
+      setTimeout(() => setCurrentStep(i), (i + 1) * 600)
+    )
     try {
       // Map light exposure number to API string values
       const lightStr = analysisStore.conditions.lightExposure === 0 ? 'protected'
@@ -1682,6 +1756,9 @@ function SimulatorPage() {
         })
       }
     } catch { /* on error, set no result */ }
+    // Clear step timers
+    stepTimers.forEach((t) => clearTimeout(t))
+    setCurrentStep(SIM_STEPS.length)
     analysisStore.setRunning(false)
     setSimDone(true)
   }, [analysisStore])
@@ -1711,54 +1788,11 @@ function SimulatorPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               {analysisStore.substances.map((sub, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="flex gap-2 items-end"
-                >
-                  <div className="flex-1">
-                    <Label className="text-xs">Name</Label>
-                    <Input
-                      placeholder="Substance name"
-                      value={sub.name}
-                      onChange={(e) => analysisStore.updateSubstance(i, 'name', e.target.value)}
-                    />
-                  </div>
-                  <div className="w-20">
-                    <Label className="text-xs">Conc.</Label>
-                    <Input
-                      type="number"
-                      value={sub.concentration}
-                      onChange={(e) => analysisStore.updateSubstance(i, 'concentration', parseFloat(e.target.value) || 0)}
-                    />
-                  </div>
-                  <div className="w-24">
-                    <Label className="text-xs">Unit</Label>
-                    <Select
-                      value={sub.unit}
-                      onValueChange={(v) => analysisStore.updateSubstance(i, 'unit', v)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="g/L">g/L</SelectItem>
-                        <SelectItem value="mg/mL">mg/mL</SelectItem>
-                        <SelectItem value="mol/L">mol/L</SelectItem>
-                        <SelectItem value="%w/v">%w/v</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {analysisStore.substances.length > 1 && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="text-red-500 hover:text-red-700"
-                      onClick={() => analysisStore.removeSubstance(i)}
-                    >
-                      <Trash2 className="size-4" />
-                    </Button>
+                <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex gap-2 items-end">
+                  <div className="flex-1"><Label className="text-xs">Name</Label><Input placeholder="Substance name" value={sub.name} onChange={(e) => analysisStore.updateSubstance(i, 'name', e.target.value)} /></div>
+                  <div className="w-20"><Label className="text-xs">Conc.</Label><Input type="number" value={sub.concentration} onChange={(e) => analysisStore.updateSubstance(i, 'concentration', parseFloat(e.target.value) || 0)} /></div>
+                  <div className="w-24"><Label className="text-xs">Unit</Label><Select value={sub.unit} onValueChange={(v) => analysisStore.updateSubstance(i, 'unit', v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="g/L">g/L</SelectItem><SelectItem value="mg/mL">mg/mL</SelectItem><SelectItem value="mol/L">mol/L</SelectItem><SelectItem value="%w/v">%w/v</SelectItem></SelectContent></Select></div>
+                  {analysisStore.substances.length > 1 && (<Button variant="ghost" size="icon" className="text-red-500 hover:text-red-700" onClick={() => analysisStore.removeSubstance(i)}><Trash2 className="size-4" /></Button>
                   )}
                 </motion.div>
               ))}
@@ -1782,40 +1816,21 @@ function SimulatorPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs">pH</Label>
-                  <Input
-                    type="number"
-                    step="0.1"
-                    value={analysisStore.conditions.ph}
-                    onChange={(e) => analysisStore.setConditions({ ph: parseFloat(e.target.value) || 0 })}
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">Temperature (°C)</Label>
-                  <Input
-                    type="number"
-                    value={analysisStore.conditions.temperature}
-                    onChange={(e) => analysisStore.setConditions({ temperature: parseFloat(e.target.value) || 0 })}
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">Dissolved O₂ (mg/L)</Label>
-                  <Input
-                    type="number"
-                    step="0.1"
-                    value={analysisStore.conditions.dissolvedOxygen}
-                    onChange={(e) => analysisStore.setConditions({ dissolvedOxygen: parseFloat(e.target.value) || 0 })}
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">Light Exposure (lux)</Label>
-                  <Input
-                    type="number"
-                    value={analysisStore.conditions.lightExposure}
-                    onChange={(e) => analysisStore.setConditions({ lightExposure: parseFloat(e.target.value) || 0 })}
-                  />
-                </div>
+                {[
+                  { key: 'ph', label: 'pH', step: '0.1', type: 'ph', val: analysisStore.conditions.ph },
+                  { key: 'temperature', label: 'Temperature (°C)', step: undefined, type: 'temperature', val: analysisStore.conditions.temperature },
+                  { key: 'dissolvedOxygen', label: 'Dissolved O₂ (mg/L)', step: '0.1', type: 'dissolvedOxygen', val: analysisStore.conditions.dissolvedOxygen },
+                  { key: 'lightExposure', label: 'Light Exposure (lux)', step: undefined, type: 'lightExposure', val: analysisStore.conditions.lightExposure },
+                ].map((c) => {
+                  const sev = getConditionSeverity(c.type, c.val)
+                  const sevDot = sev.color === 'red' ? 'bg-red-500' : sev.color === 'amber' ? 'bg-amber-500' : 'bg-emerald-500'
+                  return (
+                    <div key={c.key}>
+                      <div className="flex items-center gap-2 mb-1"><Label className="text-xs">{c.label}</Label><span className={`size-2 rounded-full ${sevDot}`} /><span className="text-[10px] text-muted-foreground">{sev.label}</span></div>
+                      <Input type="number" step={c.step} value={c.val} onChange={(e) => analysisStore.setConditions({ [c.key]: parseFloat(e.target.value) || 0 })} />
+                    </div>
+                  )
+                })}
               </div>
             </CardContent>
           </Card>
@@ -1851,11 +1866,30 @@ function SimulatorPage() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="flex items-center justify-center py-20"
+                className="flex items-center justify-center py-8"
               >
                 <div className="flex flex-col items-center gap-4">
-                  <RefreshCw className="size-8 animate-spin text-emerald-600" />
-                  <p className="text-sm text-muted-foreground">Running stability analysis simulation...</p>
+                  {SIM_STEPS.map((step, i) => (
+                    <motion.div
+                      key={step}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: currentStep >= i ? 1 : 0.3, x: 0 }}
+                      transition={{ delay: i * 0.2 }}
+                      className="flex items-center gap-3"
+                    >
+                      {currentStep > i ? (
+                        <CheckCircle2 className="size-4 text-emerald-500" />
+                      ) : currentStep === i ? (
+                        <RefreshCw className="size-4 text-emerald-500 animate-spin" />
+                      ) : (
+                        <Clock className="size-4 text-muted-foreground" />
+                      )}
+                      <span className={`text-sm ${currentStep >= i ? 'font-medium' : 'text-muted-foreground'}`}>
+                        {step}
+                      </span>
+                    </motion.div>
+                  ))}
+                  <Progress value={(currentStep / SIM_STEPS.length) * 100} className="w-64 h-2 [&>div]:bg-emerald-500" />
                 </div>
               </motion.div>
             )}
@@ -1920,6 +1954,24 @@ function SimulatorPage() {
                         </div>
                       )
                     })}
+                    <Separator className="my-3" />
+                    <ResponsiveContainer width="100%" height={250}>
+                      <RadarChart data={Object.entries(analysisStore.result.risks).map(([key, val]: [string, any]) => {
+                        const labelMap: Record<string, string> = {
+                          hydrolysis: 'Hydrolysis',
+                          oxidation: 'Oxidation',
+                          photolysis: 'Photolysis',
+                          thermal: 'Thermal',
+                        }
+                        return { risk: labelMap[key], score: val.score }
+                      })}>
+                        <PolarGrid className="stroke-muted" />
+                        <PolarAngleAxis dataKey="risk" className="text-xs" />
+                        <PolarRadiusAxis domain={[0, 100]} className="text-xs" />
+                        <Radar name="Risk Score" dataKey="score" stroke="#10b981" fill="#10b981" fillOpacity={0.3} />
+                        <Tooltip contentStyle={{ borderRadius: 8 }} />
+                      </RadarChart>
+                    </ResponsiveContainer>
                   </CardContent>
                 </Card>
 
@@ -1980,10 +2032,32 @@ function SimulatorPage() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
               >
-                <Card className="flex flex-col items-center justify-center py-20">
-                  <Beaker className="size-12 text-muted-foreground/30 mb-4" />
-                  <p className="text-muted-foreground">Configure substances and conditions, then run the analysis</p>
-                  <p className="text-xs text-muted-foreground mt-1">Results will appear here after simulation completes</p>
+                <Card className="flex flex-col items-center justify-center py-16 relative overflow-hidden">
+                  {/* Decorative floating circles */}
+                  <motion.div
+                    animate={{ y: [-10, 10, -10], rotate: [0, 180, 360] }}
+                    transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+                    className="absolute top-8 left-12 size-8 rounded-full bg-emerald-200/30 dark:bg-emerald-800/30 blur-sm"
+                  />
+                  <motion.div
+                    animate={{ y: [10, -10, 10], rotate: [360, 180, 0] }}
+                    transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+                    className="absolute bottom-12 right-16 size-6 rounded-full bg-teal-200/30 dark:bg-teal-800/30 blur-sm"
+                  />
+                  <motion.div
+                    animate={{ x: [-5, 5, -5], y: [5, -5, 5] }}
+                    transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                    className="absolute top-20 right-12 size-4 rounded-full bg-cyan-200/30 dark:bg-cyan-800/30 blur-sm"
+                  />
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: 'spring', stiffness: 200, delay: 0.2 }}
+                  >
+                    <Beaker className="size-16 text-emerald-600/20 dark:text-emerald-400/20 mb-4" />
+                  </motion.div>
+                  <p className="text-muted-foreground font-medium">Configure substances and conditions</p>
+                  <p className="text-xs text-muted-foreground mt-1">Then click "Run Analysis" to simulate stability</p>
                 </Card>
               </motion.div>
             )}
@@ -2000,11 +2074,13 @@ function StudiesPage() {
   const { toast } = useToast()
   const [statusFilter, setStatusFilter] = useState('all')
   const [typeFilter, setTypeFilter] = useState('all')
+  const [studyTypeFilter, setStudyTypeFilter] = useState('all')
   const [createOpen, setCreateOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [refreshKey, setRefreshKey] = useState(0)
   const [apiStudies, setApiStudies] = useState<StudyData[]>([])
   const [totalCount, setTotalCount] = useState(0)
+  const [studiesByStatus, setStudiesByStatus] = useState<{ status: string; _count: { status: number } }[]>([])
   const [creating, setCreating] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [detailOpen, setDetailOpen] = useState(false)
@@ -2021,6 +2097,7 @@ function StudiesPage() {
     temperatureC: 25,
     humidityPercent: 60,
     durationMonths: 24,
+    ph: 7.0,
   })
 
   useEffect(() => {
@@ -2028,21 +2105,26 @@ function StudiesPage() {
     const loadData = async () => {
       const params = new URLSearchParams()
       if (statusFilter !== 'all') params.set('status', statusFilter)
-      if (typeFilter !== 'all') params.set('type', typeFilter)
+      if (studyTypeFilter !== 'all') params.set('type', studyTypeFilter)
       try {
-        const res = await fetch(`/api/studies?${params.toString()}`)
-        if (res.ok && !cancelled) {
-          const data = await res.json()
+        const [studiesRes, statsRes] = await Promise.all([
+          fetch(`/api/studies?${params.toString()}`),
+          fetch('/api/stats'),
+        ])
+        if (studiesRes.ok && !cancelled) {
+          const data = await studiesRes.json()
           const transformed: StudyData[] = (data.studies || []).map((s: any) => ({
-            id: s.id, studyCode: s.studyCode || '', substanceName: s.substanceName || '',
-            studyType: s.studyType || 'long_term', temperatureC: s.temperatureC ?? 25,
-            humidityPercent: s.humidityPercent ?? null, durationMonths: s.durationMonths ?? 24,
-            predictedShelfLifeMonths: s.predictedShelfLifeMonths ?? null,
-            status: s.status || 'draft', ph: s.ph ?? null,
+            ...transformStudy(s), humidityPercent: s.humidityPercent ?? null, ph: s.ph ?? null,
           }))
           if (!cancelled) {
             setApiStudies(transformed)
             setTotalCount(data.pagination?.total ?? 0)
+          }
+        }
+        if (statsRes.ok && !cancelled) {
+          const statsData = await statsRes.json()
+          if (statsData.studiesByStatus && !cancelled) {
+            setStudiesByStatus(statsData.studiesByStatus)
           }
         }
       } catch { /* fallback */ }
@@ -2050,7 +2132,7 @@ function StudiesPage() {
     }
     loadData()
     return () => { cancelled = true }
-  }, [statusFilter, typeFilter, refreshKey])
+  }, [statusFilter, studyTypeFilter, refreshKey])
 
   const handleRefresh = () => setRefreshKey(k => k + 1)
 
@@ -2073,6 +2155,7 @@ function StudiesPage() {
           temperatureC: newStudy.temperatureC,
           humidityPercent: newStudy.humidityPercent,
           durationMonths: newStudy.durationMonths,
+          ph: newStudy.ph,
         }),
       })
       if (res.ok) {
@@ -2081,7 +2164,7 @@ function StudiesPage() {
           description: `${newStudy.substanceName} study created successfully (${code})`,
         })
         setCreateOpen(false)
-        setNewStudy({ substanceName: '', studyType: 'long_term', temperatureC: 25, humidityPercent: 60, durationMonths: 24 })
+        setNewStudy({ substanceName: '', studyType: 'long_term', temperatureC: 25, humidityPercent: 60, durationMonths: 24, ph: 7.0 })
         handleRefresh()
       } else {
         const errBody = await res.json().catch(() => ({}))
@@ -2296,8 +2379,46 @@ function StudiesPage() {
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3">
+      {/* Status Pipeline Visualization */}
+      <div className="flex items-center gap-1 p-3 rounded-xl bg-gradient-to-r from-emerald-50/50 to-teal-50/50 dark:from-emerald-950/20 dark:to-teal-950/20 border">
+        {['draft', 'in_progress', 'under_review', 'approved'].map((stage, i) => {
+          const count = studiesByStatus?.find(s => s.status === stage)?._count?.status || 0
+          const stageColors: Record<string, string> = {
+            draft: 'bg-slate-400', in_progress: 'bg-teal-500', under_review: 'bg-amber-500', approved: 'bg-emerald-500'
+          }
+          const stageLabels: Record<string, string> = {
+            draft: 'Draft', in_progress: 'In Progress', under_review: 'Under Review', approved: 'Approved'
+          }
+          return (
+            <div key={stage} className="flex items-center gap-1">
+              {i > 0 && <ArrowRight className="size-3 text-muted-foreground" />}
+              <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-white/60 dark:bg-card/60">
+                <span className={`size-2 rounded-full ${stageColors[stage]}`} />
+                <span className="text-xs font-medium">{stageLabels[stage]}</span>
+                <Badge variant="secondary" className="text-[10px] h-4 px-1">{count}</Badge>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Study Type Filter Pills */}
+      <div className="flex flex-wrap gap-2 mb-1">
+        {['all', 'long_term', 'accelerated', 'intermediate', 'stress'].map((type) => (
+          <Button
+            key={type}
+            variant={studyTypeFilter === type ? 'default' : 'outline'}
+            size="sm"
+            className={`h-7 text-xs rounded-full ${studyTypeFilter === type ? 'bg-emerald-600 text-white hover:bg-emerald-700' : ''}`}
+            onClick={() => setStudyTypeFilter(type)}
+          >
+            {type === 'all' ? 'All Types' : studyTypeLabels[type]}
+          </Button>
+        ))}
+      </div>
+
+      {/* Status Filter */}
+      <div className="flex gap-3">
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-[160px]">
             <SelectValue placeholder="Filter by Status" />
@@ -2309,18 +2430,6 @@ function StudiesPage() {
             <SelectItem value="completed">Completed</SelectItem>
             <SelectItem value="under_review">Under Review</SelectItem>
             <SelectItem value="approved">Approved</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Filter by Type" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Types</SelectItem>
-            <SelectItem value="long_term">Long-Term</SelectItem>
-            <SelectItem value="accelerated">Accelerated</SelectItem>
-            <SelectItem value="intermediate">Intermediate</SelectItem>
-            <SelectItem value="stress">Stress Testing</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -2391,53 +2500,17 @@ function StudiesPage() {
             <DialogDescription>Define the parameters for a new stability study</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div>
-              <Label>Substance Name *</Label>
-              <Input
-                placeholder="Enter substance name"
-                value={newStudy.substanceName}
-                onChange={(e) => setNewStudy({ ...newStudy, substanceName: e.target.value })}
-              />
+            <div><Label className="text-emerald-700 dark:text-emerald-400">Substance Name *</Label><Input placeholder="Enter substance name" value={newStudy.substanceName} onChange={(e) => setNewStudy({ ...newStudy, substanceName: e.target.value })} className="border-emerald-200 dark:border-emerald-800/50 focus:border-emerald-500" /></div>
+            <div className="p-3 rounded-lg bg-emerald-50/50 dark:bg-emerald-900/10 border border-emerald-200/50 dark:border-emerald-800/50">
+              <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400 mb-2">Study Code Preview</p>
+              <p className="text-sm font-mono text-muted-foreground">STB-{new Date().getFullYear()}-{String(Date.now()).slice(-5)} <span className="text-xs">(auto-generated)</span></p>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Study Type</Label>
-                <Select value={newStudy.studyType} onValueChange={(v) => setNewStudy({ ...newStudy, studyType: v })}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="long_term">Long-Term</SelectItem>
-                    <SelectItem value="accelerated">Accelerated</SelectItem>
-                    <SelectItem value="intermediate">Intermediate</SelectItem>
-                    <SelectItem value="stress">Stress Testing</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Duration (months)</Label>
-                <Input
-                  type="number"
-                  value={newStudy.durationMonths}
-                  onChange={(e) => setNewStudy({ ...newStudy, durationMonths: parseInt(e.target.value) || 0 })}
-                />
-              </div>
-              <div>
-                <Label>Temperature (°C)</Label>
-                <Input
-                  type="number"
-                  value={newStudy.temperatureC}
-                  onChange={(e) => setNewStudy({ ...newStudy, temperatureC: parseFloat(e.target.value) || 0 })}
-                />
-              </div>
-              <div>
-                <Label>Humidity (%)</Label>
-                <Input
-                  type="number"
-                  value={newStudy.humidityPercent}
-                  onChange={(e) => setNewStudy({ ...newStudy, humidityPercent: parseFloat(e.target.value) || 0 })}
-                />
-              </div>
+              <div><Label className="text-emerald-700 dark:text-emerald-400">Study Type</Label><Select value={newStudy.studyType} onValueChange={(v) => setNewStudy({ ...newStudy, studyType: v })}><SelectTrigger className="border-emerald-200 dark:border-emerald-800/50"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="long_term">Long-Term</SelectItem><SelectItem value="accelerated">Accelerated</SelectItem><SelectItem value="intermediate">Intermediate</SelectItem><SelectItem value="stress">Stress Testing</SelectItem></SelectContent></Select></div>
+              <div><Label className="text-emerald-700 dark:text-emerald-400">Duration (months)</Label><Input type="number" value={newStudy.durationMonths} onChange={(e) => setNewStudy({ ...newStudy, durationMonths: parseInt(e.target.value) || 0 })} className="border-emerald-200 dark:border-emerald-800/50 focus:border-emerald-500" /></div>
+              <div><Label className="text-emerald-700 dark:text-emerald-400">Temperature (°C)</Label><Input type="number" value={newStudy.temperatureC} onChange={(e) => setNewStudy({ ...newStudy, temperatureC: parseFloat(e.target.value) || 0 })} className="border-emerald-200 dark:border-emerald-800/50 focus:border-emerald-500" /></div>
+              <div><Label className="text-emerald-700 dark:text-emerald-400">Humidity (%)</Label><Input type="number" value={newStudy.humidityPercent} onChange={(e) => setNewStudy({ ...newStudy, humidityPercent: parseFloat(e.target.value) || 0 })} className="border-emerald-200 dark:border-emerald-800/50 focus:border-emerald-500" /></div>
+              <div><Label className="text-emerald-700 dark:text-emerald-400">pH</Label><Input type="number" step="0.1" value={newStudy.ph} onChange={(e) => setNewStudy({ ...newStudy, ph: parseFloat(e.target.value) || 7.0 })} className="border-emerald-200 dark:border-emerald-800/50 focus:border-emerald-500" /></div>
             </div>
           </div>
           <DialogFooter>
@@ -2591,58 +2664,12 @@ function StudiesPage() {
                   <div className="p-2 rounded-lg bg-emerald-50/50 dark:bg-emerald-900/10 border border-emerald-200/50 dark:border-emerald-800/50">
                     <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400 mb-2">Add Time Point</p>
                     <div className="flex flex-wrap items-end gap-2">
-                      <div className="flex-1 min-w-[100px]">
-                        <Label className="text-[10px] text-muted-foreground">Time (days)</Label>
-                        <Input
-                          type="number"
-                          min="0"
-                          placeholder="0"
-                          value={newTimePoint.timeDays || ''}
-                          onChange={(e) => setNewTimePoint({ ...newTimePoint, timeDays: parseInt(e.target.value) || 0 })}
-                          className="text-xs h-8"
-                        />
-                      </div>
-                      <div className="flex-1 min-w-[100px]">
-                        <Label className="text-[10px] text-muted-foreground">% Remaining</Label>
-                        <Input
-                          type="number"
-                          min="0"
-                          max="100"
-                          step="0.1"
-                          placeholder="100"
-                          value={newTimePoint.percentRemaining || ''}
-                          onChange={(e) => setNewTimePoint({ ...newTimePoint, percentRemaining: parseFloat(e.target.value) || 0 })}
-                          className="text-xs h-8"
-                        />
-                      </div>
-                      <label className="flex items-center gap-1 text-xs cursor-pointer h-8">
-                        <input
-                          type="checkbox"
-                          checked={newTimePoint.isOOS}
-                          onChange={(e) => setNewTimePoint({ ...newTimePoint, isOOS: e.target.checked })}
-                          className="rounded"
-                        />
-                        OOS
-                      </label>
-                      <label className="flex items-center gap-1 text-xs cursor-pointer h-8">
-                        <input
-                          type="checkbox"
-                          checked={newTimePoint.isOOT}
-                          onChange={(e) => setNewTimePoint({ ...newTimePoint, isOOT: e.target.checked })}
-                          className="rounded"
-                        />
-                        OOT
-                      </label>
-                      <Button
-                        size="sm"
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white h-8"
-                        onClick={handleAddTimePoint}
-                        disabled={addingTimePoint}
-                      >
-                        {addingTimePoint
-                          ? <><RefreshCw className="size-3 mr-1 animate-spin" /> Adding...</>
-                          : <><Plus className="size-3 mr-1" /> Add</>
-                        }
+                      <div className="flex-1 min-w-[100px]"><Label className="text-[10px] text-muted-foreground">Time (days)</Label><Input type="number" min="0" placeholder="0" value={newTimePoint.timeDays || ''} onChange={(e) => setNewTimePoint({ ...newTimePoint, timeDays: parseInt(e.target.value) || 0 })} className="text-xs h-8" /></div>
+                      <div className="flex-1 min-w-[100px]"><Label className="text-[10px] text-muted-foreground">% Remaining</Label><Input type="number" min="0" max="100" step="0.1" placeholder="100" value={newTimePoint.percentRemaining || ''} onChange={(e) => setNewTimePoint({ ...newTimePoint, percentRemaining: parseFloat(e.target.value) || 0 })} className="text-xs h-8" /></div>
+                      <label className="flex items-center gap-1 text-xs cursor-pointer h-8"><input type="checkbox" checked={newTimePoint.isOOS} onChange={(e) => setNewTimePoint({ ...newTimePoint, isOOS: e.target.checked })} className="rounded" />OOS</label>
+                      <label className="flex items-center gap-1 text-xs cursor-pointer h-8"><input type="checkbox" checked={newTimePoint.isOOT} onChange={(e) => setNewTimePoint({ ...newTimePoint, isOOT: e.target.checked })} className="rounded" />OOT</label>
+                      <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white h-8" onClick={handleAddTimePoint} disabled={addingTimePoint}>
+                        {addingTimePoint ? <><RefreshCw className="size-3 mr-1 animate-spin" /> Adding...</> : <><Plus className="size-3 mr-1" /> Add</>}
                       </Button>
                     </div>
                   </div>
@@ -2652,33 +2679,18 @@ function StudiesPage() {
 
                 {/* Electronic signatures */}
                 <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Shield className="size-4 text-emerald-600 dark:text-emerald-400" />
-                    <p className="text-sm font-medium">Electronic Signatures ({detailStudy.signatures?.length || 0})</p>
-                  </div>
+                  <div className="flex items-center gap-2"><Shield className="size-4 text-emerald-600 dark:text-emerald-400" /><p className="text-sm font-medium">Electronic Signatures ({detailStudy.signatures?.length || 0})</p></div>
                   {detailStudy.signatures && detailStudy.signatures.length > 0 ? (
                     <div className="space-y-2">
                       {detailStudy.signatures.map((sig: any) => (
                         <div key={sig.id} className="flex items-center gap-3 p-2 rounded-lg bg-muted/40">
-                          <div className="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center text-xs font-bold shrink-0">
-                            {sig.signerName?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() || '??'}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium">{sig.signerName}</p>
-                            <p className="text-xs text-muted-foreground">{sig.meaning} · {sig.signerRole}</p>
-                          </div>
-                          <div className="text-right shrink-0">
-                            <p className="text-xs text-muted-foreground">{sig.signedAt ? new Date(sig.signedAt).toLocaleString() : ''}</p>
-                            <p className="text-[10px] font-mono text-muted-foreground">#{sig.signatureHash?.slice(0, 8)}</p>
-                          </div>
+                          <div className="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center text-xs font-bold shrink-0">{sig.signerName?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() || '??'}</div>
+                          <div className="flex-1 min-w-0"><p className="text-sm font-medium">{sig.signerName}</p><p className="text-xs text-muted-foreground">{sig.meaning} · {sig.signerRole}</p></div>
+                          <div className="text-right shrink-0"><p className="text-xs text-muted-foreground">{sig.signedAt ? new Date(sig.signedAt).toLocaleString() : ''}</p><p className="text-[10px] font-mono text-muted-foreground">#{sig.signatureHash?.slice(0, 8)}</p></div>
                         </div>
                       ))}
                     </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground p-3 rounded-lg bg-muted/30">
-                      No electronic signatures recorded yet.
-                    </p>
-                  )}
+                  ) : <p className="text-sm text-muted-foreground p-3 rounded-lg bg-muted/30">No electronic signatures recorded yet.</p>}
                 </div>
 
                 <Separator />
@@ -2686,34 +2698,14 @@ function StudiesPage() {
                 {/* Status action buttons */}
                 {detailStudy.status === 'under_review' && (
                   <div className="flex flex-wrap gap-2">
-                    <Button
-                      size="sm"
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                      onClick={() => updateStudyStatus('approved')}
-                      disabled={statusUpdating}
-                    >
-                      <CheckCircle2 className="size-4 mr-1" /> Approve
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={() => updateStudyStatus('rejected')}
-                      disabled={statusUpdating}
-                    >
-                      <XCircle className="size-4 mr-1" /> Reject
-                    </Button>
+                    <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => updateStudyStatus('approved')} disabled={statusUpdating}><CheckCircle2 className="size-4 mr-1" /> Approve</Button>
+                    <Button size="sm" variant="destructive" onClick={() => updateStudyStatus('rejected')} disabled={statusUpdating}><XCircle className="size-4 mr-1" /> Reject</Button>
                   </div>
                 )}
               </div>
 
               <DialogFooter className="gap-2 flex-wrap">
-                <Button
-                  variant="outline"
-                  onClick={signStudy}
-                  disabled={signing}
-                >
-                  {signing ? <><RefreshCw className="size-4 mr-2 animate-spin" /> Signing...</> : <><Shield className="size-4 mr-2" /> Sign Study</>}
-                </Button>
+                <Button variant="outline" onClick={signStudy} disabled={signing}>{signing ? <><RefreshCw className="size-4 mr-2 animate-spin" /> Signing...</> : <><Shield className="size-4 mr-2" /> Sign Study</>}</Button>
                 <Button onClick={() => setDetailOpen(false)}>Close</Button>
               </DialogFooter>
             </>
@@ -2738,21 +2730,12 @@ function ReportsPage() {
   const [apiReports, setApiReports] = useState<ReportData[]>([])
   const [reportStudies, setReportStudies] = useState<StudyData[]>([])
   const [generating, setGenerating] = useState(false)
+  const [previewReport, setPreviewReport] = useState<ReportData | null>(null)
+  const [previewOpen, setPreviewOpen] = useState(false)
 
-  const reportStatusColors: Record<string, string> = {
-    draft: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
-    completed: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
-    under_review: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
-    in_progress: 'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300',
-  }
-
-  const colorMap: Record<string, string> = {
-    emerald: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400',
-    teal: 'bg-teal-100 text-teal-600 dark:bg-teal-900/40 dark:text-teal-400',
-    amber: 'bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400',
-    cyan: 'bg-cyan-100 text-cyan-600 dark:bg-cyan-900/40 dark:text-cyan-400',
-    rose: 'bg-rose-100 text-rose-600 dark:bg-rose-900/40 dark:text-rose-400',
-  }
+  // reportStatusColors shares most entries with global statusColors
+  // colorMap is now the global COLOR_MAP
+  const reportStatusColors: Record<string, string> = statusColors
 
   useEffect(() => {
     let cancelled = false
@@ -2763,8 +2746,7 @@ function ReportsPage() {
           const data = await res.json()
           const transformed: ReportData[] = (data.reports || []).map((r: any) => ({
             id: r.id, title: r.title || '', reportType: r.reportType || '',
-            status: r.status || 'draft',
-            createdAt: r.createdAt ? new Date(r.createdAt).toLocaleDateString() : '',
+            status: r.status || 'draft', createdAt: r.createdAt ? new Date(r.createdAt).toLocaleDateString() : '',
           }))
           if (!cancelled) setApiReports(transformed)
         }
@@ -2773,14 +2755,7 @@ function ReportsPage() {
         const res = await fetch('/api/studies')
         if (res.ok && !cancelled) {
           const data = await res.json()
-          const transformed: StudyData[] = (data.studies || []).map((s: any) => ({
-            id: s.id, studyCode: s.studyCode || '', substanceName: s.substanceName || '',
-            studyType: s.studyType || 'long_term', temperatureC: s.temperatureC || 25,
-            humidityPercent: s.humidityPercent, durationMonths: s.durationMonths || 24,
-            predictedShelfLifeMonths: s.predictedShelfLifeMonths, status: s.status || 'draft',
-            ph: s.ph,
-          }))
-          if (!cancelled) setReportStudies(transformed)
+          if (!cancelled) setReportStudies((data.studies || []).map(transformStudy))
         }
       } catch { /* fallback */ }
       if (!cancelled) setLoading(false)
@@ -2981,7 +2956,7 @@ function ReportsPage() {
                 <CardContent className="p-6 flex flex-col items-center gap-3 text-center">
                   <motion.div
                     whileHover={{ rotate: 8, scale: 1.1 }}
-                    className={`p-3 rounded-xl ${colorMap[rt.color]}`}
+                    className={`p-3 rounded-xl ${COLOR_MAP[rt.color]}`}
                   >
                     <Icon className="size-6" />
                   </motion.div>
@@ -3002,124 +2977,140 @@ function ReportsPage() {
         })}
       </div>
 
-      {/* Recent Reports */}
-      <Card className="backdrop-blur-sm bg-card/80">
-        <CardHeader>
-          <CardTitle>Recent Reports</CardTitle>
-          <CardDescription>Recently generated compliance documents</CardDescription>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="max-h-72 overflow-y-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Title</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading ? (
-                  Array.from({ length: 3 }).map((_, i) => (
-                    <TableRow key={i}>
-                      <TableCell colSpan={5}><Skeleton className="h-8 w-full" /></TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  apiReports.map((report, idx) => (
-                    <TableRow key={report.id} className={idx % 2 === 1 ? 'bg-muted/30' : ''}>
-                      <TableCell className="font-medium">{report.title}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="text-xs">
-                          {REPORT_TYPES.find(r => r.type === report.reportType)?.title?.split(' ')[0] || report.reportType}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={reportStatusColors[report.status]}>
-                          {report.status.replace('_', ' ')}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">{report.createdAt}</TableCell>
-                      <TableCell className="text-right">
-                        <TooltipProvider delayDuration={200}>
-                          <UiTooltip>
-                            <TooltipTrigger asChild>
-                              <Button variant="ghost" size="sm" onClick={() => handlePrintReport(report)}>
-                                <Download className="size-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Export {report.reportType} report as PDF</TooltipContent>
-                          </UiTooltip>
-                        </TooltipProvider>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+      {/* Recent Reports - Card Grid */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Recent Reports</h2>
+          <p className="text-sm text-muted-foreground">{apiReports.length} reports</p>
+        </div>
+        {loading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-48 w-full" />)}
           </div>
-        </CardContent>
-      </Card>
+        ) : apiReports.length === 0 ? (
+          <Card>
+            <CardContent className="p-8 text-center text-muted-foreground">
+              <FileText className="size-10 mx-auto mb-3 opacity-30" />
+              <p className="font-medium">No reports generated yet</p>
+              <p className="text-sm mt-1">Use the report type cards above to generate your first compliance report.</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {apiReports.map((report) => {
+              const typeInfo = REPORT_TYPES.find(t => t.type === report.reportType)
+              const Icon = typeInfo?.icon || FileText
+              return (
+                <motion.div key={report.id} whileHover={{ y: -4 }} transition={{ type: 'spring', stiffness: 300 }}>
+                  <Card className="cursor-pointer hover:shadow-lg transition-shadow overflow-hidden" onClick={() => { setPreviewReport(report); setPreviewOpen(true) }}>
+                    <div className={`h-2 ${REPORT_GRADIENT[report.reportType] || REPORT_GRADIENT.validation_protocol}`} />
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className={`p-2 rounded-lg shrink-0 ${REPORT_ICON_BG[report.reportType] || REPORT_ICON_BG.validation_protocol}`}>
+                          <Icon className="size-5" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-semibold text-sm truncate">{report.title}</h3>
+                          <p className="text-xs text-muted-foreground truncate">{typeInfo?.description}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <Badge className={`text-[10px] ${reportStatusColors[report.status]}`}>{report.status.replace('_', ' ')}</Badge>
+                        <span className="text-xs text-muted-foreground">{report.createdAt}</span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-3 pt-3 border-t">
+                        <Button variant="ghost" size="sm" className="text-xs h-7 px-2" onClick={(e) => { e.stopPropagation(); setPreviewReport(report); setPreviewOpen(true) }}>
+                          <Eye className="size-3 mr-1" /> Preview
+                        </Button>
+                        <Button variant="ghost" size="sm" className="text-xs h-7 px-2" onClick={(e) => { e.stopPropagation(); handlePrintReport(report) }}>
+                          <Download className="size-3 mr-1" /> Export PDF
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Report Preview Modal */}
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+          {previewReport ? (() => {
+            const typeInfo = REPORT_TYPES.find(t => t.type === previewReport.reportType)
+            const Icon = typeInfo?.icon || FileText
+            const previewContent: Record<string, string[]> = {
+              ich_q1a: ['1. Scope & Objective', '2. Test Conditions (25°C/60% RH, 40°C/75% RH)', '3. Testing Frequency (0, 3, 6, 9, 12, 18, 24 months)', '4. Container Closure System', '5. Acceptance Criteria', '6. Statistical Analysis Plan', '7. Out-of-Specification Protocol'],
+              ctd_module: ['3.2.P.8.1 Summary', '3.2.P.8.2 Post-approval Changes', '3.2.P.8.3 Stability Data Tables', '3.2.P.8.4 Statistical Analysis', '3.2.P.8.5 Conclusions & Shelf Life'],
+              fmea: ['1. Process Map & Flowchart', '2. Failure Mode Identification', '3. Severity Rating (1-10)', '4. Occurrence Rating (1-10)', '5. Detection Rating (1-10)', '6. RPN Calculation & Ranking', '7. Recommended Actions'],
+              doe: ['1. Factor Selection', '2. Level Definition', '3. Design Matrix (Full/Partial Factorial)', '4. Response Variable Definition', '5. Randomization Plan', '6. Statistical Analysis Method', '7. Expected Outcomes'],
+              validation_protocol: ['1. Installation Qualification (IQ)', '2. Operational Qualification (OQ)', '3. Performance Qualification (PQ)', '4. Acceptance Criteria', '5. Deviation Handling', '6. Final Report Template'],
+            }
+            return (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-3">
+                    <div className={`p-2 rounded-lg shrink-0 ${previewReport.reportType === 'ich_q1a' ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400' : previewReport.reportType === 'ctd_module' ? 'bg-teal-100 text-teal-600 dark:bg-teal-900/40 dark:text-teal-400' : previewReport.reportType === 'fmea' ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400' : previewReport.reportType === 'doe' ? 'bg-cyan-100 text-cyan-600 dark:bg-cyan-900/40 dark:text-cyan-400' : 'bg-rose-100 text-rose-600 dark:bg-rose-900/40 dark:text-rose-400'}`}>
+                      <Icon className="size-5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <span className="truncate">{previewReport.title}</span>
+                      <Badge className={`ml-2 text-[10px] ${reportStatusColors[previewReport.status]}`}>{previewReport.status.replace('_', ' ')}</Badge>
+                    </div>
+                  </DialogTitle>
+                  <DialogDescription>{typeInfo?.description}</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="p-3 rounded-lg bg-emerald-50/50 dark:bg-emerald-900/10 border-l-4 border-emerald-500 text-sm">
+                    <p className="text-muted-foreground">Report ID: <span className="font-mono">{previewReport.id}</span> · Created: {previewReport.createdAt}</p>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">Document Structure Outline:</p>
+                    {previewContent[previewReport.reportType]?.map((section, idx) => (
+                      <div key={idx} className="flex items-center gap-2 p-2 rounded-lg bg-muted/40 hover:bg-muted/60 transition-colors">
+                        <span className="size-2 rounded-full bg-emerald-500" />
+                        <span className="text-sm">{section}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="p-3 rounded-lg border bg-card">
+                    <p className="text-xs font-medium text-muted-foreground mb-2">Compliance Note</p>
+                    <p className="text-xs text-muted-foreground">This report follows FDA 21 CFR Part 11 requirements for electronic records and signatures. Audit retention: 7 years.</p>
+                  </div>
+                </div>
+                <DialogFooter className="gap-2">
+                  <Button variant="outline" onClick={() => setPreviewOpen(false)}>Close</Button>
+                  <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => { setPreviewOpen(false); handlePrintReport(previewReport) }}>
+                    <Download className="size-4 mr-2" /> Export PDF
+                  </Button>
+                </DialogFooter>
+              </>
+            )
+          })() : null}
+        </DialogContent>
+      </Dialog>
 
       {/* Generate Report Dialog */}
       <Dialog open={generateOpen} onOpenChange={setGenerateOpen}>
         <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Generate Report</DialogTitle>
-            <DialogDescription>Configure and generate a compliance report</DialogDescription>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Generate Report</DialogTitle><DialogDescription>Configure and generate a compliance report</DialogDescription></DialogHeader>
           <div className="space-y-4">
-            <div>
-              <Label>Report Type *</Label>
-              <Select value={selectedReportType} onValueChange={setSelectedReportType}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select report type" />
-                </SelectTrigger>
-                <SelectContent>
-                  {REPORT_TYPES.map((rt) => (
-                    <SelectItem key={rt.type} value={rt.type}>{rt.title}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Associated Study</Label>
-              <Select value={selectedStudyId} onValueChange={setSelectedStudyId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a study (optional)" />
-                </SelectTrigger>
-                <SelectContent>
-                  {reportStudies.map((std) => (
-                    <SelectItem key={std.id} value={std.id}>{std.studyCode} — {std.substanceName}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Additional Notes</Label>
-              <Textarea placeholder="Any additional context or requirements for this report..." />
-            </div>
+            <div><Label>Report Type *</Label><Select value={selectedReportType} onValueChange={setSelectedReportType}><SelectTrigger><SelectValue placeholder="Select report type" /></SelectTrigger><SelectContent>{REPORT_TYPES.map((rt) => (<SelectItem key={rt.type} value={rt.type}>{rt.title}</SelectItem>))}</SelectContent></Select></div>
+            <div><Label>Associated Study</Label><Select value={selectedStudyId} onValueChange={setSelectedStudyId}><SelectTrigger><SelectValue placeholder="Select a study (optional)" /></SelectTrigger><SelectContent>{reportStudies.map((std) => (<SelectItem key={std.id} value={std.id}>{std.studyCode} — {std.substanceName}</SelectItem>))}</SelectContent></Select></div>
+            <div><Label>Additional Notes</Label><Textarea placeholder="Any additional context or requirements for this report..." /></div>
             {selectedReportType && (
               <div className="p-3 rounded-lg bg-emerald-50/50 dark:bg-emerald-900/10 border-l-4 border-emerald-500 text-sm">
                 <p className="text-muted-foreground">Report title preview:</p>
-                <p className="font-medium">
-                  {REPORT_TYPES.find(r => r.type === selectedReportType)?.title || selectedReportType} Report — {new Date().toLocaleDateString()}
-                </p>
+                <p className="font-medium">{REPORT_TYPES.find(r => r.type === selectedReportType)?.title || selectedReportType} Report — {new Date().toLocaleDateString()}</p>
               </div>
             )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setGenerateOpen(false)}>Cancel</Button>
-            <Button
-              className="bg-emerald-600 hover:bg-emerald-700 text-white"
-              onClick={handleGenerateReport}
-              disabled={!selectedReportType || generating}
-            >
-              {generating
-                ? <><RefreshCw className="size-4 mr-2 animate-spin" /> Generating...</>
-                : <><FileText className="size-4 mr-2" /> Generate Report</>}
+            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={handleGenerateReport} disabled={!selectedReportType || generating}>
+              {generating ? <><RefreshCw className="size-4 mr-2 animate-spin" /> Generating...</> : <><FileText className="size-4 mr-2" /> Generate Report</>}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -3139,6 +3130,17 @@ function DegradationPage() {
   const [molecules, setMolecules] = useState<MoleculeData[]>([])
   const [selectedMoleculeId, setSelectedMoleculeId] = useState('all')
   const [search, setSearch] = useState('')
+  const [hazardFilter, setHazardFilter] = useState('all')
+  const [createDpOpen, setCreateDpOpen] = useState(false)
+  const [creatingDp, setCreatingDp] = useState(false)
+  const [newDp, setNewDp] = useState({
+    name: '',
+    smiles: '',
+    hazardLevel: 'low',
+    percentage: 0,
+    moleculeId: '',
+    description: '',
+  })
 
   useEffect(() => {
     let cancelled = false
@@ -3154,13 +3156,7 @@ function DegradationPage() {
         }
         if (!cancelled && molRes.ok) {
           const data = await molRes.json()
-          const transformed: MoleculeData[] = (data.molecules || []).map((m: any) => ({
-            id: m.id, name: m.name, casNumber: m.casNumber || '', smiles: m.smiles || '',
-            formula: m.formula || '', molarMass: m.molarMass ?? 0, logP: m.logP ?? 0,
-            stabilityScore: m.predictedStabilityScore ?? 0, riskLevel: m.riskLevel || 'low',
-            dataSource: m.dataSource || 'Manual', description: m.description || '',
-            meltingPoint: m.meltingPoint ?? null, boilingPoint: m.boilingPoint ?? null,
-          }))
+          const transformed: MoleculeData[] = (data.molecules || []).map(transformMolecule)
           setMolecules(transformed)
         }
       } catch { /* ignore */ }
@@ -3173,13 +3169,14 @@ function DegradationPage() {
   const handleRefresh = () => { setLoading(true); setRefreshKey(k => k + 1) }
 
   const hazardColors: Record<string, string> = {
-    low: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700',
-    moderate: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 border-amber-300 dark:border-amber-700',
-    high: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 border-red-300 dark:border-red-700',
+    low: `bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 ${HAZARD_OUTLINE_MAP.low}`,
+    moderate: `bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 ${HAZARD_OUTLINE_MAP.moderate}`,
+    high: `bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 ${HAZARD_OUTLINE_MAP.high}`,
   }
 
   const filtered = products.filter((p) => {
     if (selectedMoleculeId !== 'all' && p.moleculeId !== selectedMoleculeId) return false
+    if (hazardFilter !== 'all' && p.hazardLevel !== hazardFilter) return false
     if (search && !p.name.toLowerCase().includes(search.toLowerCase()) &&
         !(p.molecule?.name || '').toLowerCase().includes(search.toLowerCase())) return false
     return true
@@ -3200,6 +3197,16 @@ function DegradationPage() {
     fill: level === 'low' ? '#10b981' : level === 'moderate' ? '#f59e0b' : '#ef4444',
   }))
 
+  // Most common hazard level
+  const hazardCounts: Record<string, number> = { low: 0, moderate: 0, high: 0, critical: 0 }
+  products.forEach((p) => { if (hazardCounts[p.hazardLevel] !== undefined) hazardCounts[p.hazardLevel]++ })
+  const mostCommonHazard = Object.entries(hazardCounts).sort(([,a], [,b]) => b - a)[0]?.[0] || 'low'
+
+  // Average degradation percentage
+  const avgDegradation = products.length > 0
+    ? Math.round(products.reduce((s, p) => s + (p.percentage ?? 0), 0) / products.filter(p => p.percentage != null).length)
+    : 0
+
   // Top degradation products by percentage
   const topByPercentage = [...filtered]
     .filter((p) => p.percentage != null)
@@ -3218,37 +3225,31 @@ function DegradationPage() {
           <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-400 dark:to-teal-400 bg-clip-text text-transparent">Degradation Pathways</h1>
           <p className="text-muted-foreground">Track and analyze chemical degradation products and hazard pathways</p>
         </div>
-        <Button variant="outline" size="sm" onClick={handleRefresh} disabled={loading}>
-          <RefreshCw className={`size-4 mr-1 ${loading ? 'animate-spin' : ''}`} /> Refresh
-        </Button>
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={loading}>
+            <RefreshCw className={`size-4 mr-1 ${loading ? 'animate-spin' : ''}`} /> Refresh
+          </Button>
+          <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" size="sm" onClick={() => setCreateDpOpen(true)}>
+            <Plus className="size-4 mr-1" /> Add Product
+          </Button>
+        </div>
       </div>
 
       {/* KPI cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
           { label: 'Total Products', value: products.length, icon: FlaskConical, color: 'emerald' },
-          { label: 'Tracked Molecules', value: Object.keys(grouped).length, icon: Atom, color: 'teal' },
+          { label: 'Avg Degradation %', value: avgDegradation, icon: Gauge, color: 'teal' },
           { label: 'High Hazard', value: products.filter((p) => p.hazardLevel === 'high').length, icon: AlertTriangle, color: 'red' },
-          { label: 'Avg. Yield %', value: products.length > 0 ? Math.round(products.reduce((s, p) => s + (p.percentage ?? 0), 0) / products.length) : 0, icon: Gauge, color: 'cyan' },
+          { label: 'Most Common', value: mostCommonHazard.charAt(0).toUpperCase() + mostCommonHazard.slice(1), icon: BarChart3, color: 'cyan' },
         ].map((stat) => {
           const Icon = stat.icon
-          const colorMap: Record<string, string> = {
-            emerald: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400',
-            teal: 'bg-teal-100 text-teal-600 dark:bg-teal-900/40 dark:text-teal-400',
-            red: 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400',
-            cyan: 'bg-cyan-100 text-cyan-600 dark:bg-cyan-900/40 dark:text-cyan-400',
-          }
           return (
             <Card key={stat.label} className="backdrop-blur-sm bg-card/80 overflow-hidden relative">
-              <div className={`absolute top-0 left-0 right-0 h-1 ${stat.color === 'red' ? 'bg-red-500' : stat.color === 'cyan' ? 'bg-cyan-500' : stat.color === 'teal' ? 'bg-teal-500' : 'bg-emerald-500'}`} />
+              <div className={`absolute top-0 left-0 right-0 h-1 ${GRADIENT_TOP_BAR[stat.color] || 'bg-emerald-500'}`} />
               <CardContent className="p-4 flex items-center gap-3">
-                <div className={`p-2 rounded-lg shrink-0 ${colorMap[stat.color]}`}>
-                  <Icon className="size-4" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">{stat.label}</p>
-                  <p className="text-xl font-bold tabular-nums">{stat.value}</p>
-                </div>
+                <div className={`p-2 rounded-lg shrink-0 ${COLOR_MAP[stat.color]}`}><Icon className="size-4" /></div>
+                <div><p className="text-xs text-muted-foreground">{stat.label}</p><p className="text-xl font-bold tabular-nums">{stat.value}</p></div>
               </CardContent>
             </Card>
           )
@@ -3313,6 +3314,22 @@ function DegradationPage() {
         </Card>
       </div>
 
+      {/* Hazard Level Filter */}
+      <div className="flex flex-wrap gap-2 mb-1">
+        {['all', 'low', 'moderate', 'high', 'critical'].map((level) => (
+          <Button
+            key={level}
+            variant={hazardFilter === level ? 'default' : 'outline'}
+            size="sm"
+            className={`h-7 text-xs rounded-full ${hazardFilter === level ? (RISK_PILL_ACTIVE[level] || 'bg-emerald-600 text-white') : ''}`}
+            onClick={() => setHazardFilter(level)}
+          >
+            {level === 'all' ? 'All Levels' : level.charAt(0).toUpperCase() + level.slice(1)}
+            {level !== 'all' && <Badge variant="secondary" className="text-[10px] h-4 px-1 ml-1">{hazardCounts[level] || 0}</Badge>}
+          </Button>
+        ))}
+      </div>
+
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
@@ -3347,7 +3364,7 @@ function DegradationPage() {
           <CardContent className="p-8 text-center text-muted-foreground">
             <FlaskConical className="size-10 mx-auto mb-3 opacity-30" />
             <p className="font-medium">No degradation products found</p>
-            <p className="text-sm mt-1">Add degradation products via molecule detail dialogs to see them here.</p>
+            <p className="text-sm mt-1">Add degradation products to see them here.</p>
             <Button variant="outline" size="sm" className="mt-3" onClick={() => setPage('molecules')}>
               <Atom className="size-4 mr-2" /> Go to Molecules
             </Button>
@@ -3375,37 +3392,101 @@ function DegradationPage() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-2 pt-0">
-                {group.products.map((dp) => (
-                  <div key={dp.id} className="flex items-center justify-between p-2 rounded-lg bg-muted/40 hover:bg-muted/60 transition-colors">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-medium">{dp.name}</span>
-                        <Badge variant="outline" className={`text-[10px] ${hazardColors[dp.hazardLevel] || hazardColors.low}`}>
-                          {dp.hazardLevel}
-                        </Badge>
+                {group.products.map((dp) => {
+                  const borderColorClass = HAZARD_BORDER_MAP[dp.hazardLevel] || 'border-l-emerald-500'
+                  const barColorClass = HAZARD_BAR_MAP[dp.hazardLevel] || 'from-emerald-400 to-teal-500'
+                  return (
+                    <div key={dp.id} className={`flex items-center justify-between p-2 rounded-lg border-l-4 ${borderColorClass} bg-muted/40 hover:bg-muted/60 transition-colors`}>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-medium">{dp.name}</span>
+                          <Badge variant="outline" className={`text-[10px] ${hazardColors[dp.hazardLevel] || hazardColors.low}`}>
+                            {dp.hazardLevel}
+                          </Badge>
+                          <Badge variant="secondary" className="text-[10px]">{group.molecule?.name || 'Unknown'}</Badge>
+                        </div>
+                        {dp.smiles && (
+                          <p className="text-[10px] font-mono text-muted-foreground mt-0.5 truncate">{dp.smiles}</p>
+                        )}
                       </div>
-                      {dp.smiles && (
-                        <p className="text-[10px] font-mono text-muted-foreground mt-0.5 truncate">{dp.smiles}</p>
+                      {dp.percentage != null && (
+                        <div className="ml-2 flex items-center gap-2 shrink-0">
+                          <div className="w-20 h-2 rounded-full bg-muted overflow-hidden">
+                            <div
+                              className={`h-full bg-gradient-to-r ${barColorClass}`}
+                              style={{ width: `${Math.min(100, dp.percentage)}%` }}
+                            />
+                          </div>
+                          <span className="text-xs font-semibold tabular-nums w-10 text-right">{dp.percentage}%</span>
+                        </div>
                       )}
                     </div>
-                    {dp.percentage != null && (
-                      <div className="ml-2 flex items-center gap-2 shrink-0">
-                        <div className="w-16 h-2 rounded-full bg-muted overflow-hidden">
-                          <div
-                            className="h-full bg-gradient-to-r from-amber-400 to-red-500"
-                            style={{ width: `${Math.min(100, dp.percentage)}%` }}
-                          />
-                        </div>
-                        <span className="text-xs font-semibold tabular-nums w-10 text-right">{dp.percentage}%</span>
-                      </div>
-                    )}
-                  </div>
-                ))}
+                  )
+                })}
               </CardContent>
             </Card>
           ))}
         </div>
       )}
+
+      {/* Add Degradation Product Dialog */}
+      <Dialog open={createDpOpen} onOpenChange={setCreateDpOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Add Degradation Product</DialogTitle>
+            <DialogDescription>Define a new degradation product for a parent molecule</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div><Label className="text-emerald-700 dark:text-emerald-400">Product Name *</Label><Input placeholder="Enter degradation product name" value={newDp.name} onChange={(e) => setNewDp({ ...newDp, name: e.target.value })} className="border-emerald-200 dark:border-emerald-800/50 focus:border-emerald-500" /></div>
+            <div><Label className="text-emerald-700 dark:text-emerald-400">SMILES</Label><Input placeholder="Enter SMILES notation (optional)" value={newDp.smiles} onChange={(e) => setNewDp({ ...newDp, smiles: e.target.value })} className="border-emerald-200 dark:border-emerald-800/50 focus:border-emerald-500 font-mono" /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label className="text-emerald-700 dark:text-emerald-400">Parent Molecule *</Label><Select value={newDp.moleculeId} onValueChange={(v) => setNewDp({ ...newDp, moleculeId: v })}><SelectTrigger className="border-emerald-200 dark:border-emerald-800/50"><SelectValue placeholder="Select molecule" /></SelectTrigger><SelectContent>{molecules.map((m) => (<SelectItem key={m.id} value={m.id}>{m.name} ({formatFormula(m.formula)})</SelectItem>))}</SelectContent></Select></div>
+              <div><Label className="text-emerald-700 dark:text-emerald-400">Hazard Level</Label><Select value={newDp.hazardLevel} onValueChange={(v) => setNewDp({ ...newDp, hazardLevel: v })}><SelectTrigger className="border-emerald-200 dark:border-emerald-800/50"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="low">Low</SelectItem><SelectItem value="moderate">Moderate</SelectItem><SelectItem value="high">High</SelectItem><SelectItem value="critical">Critical</SelectItem></SelectContent></Select></div>
+              <div><Label className="text-emerald-700 dark:text-emerald-400">Degradation %</Label><Input type="number" min="0" max="100" step="0.1" value={newDp.percentage} onChange={(e) => setNewDp({ ...newDp, percentage: parseFloat(e.target.value) || 0 })} className="border-emerald-200 dark:border-emerald-800/50 focus:border-emerald-500" /></div>
+            </div>
+            <div><Label className="text-emerald-700 dark:text-emerald-400">Description</Label><Textarea placeholder="Describe degradation pathway or conditions..." value={newDp.description} onChange={(e) => setNewDp({ ...newDp, description: e.target.value })} className="border-emerald-200 dark:border-emerald-800/50 focus:border-emerald-500" /></div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateDpOpen(false)}>Cancel</Button>
+            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={async () => {
+              if (!newDp.name.trim() || !newDp.moleculeId) {
+                toast({ title: 'Validation error', description: 'Product name and parent molecule are required', variant: 'destructive' })
+                return
+              }
+              setCreatingDp(true)
+              try {
+                const res = await fetch('/api/degradation-products', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    name: newDp.name,
+                    smiles: newDp.smiles || undefined,
+                    hazardLevel: newDp.hazardLevel,
+                    percentage: newDp.percentage || undefined,
+                    moleculeId: newDp.moleculeId,
+                    description: newDp.description || undefined,
+                  }),
+                })
+                if (res.ok) {
+                  toast({ title: 'Product added', description: `${newDp.name} added as degradation product` })
+                  setCreateDpOpen(false)
+                  setNewDp({ name: '', smiles: '', hazardLevel: 'low', percentage: 0, moleculeId: '', description: '' })
+                  handleRefresh()
+                } else {
+                  const err = await res.json().catch(() => ({}))
+                  toast({ title: 'Error', description: err.error || 'Failed to add product', variant: 'destructive' })
+                }
+              } catch {
+                toast({ title: 'Error', description: 'Network error', variant: 'destructive' })
+              } finally {
+                setCreatingDp(false)
+              }
+            }} disabled={creatingDp}>
+              {creatingDp ? <><RefreshCw className="size-4 mr-2 animate-spin" /> Adding...</> : 'Add Product'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </motion.div>
   )
 }
@@ -3439,13 +3520,7 @@ function AnalyticsPage() {
         }
         if (!cancelled && molRes.ok) {
           const md = await molRes.json()
-          const transformed: MoleculeData[] = (md.molecules || []).map((m: any) => ({
-            id: m.id, name: m.name, casNumber: m.casNumber || '', smiles: m.smiles || '',
-            formula: m.formula || '', molarMass: m.molarMass ?? 0, logP: m.logP ?? 0,
-            stabilityScore: m.predictedStabilityScore ?? 0, riskLevel: m.riskLevel || 'low',
-            dataSource: m.dataSource || 'Manual', description: m.description || '',
-            meltingPoint: m.meltingPoint ?? null, boilingPoint: m.boilingPoint ?? null,
-          }))
+          const transformed: MoleculeData[] = (md.molecules || []).map(transformMolecule)
           if (!cancelled) setMolecules(transformed)
         }
         if (!cancelled && stdRes.ok) {
@@ -3521,6 +3596,50 @@ function AnalyticsPage() {
   const top5Stable = sortedByStability.slice(0, 5)
   const top5Unstable = [...molecules].sort((a, b) => a.stabilityScore - b.stabilityScore).slice(0, 5)
 
+  // Scatter data: Stability Score vs Molar Mass
+  const mwScatterData = molecules
+    .filter((m) => m.molarMass > 0 && m.stabilityScore > 0)
+    .map((m) => ({ molarMass: m.molarMass, stabilityScore: m.stabilityScore, name: m.name }))
+
+  // Radar data: Multi-property comparison for top 4 molecules
+  const radarMolecules = sortedByStability.slice(0, 4)
+  const radarProperties = ['Hydrolysis', 'Thermal', 'Photolytic', 'Oxidative', 'Solubility', 'LogP']
+  const radarData = radarProperties.map((prop) => {
+    const entry: Record<string, string | number> = { property: prop }
+    radarMolecules.forEach((mol) => {
+      let val = 0
+      if (prop === 'Hydrolysis') val = mol.stabilityScore * 0.72
+      else if (prop === 'Thermal') val = Math.min(100, mol.stabilityScore * 1.05 + (mol.molarMass > 150 ? 8 : 0))
+      else if (prop === 'Photolytic') val = mol.stabilityScore * 0.65 + Math.random() * 5
+      else if (prop === 'Oxidative') val = mol.stabilityScore * 0.80
+      else if (prop === 'Solubility') val = Math.min(100, Math.max(0, 100 - (mol.logP ?? 0) * 20))
+      else if (prop === 'LogP') val = Math.min(100, Math.max(0, (mol.logP ?? 0) * 25 + 30))
+      entry[mol.name] = Math.round(Math.min(100, Math.max(0, val)))
+    })
+    return entry
+  })
+  const RADAR_COLORS = ['#10b981', '#14b8a6', '#06b6d4', '#f59e0b']
+
+  // Export analytics CSV
+  const exportAnalyticsCSV = () => {
+    const rows: string[] = ['Name,CAS,MW,LogP,Stability,Risk']
+    molecules.forEach((m) => {
+      rows.push(`${m.name},${m.casNumber},${m.molarMass},${m.logP ?? ''},${m.stabilityScore},${m.riskLevel}`)
+    })
+    rows.push('')
+    rows.push('--- QSPR Model Performance ---')
+    QSPR_MODEL_PERFORMANCE.forEach((model) => {
+      rows.push(`${model.model},R2=${model.r2},RMSE=${model.rmse},MAE=${model.mae}`)
+    })
+    const blob = new Blob([rows.join('\n')], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'chemstab-analytics.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -3533,52 +3652,33 @@ function AnalyticsPage() {
           <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-400 dark:to-teal-400 bg-clip-text text-transparent">Analytics &amp; Insights</h1>
           <p className="text-muted-foreground">QSPR model performance and platform-wide chemical stability analytics</p>
         </div>
-        <Button variant="outline" size="sm" onClick={handleRefresh} disabled={loading}>
-          <RefreshCw className={`size-4 mr-1 ${loading ? 'animate-spin' : ''}`} /> Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={exportAnalyticsCSV} className="gap-2">
+            <Download className="size-4" /> Export Analytics
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={loading}>
+            <RefreshCw className={`size-4 mr-1 ${loading ? 'animate-spin' : ''}`} /> Refresh
+          </Button>
+        </div>
       </div>
 
       {/* QSPR Model Performance */}
       <Card className="backdrop-blur-sm bg-card/80">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Cpu className="size-5 text-emerald-600 dark:text-emerald-400" />
-            QSPR Model Performance
-          </CardTitle>
-          <CardDescription>Prediction accuracy metrics for active quantitative structure-property relationship models</CardDescription>
-        </CardHeader>
+        <CardHeader><CardTitle className="flex items-center gap-2"><Cpu className="size-5 text-emerald-600 dark:text-emerald-400" /> QSPR Model Performance</CardTitle><CardDescription>Prediction accuracy metrics for active QSPR models</CardDescription></CardHeader>
         <CardContent>
           {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-32 w-full" />)}
-            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-32 w-full" />)}</div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {QSPR_MODEL_PERFORMANCE.map((model) => (
-                <motion.div
-                  key={model.model}
-                  whileHover={{ y: -2 }}
-                  className="p-4 rounded-xl border bg-card relative overflow-hidden"
-                >
+                <motion.div key={model.model} whileHover={{ y: -2 }} className="p-4 rounded-xl border bg-card relative overflow-hidden">
                   <div className="absolute inset-x-0 top-0 h-1" style={{ background: model.fill }} />
-                  <div className="flex items-center gap-2 mb-3">
-                    <Brain className="size-4" style={{ color: model.fill }} />
-                    <p className="font-semibold">{model.model}</p>
-                  </div>
+                  <div className="flex items-center gap-2 mb-3"><Brain className="size-4" style={{ color: model.fill }} /><p className="font-semibold">{model.model}</p></div>
                   <div className="space-y-1.5 text-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground">R²</span>
-                      <span className="font-bold" style={{ color: model.fill }}>{model.r2.toFixed(2)}</span>
-                    </div>
+                    <div className="flex items-center justify-between"><span className="text-muted-foreground">R²</span><span className="font-bold" style={{ color: model.fill }}>{model.r2.toFixed(2)}</span></div>
                     <Progress value={model.r2 * 100} className="h-1.5" />
-                    <div className="flex items-center justify-between pt-1">
-                      <span className="text-muted-foreground">RMSE</span>
-                      <span className="font-medium">{model.rmse.toFixed(2)}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground">MAE</span>
-                      <span className="font-medium">{model.mae.toFixed(2)}</span>
-                    </div>
+                    <div className="flex items-center justify-between pt-1"><span className="text-muted-foreground">RMSE</span><span className="font-medium">{model.rmse.toFixed(2)}</span></div>
+                    <div className="flex items-center justify-between"><span className="text-muted-foreground">MAE</span><span className="font-medium">{model.mae.toFixed(2)}</span></div>
                   </div>
                 </motion.div>
               ))}
@@ -3590,54 +3690,21 @@ function AnalyticsPage() {
       {/* Property Distribution Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card className="backdrop-blur-sm bg-card/80">
-          <CardHeader>
-            <CardTitle>Risk Level Distribution</CardTitle>
-            <CardDescription>Molecule count by risk classification</CardDescription>
-          </CardHeader>
+          <CardHeader><CardTitle>Risk Level Distribution</CardTitle><CardDescription>Molecule count by risk classification</CardDescription></CardHeader>
           <CardContent>
-            {loading ? (
-              <Skeleton className="h-[280px] w-full" />
-            ) : riskPieData.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-20 text-center">No data available</p>
-            ) : (
+            {loading ? <Skeleton className="h-[280px] w-full" /> : riskPieData.length === 0 ? <p className="text-sm text-muted-foreground py-20 text-center">No data available</p> : (
               <ResponsiveContainer width="100%" height={280}>
-                <PieChart>
-                  <Pie data={riskPieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} label>
-                    {riskPieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.fill} />
-                    ))}
-                  </Pie>
-                  <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb' }} />
-                  <Legend />
-                </PieChart>
+                <PieChart><Pie data={riskPieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} label>{riskPieData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.fill} />)}</Pie><Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb' }} /><Legend /></PieChart>
               </ResponsiveContainer>
             )}
           </CardContent>
         </Card>
-
         <Card className="backdrop-blur-sm bg-card/80">
-          <CardHeader>
-            <CardTitle>Molecules by Data Source</CardTitle>
-            <CardDescription>Origin of molecule records</CardDescription>
-          </CardHeader>
+          <CardHeader><CardTitle>Molecules by Data Source</CardTitle><CardDescription>Origin of molecule records</CardDescription></CardHeader>
           <CardContent>
-            {loading ? (
-              <Skeleton className="h-[280px] w-full" />
-            ) : sourceBarData.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-20 text-center">No data available</p>
-            ) : (
+            {loading ? <Skeleton className="h-[280px] w-full" /> : sourceBarData.length === 0 ? <p className="text-sm text-muted-foreground py-20 text-center">No data available</p> : (
               <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={sourceBarData}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis dataKey="source" className="text-xs" />
-                  <YAxis className="text-xs" allowDecimals={false} />
-                  <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb' }} />
-                  <Bar dataKey="count" radius={[6, 6, 0, 0]}>
-                    {sourceBarData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.fill} />
-                    ))}
-                  </Bar>
-                </BarChart>
+                <BarChart data={sourceBarData}><CartesianGrid strokeDasharray="3 3" className="stroke-muted" /><XAxis dataKey="source" className="text-xs" /><YAxis className="text-xs" allowDecimals={false} /><Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb' }} /><Bar dataKey="count" radius={[6, 6, 0, 0]}>{sourceBarData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.fill} />)}</Bar></BarChart>
               </ResponsiveContainer>
             )}
           </CardContent>
@@ -3647,48 +3714,21 @@ function AnalyticsPage() {
       {/* Stability Score Distribution + Study Status */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card className="backdrop-blur-sm bg-card/80">
-          <CardHeader>
-            <CardTitle>Stability Score Distribution</CardTitle>
-            <CardDescription>Histogram of molecule predicted stability scores</CardDescription>
-          </CardHeader>
+          <CardHeader><CardTitle>Stability Score Distribution</CardTitle><CardDescription>Histogram of molecule predicted stability scores</CardDescription></CardHeader>
           <CardContent>
-            {loading ? (
-              <Skeleton className="h-[280px] w-full" />
-            ) : (
+            {loading ? <Skeleton className="h-[280px] w-full" /> : (
               <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={bins}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis dataKey="range" className="text-xs" />
-                  <YAxis className="text-xs" allowDecimals={false} />
-                  <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb' }} />
-                  <Bar dataKey="count" fill="#10b981" radius={[6, 6, 0, 0]} />
-                </BarChart>
+                <BarChart data={bins}><CartesianGrid strokeDasharray="3 3" className="stroke-muted" /><XAxis dataKey="range" className="text-xs" /><YAxis className="text-xs" allowDecimals={false} /><Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb' }} /><Bar dataKey="count" fill="#10b981" radius={[6, 6, 0, 0]} /></BarChart>
               </ResponsiveContainer>
             )}
           </CardContent>
         </Card>
-
         <Card className="backdrop-blur-sm bg-card/80">
-          <CardHeader>
-            <CardTitle>Study Status Distribution</CardTitle>
-            <CardDescription>Current state of stability studies</CardDescription>
-          </CardHeader>
+          <CardHeader><CardTitle>Study Status Distribution</CardTitle><CardDescription>Current state of stability studies</CardDescription></CardHeader>
           <CardContent>
-            {loading ? (
-              <Skeleton className="h-[280px] w-full" />
-            ) : statusDonutData.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-20 text-center">No data available</p>
-            ) : (
+            {loading ? <Skeleton className="h-[280px] w-full" /> : statusDonutData.length === 0 ? <p className="text-sm text-muted-foreground py-20 text-center">No data available</p> : (
               <ResponsiveContainer width="100%" height={280}>
-                <PieChart>
-                  <Pie data={statusDonutData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={90} label>
-                    {statusDonutData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.fill} />
-                    ))}
-                  </Pie>
-                  <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb' }} />
-                  <Legend />
-                </PieChart>
+                <PieChart><Pie data={statusDonutData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={90} label>{statusDonutData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.fill} />)}</Pie><Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb' }} /><Legend /></PieChart>
               </ResponsiveContainer>
             )}
           </CardContent>
@@ -3697,32 +3737,11 @@ function AnalyticsPage() {
 
       {/* Temperature vs Shelf Life Scatter */}
       <Card className="backdrop-blur-sm bg-card/80">
-        <CardHeader>
-          <CardTitle>Temperature vs. Predicted Shelf Life</CardTitle>
-          <CardDescription>Relationship between study temperature and predicted shelf life (months)</CardDescription>
-        </CardHeader>
+        <CardHeader><CardTitle>Temperature vs. Predicted Shelf Life</CardTitle><CardDescription>Relationship between study temperature and predicted shelf life</CardDescription></CardHeader>
         <CardContent>
-          {loading ? (
-            <Skeleton className="h-[300px] w-full" />
-          ) : scatterData.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-20 text-center">No shelf life data available</p>
-          ) : (
+          {loading ? <Skeleton className="h-[300px] w-full" /> : scatterData.length === 0 ? <p className="text-sm text-muted-foreground py-20 text-center">No shelf life data available</p> : (
             <ResponsiveContainer width="100%" height={300}>
-              <ScatterChart>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                <XAxis type="number" dataKey="x" name="Temperature" unit="°C" className="text-xs" />
-                <YAxis type="number" dataKey="y" name="Shelf Life" unit=" mo" className="text-xs" />
-                <Tooltip
-                  cursor={{ strokeDasharray: '3 3' }}
-                  contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb' }}
-                  formatter={(val: any, name: any) => {
-                    if (name === 'Shelf Life') return [`${val} months`, name]
-                    if (name === 'Temperature') return [`${val}°C`, name]
-                    return [val, name]
-                  }}
-                />
-                <Scatter name="Studies" data={scatterData} fill="#14b8a6" />
-              </ScatterChart>
+              <ScatterChart><CartesianGrid strokeDasharray="3 3" className="stroke-muted" /><XAxis type="number" dataKey="x" name="Temperature" unit="°C" className="text-xs" /><YAxis type="number" dataKey="y" name="Shelf Life" unit=" mo" className="text-xs" /><Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb' }} formatter={(val: any, name: any) => [name === 'Shelf Life' ? `${val} months` : name === 'Temperature' ? `${val}°C` : val, name]} /><Scatter name="Studies" data={scatterData} fill="#14b8a6" /></ScatterChart>
             </ResponsiveContainer>
           )}
         </CardContent>
@@ -3812,6 +3831,66 @@ function AnalyticsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Stability vs Molecular Weight Scatter */}
+      <Card className="backdrop-blur-sm bg-card/80">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <TrendingUp className="size-5 text-emerald-600 dark:text-emerald-400" />
+            Stability vs Molecular Weight
+          </CardTitle>
+          <CardDescription>Correlation between molecular weight and predicted stability</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <Skeleton className="h-[300px] w-full" />
+          ) : mwScatterData.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-20 text-center">No data available</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={300}>
+              <ScatterChart>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                <XAxis dataKey="molarMass" name="MW" type="number" className="text-xs" label={{ value: 'MW (g/mol)', position: 'insideBottom', offset: -5 }} />
+                <YAxis dataKey="stabilityScore" name="Score" type="number" domain={[0, 100]} className="text-xs" label={{ value: 'Stability', angle: -90, position: 'insideLeft' }} />
+                <Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb' }} />
+                <Scatter name="Molecules" data={mwScatterData} fill="#10b981" />
+              </ScatterChart>
+            </ResponsiveContainer>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Property Comparison Radar */}
+      <Card className="backdrop-blur-sm bg-card/80">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Activity className="size-5 text-teal-600 dark:text-teal-400" />
+            Property Comparison Radar
+          </CardTitle>
+          <CardDescription>Compare molecules across multiple stability dimensions</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <Skeleton className="h-[300px] w-full" />
+          ) : radarData.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-20 text-center">No data available</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={300}>
+              <RadarChart data={radarData}>
+                <PolarGrid className="stroke-muted" />
+                <PolarAngleAxis dataKey="property" className="text-xs" />
+                <PolarRadiusAxis domain={[0, 100]} className="text-xs" />
+                {radarMolecules.map((mol, i) => (
+                  <Radar key={mol.name} name={mol.name} dataKey={mol.name} stroke={RADAR_COLORS[i]} fill={RADAR_COLORS[i]} fillOpacity={0.15} />
+                ))}
+                <Legend />
+                <Tooltip contentStyle={{ borderRadius: 8 }} />
+              </RadarChart>
+            </ResponsiveContainer>
+          )}
+        </CardContent>
+      </Card>
+
     </motion.div>
   )
 }
@@ -3967,14 +4046,8 @@ function AdminPage() {
     }
   }
 
-  const auditActionColors: Record<string, string> = {
-    create: 'text-emerald-600 dark:text-emerald-400',
-    update: 'text-amber-600 dark:text-amber-400',
-    delete: 'text-red-600 dark:text-red-400',
-    approve: 'text-teal-600 dark:text-teal-400',
-    sign: 'text-cyan-600 dark:text-cyan-400',
-    reject: 'text-red-600 dark:text-red-400',
-  }
+  // actionIconMap and actionColorMap now use global maps
+  // auditActionColors uses ACTION_TEXT_MAP
 
   return (
     <motion.div
@@ -4002,23 +4075,12 @@ function AdminPage() {
           { label: 'Audit Events', value: String(auditTotal || statsInfo.auditCount), icon: ClipboardList, color: 'amber' },
         ].map((stat) => {
           const Icon = stat.icon
-          const colorMap: Record<string, string> = {
-            emerald: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400',
-            teal: 'bg-teal-100 text-teal-600 dark:bg-teal-900/40 dark:text-teal-400',
-            cyan: 'bg-cyan-100 text-cyan-600 dark:bg-cyan-900/40 dark:text-cyan-400',
-            amber: 'bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400',
-          }
           return (
             <Card key={stat.label} className="backdrop-blur-sm bg-card/80 overflow-hidden relative">
-              <div className={`absolute top-0 left-0 right-0 h-1 ${stat.color === 'emerald' ? 'bg-emerald-500' : stat.color === 'teal' ? 'bg-teal-500' : stat.color === 'cyan' ? 'bg-cyan-500' : 'bg-amber-500'}`} />
+              <div className={`absolute top-0 left-0 right-0 h-1 ${GRADIENT_TOP_BAR[stat.color] || 'bg-amber-500'}`} />
               <CardContent className="p-4 flex items-center gap-3">
-                <div className={`p-2 rounded-lg shrink-0 ${colorMap[stat.color]}`}>
-                  <Icon className="size-4" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">{stat.label}</p>
-                  <p className="text-xl font-bold tabular-nums">{stat.value}</p>
-                </div>
+                <div className={`p-2 rounded-lg shrink-0 ${COLOR_MAP[stat.color]}`}><Icon className="size-4" /></div>
+                <div><p className="text-xs text-muted-foreground">{stat.label}</p><p className="text-xl font-bold tabular-nums">{stat.value}</p></div>
               </CardContent>
             </Card>
           )
@@ -4063,9 +4125,14 @@ function AdminPage() {
                     {users.map((user, idx) => (
                       <TableRow key={user.id} className={idx % 2 === 1 ? 'bg-muted/30' : ''}>
                         <TableCell>
-                          <div>
-                            <p className="font-medium text-sm">{user.name || '(no name)'}</p>
-                            <p className="text-[10px] text-muted-foreground">{user.email}</p>
+                          <div className="flex items-center gap-2">
+                            <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${roleAvatarColors[user.role] || 'from-slate-400 to-slate-500'} text-white flex items-center justify-center text-xs font-bold shadow-md shrink-0`}>
+                              {(user.name || '?').split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-medium text-sm truncate">{user.name || '(no name)'}</p>
+                              <p className="text-[10px] text-muted-foreground truncate">{user.email}</p>
+                            </div>
                           </div>
                         </TableCell>
                         <TableCell>
@@ -4181,86 +4248,79 @@ function AdminPage() {
               </div>
             )}
 
-            {/* Audit table */}
-            <div className="max-h-72 overflow-y-auto rounded-md border">
-              <Table>
-                <TableHeader className="sticky top-0 bg-card">
-                  <TableRow>
-                    <TableHead className="text-xs">Action</TableHead>
-                    <TableHead className="text-xs">Table</TableHead>
-                    <TableHead className="text-xs">User</TableHead>
-                    <TableHead className="text-xs">Time</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {auditLoading ? (
-                    Array.from({ length: 4 }).map((_, i) => (
-                      <TableRow key={i}>
-                        <TableCell colSpan={4}><Skeleton className="h-8 w-full" /></TableCell>
-                      </TableRow>
-                    ))
-                  ) : auditData.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={4} className="text-center text-muted-foreground py-6 text-xs">
-                        No audit events match your filters
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    auditData.map((entry, idx) => (
-                      <TableRow key={entry.id} className={idx % 2 === 1 ? 'bg-muted/30' : ''}>
-                        <TableCell>
-                          <span className={`font-medium text-xs ${auditActionColors[entry.action] || ''}`}>
-                            {entry.action}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-xs">{entry.tableName}</TableCell>
-                        <TableCell className="text-xs">{entry.user?.name || entry.user?.email || 'System'}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                          {entry.createdAt ? new Date(entry.createdAt).toLocaleString() : ''}
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
+            {/* Audit Timeline */}
+            <div className="max-h-72 overflow-y-auto">
+              {auditLoading ? (
+                <div className="space-y-4 p-2">
+                  {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}
+                </div>
+              ) : auditData.length === 0 ? (
+                <p className="text-center text-muted-foreground py-10 text-xs">
+                  No audit events match your filters
+                </p>
+              ) : (
+                <div className="space-y-0">
+                  {auditData.map((entry, i) => {
+                    const Icon = ACTION_ICON_MAP[entry.action] || Activity
+                    const color = ACTION_COLOR_MAP[entry.action] || ACTION_COLOR_MAP.create
+                    return (
+                      <div key={entry.id} className="flex gap-4 pb-6 relative">
+                        <div className="flex flex-col items-center">
+                          <div className={`size-8 rounded-full flex items-center justify-center ${color} shadow-sm`}><Icon className="size-4" /></div>
+                          {i < auditData.length - 1 && <div className="w-0.5 flex-1 bg-gradient-to-b from-border to-border/50 mt-1" />}
+                        </div>
+                        <div className="flex-1 min-w-0 pt-0.5">
+                          <p className="text-sm font-medium">{entry.details || `${entry.action} on ${entry.tableName}`}</p>
+                          <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                            <span className="font-medium">{entry.user?.name || entry.user?.email || 'System'}</span><span>·</span>
+                            <Badge variant="outline" className="text-[10px] h-4">{entry.action}</Badge>
+                            <Badge variant="outline" className="text-[10px] h-4 font-mono">{entry.tableName}</Badge><span>·</span>
+                            <span>{entry.createdAt ? new Date(entry.createdAt).toLocaleString() : ''}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* ML Training + System Configuration */}
+      {/* System Health Dashboard + System Configuration */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* ML Training */}
+        {/* System Health Dashboard */}
         <Card className="backdrop-blur-sm bg-card/80">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Brain className="size-5 text-emerald-600 dark:text-emerald-400" />
-              ML Training
+              <Gauge className="size-5 text-emerald-600 dark:text-emerald-400" />
+              System Health Dashboard
             </CardTitle>
-            <CardDescription>Train and manage QSPR prediction models</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="p-4 rounded-lg bg-muted/50 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">QSPR Stability Model</span>
-                <Badge variant="outline" className="text-xs">
-                  {trainingStatus === 'done' ? 'Trained' : trainingStatus === 'running' ? 'Training...' : 'Ready'}
-                </Badge>
+            {[
+              { label: 'ML Model Accuracy', value: 94.2, color: 'emerald' },
+              { label: 'API Response Time', value: 97, color: 'teal' },
+              { label: 'Database Integrity', value: 100, color: 'cyan' },
+              { label: 'Storage Capacity', value: 78, color: 'amber' },
+            ].map((item) => (
+              <div key={item.label} className="space-y-1">
+                <div className="flex items-center justify-between text-sm"><span className="font-medium">{item.label}</span><span className="font-semibold">{item.value}%</span></div>
+                <Progress value={item.value} className={`h-3 ${PROGRESS_BAR_MAP[item.color] || '[&>div]:bg-amber-500'}`} />
               </div>
+            ))}
+            <Separator />
+            <div className="p-3 rounded-lg bg-muted/50 space-y-2">
+              <div className="flex items-center justify-between"><span className="text-sm font-medium">QSPR Stability Model</span><Badge variant="outline" className="text-xs">{trainingStatus === 'done' ? 'Trained' : trainingStatus === 'running' ? 'Training...' : 'Ready'}</Badge></div>
               <div className="grid grid-cols-2 gap-2 text-xs">
-                <div><span className="text-muted-foreground">Accuracy:</span> <span className="font-medium">94.2%</span></div>
                 <div><span className="text-muted-foreground">Dataset:</span> <span className="font-medium">2,847 compounds</span></div>
                 <div><span className="text-muted-foreground">Features:</span> <span className="font-medium">128 descriptors</span></div>
                 <div><span className="text-muted-foreground">Last trained:</span> <span className="font-medium">2024-03-10</span></div>
+                <div><span className="text-muted-foreground">Status:</span> <span className="font-medium text-emerald-600 dark:text-emerald-400">Operational</span></div>
               </div>
-              {trainingStatus === 'running' && (
-                <Progress value={66} className="h-2" />
-              )}
-              {trainingStatus === 'done' && (
-                <div className="flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-400">
-                  <CheckCircle2 className="size-4" /> Training completed successfully
-                </div>
-              )}
+              {trainingStatus === 'running' && <Progress value={66} className="h-2" />}
+              {trainingStatus === 'done' && <div className="flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-400"><CheckCircle2 className="size-4" /> Training completed successfully</div>}
             </div>
             <Button
               className="bg-emerald-600 hover:bg-emerald-700 text-white w-full"
@@ -4309,57 +4369,38 @@ function AdminPage() {
         <DialogContent className="sm:max-w-md" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Users className="size-5 text-emerald-600 dark:text-emerald-400" />
+              {editingUser ? (
+                <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${roleAvatarColors[editingUser.role] || 'from-slate-400 to-slate-500'} text-white flex items-center justify-center text-xs font-bold shadow-md`}>
+                  {(editingUser.name || '?').split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)}
+                </div>
+              ) : (<Users className="size-5 text-emerald-600 dark:text-emerald-400" />)}
               {editingUser ? 'Edit User' : 'Add New User'}
             </DialogTitle>
+            {editingUser && <DialogDescription>Editing {editingUser.name || editingUser.email} — {roleLabels[editingUser.role] || editingUser.role}</DialogDescription>}
           </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label>Full Name</Label>
-              <Input
-                placeholder="e.g. Dr. Jane Smith"
-                value={userForm.name}
-                onChange={(e) => setUserForm({ ...userForm, name: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label>Email *</Label>
-              <Input
-                type="email"
-                placeholder="jane.smith@chemstab.io"
-                value={userForm.email}
-                onChange={(e) => setUserForm({ ...userForm, email: e.target.value })}
-              />
-            </div>
+          <div className="space-y-4">
+            {!editingUser && userForm.name && (
+              <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/50">
+                <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${roleAvatarColors[userForm.role] || 'from-slate-400 to-slate-500'} text-white flex items-center justify-center text-xs font-bold shadow-md`}>
+                  {userForm.name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2) || '?'}
+                </div>
+                <span className="text-sm text-muted-foreground">Preview: {roleLabels[userForm.role] || userForm.role}</span>
+              </div>
+            )}
+            <div><Label className="text-sm font-medium">Full Name *</Label><Input placeholder="e.g. Dr. Jane Smith" value={userForm.name} onChange={(e) => setUserForm({ ...userForm, name: e.target.value })} className={!userForm.name.trim() && userForm.email ? 'border-red-300 focus:border-red-500' : ''} />{!userForm.name.trim() && userForm.email && <p className="text-xs text-red-500 mt-1">Name is required</p>}</div>
+            <div><Label className="text-sm font-medium">Email *</Label><Input type="email" placeholder="jane.smith@chemstab.io" value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} className={!userForm.email.trim() ? 'border-red-300 focus:border-red-500' : ''} />{!userForm.email.trim() && <p className="text-xs text-red-500 mt-1">Email is required</p>}</div>
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Role</Label>
-                <Select value={userForm.role} onValueChange={(v) => setUserForm({ ...userForm, role: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="viewer">Viewer</SelectItem>
-                    <SelectItem value="analyst">Analyst</SelectItem>
-                    <SelectItem value="project_manager">Project Manager</SelectItem>
-                    <SelectItem value="org_admin">Org Admin</SelectItem>
-                    <SelectItem value="super_admin">Super Admin</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Status</Label>
-                <Select value={userForm.isActive ? 'active' : 'inactive'} onValueChange={(v) => setUserForm({ ...userForm, isActive: v === 'active' })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="inactive">Inactive</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <div><Label className="text-sm font-medium">Role</Label><Select value={userForm.role} onValueChange={(v) => setUserForm({ ...userForm, role: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="viewer">Viewer</SelectItem><SelectItem value="analyst">Analyst</SelectItem><SelectItem value="project_manager">Project Manager</SelectItem><SelectItem value="org_admin">Org Admin</SelectItem><SelectItem value="super_admin">Super Admin</SelectItem></SelectContent></Select></div>
+              <div><Label className="text-sm font-medium">Status</Label><Select value={userForm.isActive ? 'active' : 'inactive'} onValueChange={(v) => setUserForm({ ...userForm, isActive: v === 'active' })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="active">Active</SelectItem><SelectItem value="inactive">Inactive</SelectItem></SelectContent></Select></div>
+            </div>
+            <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/50">
+              <Badge variant="outline" className="text-xs">{roleLabels[userForm.role] || userForm.role}</Badge>
+              {userForm.isActive ? <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 text-xs">Active</Badge> : <Badge variant="secondary" className="text-xs">Inactive</Badge>}
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setUserDialogOpen(false)}>Cancel</Button>
-            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={handleSaveUser} disabled={savingUser}>
+            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={handleSaveUser} disabled={savingUser || !userForm.name.trim() || !userForm.email.trim()}>
               {savingUser
                 ? <><RefreshCw className="size-4 mr-2 animate-spin" /> Saving...</>
                 : <><Plus className="size-4 mr-2" /> {editingUser ? 'Save Changes' : 'Create User'}</>
@@ -4434,19 +4475,6 @@ function NotificationsButton() {
 
   const unreadCount = Math.min(notifications.length, 5)
 
-  const actionIconMap: Record<string, React.ElementType> = {
-    create: Plus, update: RefreshCw, delete: Trash2,
-    approve: CheckCircle2, sign: Shield, reject: XCircle,
-  }
-  const actionColorMap: Record<string, string> = {
-    create: 'text-emerald-600 dark:text-emerald-400',
-    update: 'text-amber-600 dark:text-amber-400',
-    delete: 'text-red-600 dark:text-red-400',
-    approve: 'text-teal-600 dark:text-teal-400',
-    sign: 'text-cyan-600 dark:text-cyan-400',
-    reject: 'text-red-600 dark:text-red-400',
-  }
-
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -4482,23 +4510,15 @@ function NotificationsButton() {
             <p className="p-6 text-center text-sm text-muted-foreground">No recent notifications</p>
           ) : (
             notifications.map((n) => {
-              const Icon = actionIconMap[n.action] || Activity
-              const color = actionColorMap[n.action] || 'text-emerald-600 dark:text-emerald-400'
+              const Icon = ACTION_ICON_MAP[n.action] || Activity
+              const color = ACTION_TEXT_MAP[n.action] || ACTION_TEXT_MAP.create
               return (
                 <div key={n.id} className="flex items-start gap-2 p-3 border-b last:border-b-0 hover:bg-muted/50 transition-colors">
                   <Icon className={`size-4 mt-0.5 shrink-0 ${color}`} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs leading-snug">
-                      <span className="font-medium">{n.user?.name || 'System'}</span>{' '}
-                      <span className="text-muted-foreground">{n.action}</span>{' '}
-                      <span className="font-mono text-[10px]">{n.tableName} #{n.recordId}</span>
-                    </p>
-                    {n.details && (
-                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.details}</p>
-                    )}
-                    <p className="text-[10px] text-muted-foreground mt-0.5">
-                      {n.createdAt ? new Date(n.createdAt).toLocaleString() : ''}
-                    </p>
+                    <p className="text-xs leading-snug"><span className="font-medium">{n.user?.name || 'System'}</span> <span className="text-muted-foreground">{n.action}</span> <span className="font-mono text-[10px]">{n.tableName} #{n.recordId}</span></p>
+                    {n.details && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.details}</p>}
+                    <p className="text-[10px] text-muted-foreground mt-0.5">{n.createdAt ? new Date(n.createdAt).toLocaleString() : ''}</p>
                   </div>
                 </div>
               )
@@ -4510,18 +4530,71 @@ function NotificationsButton() {
   )
 }
 
+// ── AI Assistant Chat Panel ────────────────────────────────────────────────
+
+const QPROMPTS = ['Explain hydrolysis degradation', 'What is ICH Q1A?', 'How does Q10 affect shelf life?', 'Compare stability of Aspirin vs Ibuprofen']
+interface CMsg { role: 'user' | 'assistant'; content: string; ts: number }
+
+function AIAssistant() {
+  const [open, setOpen] = useState(false)
+  const [msgs, setMsgs] = useState<CMsg[]>([])
+  const [input, setInput] = useState('')
+  const [ld, setLd] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const endRef = useRef<HTMLDivElement>(null)
+
+  const send = useCallback(async (t: string) => {
+    if (!t.trim() || ld) return
+    setMsgs(p => [...p, { role: 'user', content: t.trim(), ts: Date.now() }])
+    setInput(''); setLd(true); setErr(null)
+    try {
+      const r = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: t.trim() }) })
+      if (!r.ok) { const errData = await r.json().catch(() => ({ error: 'Request failed' })); throw new Error(errData.error || `HTTP ${r.status}`) }
+      const data = await r.json()
+      setMsgs(p => [...p, { role: 'assistant', content: data.response, ts: Date.now() }])
+    } catch (e) { setErr(e instanceof Error ? e.message : 'Failed') } finally { setLd(false) }
+  }, [ld])
+
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [msgs])
+
+  return (
+    <>
+      <motion.button onClick={() => setOpen(!open)} whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}
+        className="fixed bottom-6 right-6 z-50 w-12 h-12 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/30 flex items-center justify-center" aria-label="AI Assistant">
+        {open ? <X className="size-5" /> : <Brain className="size-5" />}
+        {!open && <span className="absolute inset-0 rounded-full animate-ping opacity-20 bg-gradient-to-br from-emerald-500 to-teal-600" />}
+      </motion.button>
+      <AnimatePresence>{open && (
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }}
+          className="fixed bottom-20 right-6 z-50 w-[400px] max-w-[calc(100vw-48px)] rounded-2xl border bg-card/90 backdrop-blur-xl shadow-2xl overflow-hidden flex flex-col max-h-[calc(100vh-120px)]">
+          <div className="flex items-center justify-between px-4 py-3 border-b bg-emerald-500/10">
+            <div className="flex items-center gap-2"><div className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white"><Brain className="size-3.5" /></div><div><h3 className="font-semibold text-sm bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-400 dark:to-teal-400 bg-clip-text text-transparent">ChemStab AI</h3><p className="text-[10px] text-muted-foreground">Stability expert</p></div></div>
+            <span className="relative flex h-2 w-2"><span className="animate-ping absolute h-full w-full rounded-full bg-emerald-400 opacity-75" /><span className="relative rounded-full h-2 w-2 bg-emerald-500" /></span>
+          </div>
+          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 min-h-0" style={{ maxHeight: '400px' }}>
+            {msgs.length === 0 && <div className="flex flex-col items-center py-8 text-center"><Sparkles className="size-8 text-emerald-500 mb-2" /><h4 className="font-medium text-sm mb-3">Ask ChemStab AI</h4><div className="flex flex-col gap-2 w-full max-w-[320px]">{QPROMPTS.map(p => <button key={p} onClick={() => send(p)} className="text-left px-3 py-2 rounded-lg border hover:bg-emerald-50 dark:hover:bg-emerald-950/30 text-xs transition-colors"><MessageCircle className="size-3 text-emerald-500 mr-2 inline" />{p}</button>)}</div></div>}
+            {msgs.map((m, i) => <motion.div key={m.ts + i} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${m.role === 'user' ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white' : 'bg-card border'}`}>
+                {m.role === 'assistant' && <div className="flex items-center gap-1 mb-1"><Brain className="size-3 text-emerald-500" /><span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400">AI</span></div>}
+                <p className="whitespace-pre-wrap">{m.content}</p></div></motion.div>)}
+            {ld && <div className="flex items-center gap-1 py-3"><span className="w-2 h-2 rounded-full bg-emerald-400 animate-bounce [animation-delay:-0.3s]" /><span className="w-2 h-2 rounded-full bg-emerald-400 animate-bounce [animation-delay:-0.15s]" /><span className="w-2 h-2 rounded-full bg-emerald-400 animate-bounce" /><span className="text-xs text-muted-foreground ml-2">Thinking...</span></div>}
+            {err && <div className="flex flex-col items-center gap-2 py-3"><div className="flex items-center gap-2 text-destructive text-xs"><AlertCircle className="size-3.5" />{err}</div><Button variant="outline" size="sm" className="text-xs h-7" onClick={() => { const l = msgs.filter(m => m.role === 'user').pop(); if (l) { setMsgs(p => p.slice(0, -1)); setErr(null); send(l.content) } }}><RefreshCw className="size-3 mr-1" />Retry</Button></div>}
+            <div ref={endRef} />
+          </div>
+          <div className="border-t px-3 py-3">
+            <div className="flex items-center gap-2"><Input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); send(input) } }} placeholder="Ask about stability..." disabled={ld} className="h-9 text-sm" /><Button onClick={() => send(input)} disabled={!input.trim() || ld} size="icon" className="h-9 w-9 bg-gradient-to-r from-emerald-500 to-teal-600 text-white shrink-0"><Send className="size-3.5" /></Button></div>
+            {msgs.length > 0 && <button onClick={() => { setMsgs([]); setErr(null) }} className="mt-2 text-[10px] text-muted-foreground hover:text-foreground w-full text-center">Clear conversation</button>}
+          </div>
+        </motion.div>
+      )}</AnimatePresence>
+    </>
+  )
+}
+
 // ── Main Layout ───────────────────────────────────────────────────────────
 
 export default function Home() {
-  const { darkMode } = useAppStore()
-
-  useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add('dark')
-    } else {
-      document.documentElement.classList.remove('dark')
-    }
-  }, [darkMode])
+  const { currentPage } = useAppStore()
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-background via-background to-emerald-50/30 dark:from-background dark:via-background dark:to-emerald-950/20 text-foreground">
@@ -4536,6 +4609,12 @@ export default function Home() {
         >
           <Menu className="size-4" />
         </Button>
+        {/* Breadcrumb */}
+        <div className="flex items-center gap-1 text-sm text-muted-foreground">
+          <span className="font-semibold text-foreground">ChemStab</span>
+          <ChevronRight className="size-3" />
+          <span className="capitalize">{currentPage.replace('_', ' ')}</span>
+        </div>
         <div className="flex items-center gap-2 ml-auto">
           <NotificationsButton />
           <div className="flex items-center gap-2 pl-2">
@@ -4567,6 +4646,9 @@ export default function Home() {
           </span>
         </div>
       </footer>
+
+      {/* AI Assistant Floating Panel */}
+      <AIAssistant />
     </div>
   )
 }

@@ -1,0 +1,602 @@
+  1879→    analysisStore.setRunning(false)
+  1880→    setSimDone(true)
+  1881→  }, [analysisStore])
+  1882→
+  1883→  return (
+  1884→    <motion.div
+  1885→      initial={{ opacity: 0, y: 20 }}
+  1886→      animate={{ opacity: 1, y: 0 }}
+  1887→      transition={{ duration: 0.4 }}
+  1888→      className="space-y-6"
+  1889→    >
+  1890→      <div>
+  1891→        <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-400 dark:to-teal-400 bg-clip-text text-transparent">Stability Simulator</h1>
+  1892→        <p className="text-muted-foreground">Predict chemical stability under custom environmental conditions</p>
+  1893→      </div>
+  1894→
+  1895→      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+  1896→        {/* Input Form */}
+  1897→        <div className="space-y-4">
+  1898→          <Card>
+  1899→            <CardHeader>
+  1900→              <CardTitle className="flex items-center gap-2">
+  1901→                <Beaker className="size-5 text-emerald-600 dark:text-emerald-400" />
+  1902→                Substances
+  1903→              </CardTitle>
+  1904→              <CardDescription>Add substances to analyze</CardDescription>
+  1905→            </CardHeader>
+  1906→            <CardContent className="space-y-3">
+  1907→              {analysisStore.substances.map((sub, i) => (
+  1908→                <motion.div
+  1909→                  key={i}
+  1910→                  initial={{ opacity: 0, y: 10 }}
+  1911→                  animate={{ opacity: 1, y: 0 }}
+  1912→                  className="flex gap-2 items-end"
+  1913→                >
+  1914→                  <div className="flex-1">
+  1915→                    <Label className="text-xs">Name</Label>
+  1916→                    <Input
+  1917→                      placeholder="Substance name"
+  1918→                      value={sub.name}
+  1919→                      onChange={(e) => analysisStore.updateSubstance(i, 'name', e.target.value)}
+  1920→                    />
+  1921→                  </div>
+  1922→                  <div className="w-20">
+  1923→                    <Label className="text-xs">Conc.</Label>
+  1924→                    <Input
+  1925→                      type="number"
+  1926→                      value={sub.concentration}
+  1927→                      onChange={(e) => analysisStore.updateSubstance(i, 'concentration', parseFloat(e.target.value) || 0)}
+  1928→                    />
+  1929→                  </div>
+  1930→                  <div className="w-24">
+  1931→                    <Label className="text-xs">Unit</Label>
+  1932→                    <Select
+  1933→                      value={sub.unit}
+  1934→                      onValueChange={(v) => analysisStore.updateSubstance(i, 'unit', v)}
+  1935→                    >
+  1936→                      <SelectTrigger>
+  1937→                        <SelectValue />
+  1938→                      </SelectTrigger>
+  1939→                      <SelectContent>
+  1940→                        <SelectItem value="g/L">g/L</SelectItem>
+  1941→                        <SelectItem value="mg/mL">mg/mL</SelectItem>
+  1942→                        <SelectItem value="mol/L">mol/L</SelectItem>
+  1943→                        <SelectItem value="%w/v">%w/v</SelectItem>
+  1944→                      </SelectContent>
+  1945→                    </Select>
+  1946→                  </div>
+  1947→                  {analysisStore.substances.length > 1 && (
+  1948→                    <Button
+  1949→                      variant="ghost"
+  1950→                      size="icon"
+  1951→                      className="text-red-500 hover:text-red-700"
+  1952→                      onClick={() => analysisStore.removeSubstance(i)}
+  1953→                    >
+  1954→                      <Trash2 className="size-4" />
+  1955→                    </Button>
+  1956→                  )}
+  1957→                </motion.div>
+  1958→              ))}
+  1959→              <Button
+  1960→                variant="outline"
+  1961→                size="sm"
+  1962→                className="w-full"
+  1963→                onClick={analysisStore.addSubstance}
+  1964→              >
+  1965→                <Plus className="size-4 mr-1" /> Add Substance
+  1966→              </Button>
+  1967→            </CardContent>
+  1968→          </Card>
+  1969→
+  1970→          <Card>
+  1971→            <CardHeader>
+  1972→              <CardTitle className="flex items-center gap-2">
+  1973→                <Thermometer className="size-5 text-teal-600 dark:text-teal-400" />
+  1974→                Environmental Conditions
+  1975→              </CardTitle>
+  1976→            </CardHeader>
+  1977→            <CardContent className="space-y-3">
+  1978→              <div className="grid grid-cols-2 gap-3">
+  1979→                <div>
+  1980→                  <div className="flex items-center gap-2 mb-1">
+  1981→                    <Label className="text-xs">pH</Label>
+  1982→                    {(() => {
+  1983→                      const sev = getConditionSeverity('ph', analysisStore.conditions.ph)
+  1984→                      return (
+  1985→                        <>
+  1986→                          <span className={`size-2 rounded-full ${sev.color === 'red' ? 'bg-red-500' : sev.color === 'amber' ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+  1987→                          <span className="text-[10px] text-muted-foreground">{sev.label}</span>
+  1988→                        </>
+  1989→                      )
+  1990→                    })()}
+  1991→                  </div>
+  1992→                  <Input
+  1993→                    type="number"
+  1994→                    step="0.1"
+  1995→                    value={analysisStore.conditions.ph}
+  1996→                    onChange={(e) => analysisStore.setConditions({ ph: parseFloat(e.target.value) || 0 })}
+  1997→                  />
+  1998→                </div>
+  1999→                <div>
+  2000→                  <div className="flex items-center gap-2 mb-1">
+  2001→                    <Label className="text-xs">Temperature (°C)</Label>
+  2002→                    {(() => {
+  2003→                      const sev = getConditionSeverity('temperature', analysisStore.conditions.temperature)
+  2004→                      return (
+  2005→                        <>
+  2006→                          <span className={`size-2 rounded-full ${sev.color === 'red' ? 'bg-red-500' : sev.color === 'amber' ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+  2007→                          <span className="text-[10px] text-muted-foreground">{sev.label}</span>
+  2008→                        </>
+  2009→                      )
+  2010→                    })()}
+  2011→                  </div>
+  2012→                  <Input
+  2013→                    type="number"
+  2014→                    value={analysisStore.conditions.temperature}
+  2015→                    onChange={(e) => analysisStore.setConditions({ temperature: parseFloat(e.target.value) || 0 })}
+  2016→                  />
+  2017→                </div>
+  2018→                <div>
+  2019→                  <div className="flex items-center gap-2 mb-1">
+  2020→                    <Label className="text-xs">Dissolved O₂ (mg/L)</Label>
+  2021→                    {(() => {
+  2022→                      const sev = getConditionSeverity('dissolvedOxygen', analysisStore.conditions.dissolvedOxygen)
+  2023→                      return (
+  2024→                        <>
+  2025→                          <span className={`size-2 rounded-full ${sev.color === 'red' ? 'bg-red-500' : sev.color === 'amber' ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+  2026→                          <span className="text-[10px] text-muted-foreground">{sev.label}</span>
+  2027→                        </>
+  2028→                      )
+  2029→                    })()}
+  2030→                  </div>
+  2031→                  <Input
+  2032→                    type="number"
+  2033→                    step="0.1"
+  2034→                    value={analysisStore.conditions.dissolvedOxygen}
+  2035→                    onChange={(e) => analysisStore.setConditions({ dissolvedOxygen: parseFloat(e.target.value) || 0 })}
+  2036→                  />
+  2037→                </div>
+  2038→                <div>
+  2039→                  <div className="flex items-center gap-2 mb-1">
+  2040→                    <Label className="text-xs">Light Exposure (lux)</Label>
+  2041→                    {(() => {
+  2042→                      const sev = getConditionSeverity('lightExposure', analysisStore.conditions.lightExposure)
+  2043→                      return (
+  2044→                        <>
+  2045→                          <span className={`size-2 rounded-full ${sev.color === 'red' ? 'bg-red-500' : sev.color === 'amber' ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+  2046→                          <span className="text-[10px] text-muted-foreground">{sev.label}</span>
+  2047→                        </>
+  2048→                      )
+  2049→                    })()}
+  2050→                  </div>
+  2051→                  <Input
+  2052→                    type="number"
+  2053→                    value={analysisStore.conditions.lightExposure}
+  2054→                    onChange={(e) => analysisStore.setConditions({ lightExposure: parseFloat(e.target.value) || 0 })}
+  2055→                  />
+  2056→                </div>
+  2057→              </div>
+  2058→            </CardContent>
+  2059→          </Card>
+  2060→
+  2061→          <div className="flex gap-3">
+  2062→            <Button
+  2063→              className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+  2064→              onClick={runSimulation}
+  2065→              disabled={analysisStore.running}
+  2066→            >
+  2067→              {analysisStore.running ? (
+  2068→                <>
+  2069→                  <RefreshCw className="size-4 animate-spin mr-2" /> Analyzing...
+  2070→                </>
+  2071→              ) : (
+  2072→                <>
+  2073→                  <Play className="size-4 mr-2" /> Run Analysis
+  2074→                </>
+  2075→              )}
+  2076→            </Button>
+  2077→            <Button variant="outline" onClick={analysisStore.reset}>
+  2078→              Reset
+  2079→            </Button>
+  2080→          </div>
+  2081→        </div>
+  2082→
+  2083→        {/* Results */}
+  2084→        <div className="space-y-4">
+  2085→          <AnimatePresence mode="wait">
+  2086→            {analysisStore.running && (
+  2087→              <motion.div
+  2088→                key="loading"
+  2089→                initial={{ opacity: 0 }}
+  2090→                animate={{ opacity: 1 }}
+  2091→                exit={{ opacity: 0 }}
+  2092→                className="flex items-center justify-center py-8"
+  2093→              >
+  2094→                <div className="flex flex-col items-center gap-4">
+  2095→                  {SIM_STEPS.map((step, i) => (
+  2096→                    <motion.div
+  2097→                      key={step}
+  2098→                      initial={{ opacity: 0, x: -20 }}
+  2099→                      animate={{ opacity: currentStep >= i ? 1 : 0.3, x: 0 }}
+  2100→                      transition={{ delay: i * 0.2 }}
+  2101→                      className="flex items-center gap-3"
+  2102→                    >
+  2103→                      {currentStep > i ? (
+  2104→                        <CheckCircle2 className="size-4 text-emerald-500" />
+  2105→                      ) : currentStep === i ? (
+  2106→                        <RefreshCw className="size-4 text-emerald-500 animate-spin" />
+  2107→                      ) : (
+  2108→                        <Clock className="size-4 text-muted-foreground" />
+  2109→                      )}
+  2110→                      <span className={`text-sm ${currentStep >= i ? 'font-medium' : 'text-muted-foreground'}`}>
+  2111→                        {step}
+  2112→                      </span>
+  2113→                    </motion.div>
+  2114→                  ))}
+  2115→                  <Progress value={(currentStep / SIM_STEPS.length) * 100} className="w-64 h-2 [&>div]:bg-emerald-500" />
+  2116→                </div>
+  2117→              </motion.div>
+  2118→            )}
+  2119→
+  2120→            {analysisStore.result && !analysisStore.running && (
+  2121→              <motion.div
+  2122→                key="results"
+  2123→                initial={{ opacity: 0, y: 20 }}
+  2124→                animate={{ opacity: 1, y: 0 }}
+  2125→                className="space-y-4"
+  2126→              >
+  2127→                {/* Overall Score Gauge */}
+  2128→                <Card>
+  2129→                  <CardHeader>
+  2130→                    <CardTitle>Overall Stability Score</CardTitle>
+  2131→                  </CardHeader>
+  2132→                  <CardContent className="flex flex-col items-center gap-3">
+  2133→                    <div className="relative w-32 h-32">
+  2134→                      <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+  2135→                        <circle cx="50" cy="50" r="40" fill="none" stroke="currentColor" strokeWidth="8" className="text-muted/30" />
+  2136→                        <circle
+  2137→                          cx="50" cy="50" r="40" fill="none"
+  2138→                          stroke={analysisStore.result.overallScore >= 80 ? '#10b981' : analysisStore.result.overallScore >= 60 ? '#14b8a6' : analysisStore.result.overallScore >= 40 ? '#f59e0b' : '#ef4444'}
+  2139→                          strokeWidth="8"
+  2140→                          strokeDasharray={`${(analysisStore.result.overallScore / 100) * 251.33} 251.33`}
+  2141→                          strokeLinecap="round"
+  2142→                        />
+  2143→                      </svg>
+  2144→                      <div className="absolute inset-0 flex items-center justify-center">
+  2145→                        <span className={`text-3xl font-bold ${getScoreColor(analysisStore.result.overallScore)}`}>
+  2146→                          {analysisStore.result.overallScore}
+  2147→                        </span>
+  2148→                      </div>
+  2149→                    </div>
+  2150→                    <Badge className={riskColors[analysisStore.result.riskLevel]}>
+  2151→                      Risk: {analysisStore.result.riskLevel}
+  2152→                    </Badge>
+  2153→                  </CardContent>
+  2154→                </Card>
+  2155→
+  2156→                {/* Risk Breakdown */}
+  2157→                <Card>
+  2158→                  <CardHeader>
+  2159→                    <CardTitle>Risk Breakdown</CardTitle>
+  2160→                    <CardDescription>Degradation pathway risk assessment</CardDescription>
+  2161→                  </CardHeader>
+  2162→                  <CardContent className="space-y-3">
+  2163→                    {Object.entries(analysisStore.result.risks).map(([key, val]: [string, any]) => {
+  2164→                      const labelMap: Record<string, string> = {
+  2165→                        hydrolysis: 'Hydrolysis',
+  2166→                        oxidation: 'Oxidation',
+  2167→                        photolysis: 'Photolysis',
+  2168→                        thermal: 'Thermal',
+  2169→                      }
+  2170→                      return (
+  2171→                        <div key={key} className="space-y-1">
+  2172→                          <div className="flex items-center justify-between text-sm">
+  2173→                            <span className="font-medium">{labelMap[key]}</span>
+  2174→                            <Badge className={riskColors[val.level]}>{val.level}</Badge>
+  2175→                          </div>
+  2176→                          <Progress value={val.score} className="h-2" />
+  2177→                        </div>
+  2178→                      )
+  2179→                    })}
+  2180→                    <Separator className="my-3" />
+  2181→                    <ResponsiveContainer width="100%" height={250}>
+  2182→                      <RadarChart data={Object.entries(analysisStore.result.risks).map(([key, val]: [string, any]) => {
+  2183→                        const labelMap: Record<string, string> = {
+  2184→                          hydrolysis: 'Hydrolysis',
+  2185→                          oxidation: 'Oxidation',
+  2186→                          photolysis: 'Photolysis',
+  2187→                          thermal: 'Thermal',
+  2188→                        }
+  2189→                        return { risk: labelMap[key], score: val.score }
+  2190→                      })}>
+  2191→                        <PolarGrid className="stroke-muted" />
+  2192→                        <PolarAngleAxis dataKey="risk" className="text-xs" />
+  2193→                        <PolarRadiusAxis domain={[0, 100]} className="text-xs" />
+  2194→                        <Radar name="Risk Score" dataKey="score" stroke="#10b981" fill="#10b981" fillOpacity={0.3} />
+  2195→                        <Tooltip contentStyle={{ borderRadius: 8 }} />
+  2196→                      </RadarChart>
+  2197→                    </ResponsiveContainer>
+  2198→                  </CardContent>
+  2199→                </Card>
+  2200→
+  2201→                {/* Kinetics Predictions */}
+  2202→                <Card>
+  2203→                  <CardHeader>
+  2204→                    <CardTitle>Kinetics Predictions</CardTitle>
+  2205→                  </CardHeader>
+  2206→                  <CardContent>
+  2207→                    <div className="grid grid-cols-3 gap-4">
+  2208→                      {[
+  2209→                        { label: 'Shelf Life', value: `${analysisStore.result.kinetics.shelfLifeMonths} mo`, icon: Clock },
+  2210→                        { label: 'Q₁₀', value: analysisStore.result.kinetics.q10.toString(), icon: Gauge },
+  2211→                        { label: 'Eₐ (kJ/mol)', value: analysisStore.result.kinetics.activationEnergy.toString(), icon: Zap },
+  2212→                      ].map((item) => {
+  2213→                        const Icon = item.icon
+  2214→                        return (
+  2215→                          <div key={item.label} className="flex flex-col items-center gap-1 p-3 rounded-lg bg-muted/50">
+  2216→                            <Icon className="size-4 text-emerald-600 dark:text-emerald-400" />
+  2217→                            <p className="text-xs text-muted-foreground">{item.label}</p>
+  2218→                            <p className="text-lg font-bold">{item.value}</p>
+  2219→                          </div>
+  2220→                        )
+  2221→                      })}
+  2222→                    </div>
+  2223→                  </CardContent>
+  2224→                </Card>
+  2225→
+  2226→                {/* Degradation Curve Preview */}
+  2227→                <Card>
+  2228→                  <CardHeader>
+  2229→                    <CardTitle className="flex items-center gap-2">
+  2230→                      <TrendingUp className="size-5 text-emerald-600 dark:text-emerald-400" />
+  2231→                      Predicted Degradation Curve
+  2232→                    </CardTitle>
+  2233→                    <CardDescription>Estimated concentration remaining over time</CardDescription>
+  2234→                  </CardHeader>
+  2235→                  <CardContent>
+  2236→                    <ResponsiveContainer width="100%" height={200}>
+  2237→                      <LineChart data={degradationCurveData}>
+  2238→                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+  2239→                        <XAxis dataKey="month" className="text-xs" />
+  2240→                        <YAxis domain={[0, 100]} className="text-xs" />
+  2241→                        <Tooltip contentStyle={{ borderRadius: 8 }} />
+  2242→                        <Line type="monotone" dataKey="concentration" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} name="Concentration (%)" />
+  2243→                        <Line type="monotone" dataKey="threshold" stroke="#ef4444" strokeWidth={1} strokeDasharray="5 5" dot={false} name="Acceptance Limit" />
+  2244→                      </LineChart>
+  2245→                    </ResponsiveContainer>
+  2246→                  </CardContent>
+  2247→                </Card>
+  2248→
+  2249→                {/* Recommendations */}
+  2250→                <Card>
+  2251→                  <CardHeader>
+  2252→                    <CardTitle className="flex items-center gap-2">
+  2253→                      <Lightbulb className="size-5 text-amber-600 dark:text-amber-400" />
+  2254→                      Recommendations
+  2255→                    </CardTitle>
+  2256→                  </CardHeader>
+  2257→                  <CardContent className="space-y-2">
+  2258→                    {analysisStore.result.recommendations.map((rec, i) => (
+  2259→                      <motion.div
+  2260→                        key={i}
+  2261→                        initial={{ opacity: 0, x: -10 }}
+  2262→                        animate={{ opacity: 1, x: 0 }}
+  2263→                        transition={{ delay: i * 0.1 }}
+  2264→                        className="flex items-start gap-2 p-2 rounded-lg bg-muted/30"
+  2265→                      >
+  2266→                        <CheckCircle2 className="size-4 text-emerald-500 mt-0.5 shrink-0" />
+  2267→                        <p className="text-sm">{rec}</p>
+  2268→                      </motion.div>
+  2269→                    ))}
+  2270→                  </CardContent>
+  2271→                </Card>
+  2272→              </motion.div>
+  2273→            )}
+  2274→
+  2275→            {!analysisStore.result && !analysisStore.running && (
+  2276→              <motion.div
+  2277→                key="empty"
+  2278→                initial={{ opacity: 0 }}
+  2279→                animate={{ opacity: 1 }}
+  2280→              >
+  2281→                <Card className="flex flex-col items-center justify-center py-16 relative overflow-hidden">
+  2282→                  {/* Decorative floating circles */}
+  2283→                  <motion.div
+  2284→                    animate={{ y: [-10, 10, -10], rotate: [0, 180, 360] }}
+  2285→                    transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+  2286→                    className="absolute top-8 left-12 size-8 rounded-full bg-emerald-200/30 dark:bg-emerald-800/30 blur-sm"
+  2287→                  />
+  2288→                  <motion.div
+  2289→                    animate={{ y: [10, -10, 10], rotate: [360, 180, 0] }}
+  2290→                    transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+  2291→                    className="absolute bottom-12 right-16 size-6 rounded-full bg-teal-200/30 dark:bg-teal-800/30 blur-sm"
+  2292→                  />
+  2293→                  <motion.div
+  2294→                    animate={{ x: [-5, 5, -5], y: [5, -5, 5] }}
+  2295→                    transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+  2296→                    className="absolute top-20 right-12 size-4 rounded-full bg-cyan-200/30 dark:bg-cyan-800/30 blur-sm"
+  2297→                  />
+  2298→                  <motion.div
+  2299→                    initial={{ scale: 0 }}
+  2300→                    animate={{ scale: 1 }}
+  2301→                    transition={{ type: 'spring', stiffness: 200, delay: 0.2 }}
+  2302→                  >
+  2303→                    <Beaker className="size-16 text-emerald-600/20 dark:text-emerald-400/20 mb-4" />
+  2304→                  </motion.div>
+  2305→                  <p className="text-muted-foreground font-medium">Configure substances and conditions</p>
+  2306→                  <p className="text-xs text-muted-foreground mt-1">Then click "Run Analysis" to simulate stability</p>
+  2307→                </Card>
+  2308→              </motion.div>
+  2309→            )}
+  2310→          </AnimatePresence>
+  2311→        </div>
+  2312→      </div>
+  2313→    </motion.div>
+  2314→  )
+  2315→}
+  2316→
+  2317→// ── Studies Management Page ───────────────────────────────────────────────
+  2318→
+  2319→function StudiesPage() {
+  2320→  const { toast } = useToast()
+  2321→  const [statusFilter, setStatusFilter] = useState('all')
+  2322→  const [typeFilter, setTypeFilter] = useState('all')
+  2323→  const [studyTypeFilter, setStudyTypeFilter] = useState('all')
+  2324→  const [createOpen, setCreateOpen] = useState(false)
+  2325→  const [loading, setLoading] = useState(true)
+  2326→  const [refreshKey, setRefreshKey] = useState(0)
+  2327→  const [apiStudies, setApiStudies] = useState<StudyData[]>([])
+  2328→  const [totalCount, setTotalCount] = useState(0)
+  2329→  const [studiesByStatus, setStudiesByStatus] = useState<{ status: string; _count: { status: number } }[]>([])
+  2330→  const [creating, setCreating] = useState(false)
+  2331→  const [exporting, setExporting] = useState(false)
+  2332→  const [detailOpen, setDetailOpen] = useState(false)
+  2333→  const [detailStudy, setDetailStudy] = useState<any | null>(null)
+  2334→  const [detailLoading, setDetailLoading] = useState(false)
+  2335→  const [signing, setSigning] = useState(false)
+  2336→  const [statusUpdating, setStatusUpdating] = useState(false)
+  2337→  const [newTimePoint, setNewTimePoint] = useState({ timeDays: 0, percentRemaining: 100, isOOS: false, isOOT: false })
+  2338→  const [addingTimePoint, setAddingTimePoint] = useState(false)
+  2339→  const [deletingTimePointId, setDeletingTimePointId] = useState<string | null>(null)
+  2340→  const [newStudy, setNewStudy] = useState({
+  2341→    substanceName: '',
+  2342→    studyType: 'long_term',
+  2343→    temperatureC: 25,
+  2344→    humidityPercent: 60,
+  2345→    durationMonths: 24,
+  2346→    ph: 7.0,
+  2347→  })
+  2348→
+  2349→  useEffect(() => {
+  2350→    let cancelled = false
+  2351→    const loadData = async () => {
+  2352→      const params = new URLSearchParams()
+  2353→      if (statusFilter !== 'all') params.set('status', statusFilter)
+  2354→      if (studyTypeFilter !== 'all') params.set('type', studyTypeFilter)
+  2355→      try {
+  2356→        const [studiesRes, statsRes] = await Promise.all([
+  2357→          fetch(`/api/studies?${params.toString()}`),
+  2358→          fetch('/api/stats'),
+  2359→        ])
+  2360→        if (studiesRes.ok && !cancelled) {
+  2361→          const data = await studiesRes.json()
+  2362→          const transformed: StudyData[] = (data.studies || []).map((s: any) => ({
+  2363→            id: s.id, studyCode: s.studyCode || '', substanceName: s.substanceName || '',
+  2364→            studyType: s.studyType || 'long_term', temperatureC: s.temperatureC ?? 25,
+  2365→            humidityPercent: s.humidityPercent ?? null, durationMonths: s.durationMonths ?? 24,
+  2366→            predictedShelfLifeMonths: s.predictedShelfLifeMonths ?? null,
+  2367→            status: s.status || 'draft', ph: s.ph ?? null,
+  2368→          }))
+  2369→          if (!cancelled) {
+  2370→            setApiStudies(transformed)
+  2371→            setTotalCount(data.pagination?.total ?? 0)
+  2372→          }
+  2373→        }
+  2374→        if (statsRes.ok && !cancelled) {
+  2375→          const statsData = await statsRes.json()
+  2376→          if (statsData.studiesByStatus && !cancelled) {
+  2377→            setStudiesByStatus(statsData.studiesByStatus)
+  2378→          }
+  2379→        }
+  2380→      } catch { /* fallback */ }
+  2381→      if (!cancelled) setLoading(false)
+  2382→    }
+  2383→    loadData()
+  2384→    return () => { cancelled = true }
+  2385→  }, [statusFilter, studyTypeFilter, refreshKey])
+  2386→
+  2387→  const handleRefresh = () => setRefreshKey(k => k + 1)
+  2388→
+  2389→  const handleCreate = async () => {
+  2390→    if (!newStudy.substanceName.trim()) {
+  2391→      toast({ title: 'Validation error', description: 'Substance name is required', variant: 'destructive' })
+  2392→      return
+  2393→    }
+  2394→    setCreating(true)
+  2395→    // Generate a study code based on substance name + timestamp
+  2396→    const code = `STB-${new Date().getFullYear()}-${String(Date.now()).slice(-5)}`
+  2397→    try {
+  2398→      const res = await fetch('/api/studies', {
+  2399→        method: 'POST',
+  2400→        headers: { 'Content-Type': 'application/json' },
+  2401→        body: JSON.stringify({
+  2402→          studyCode: code,
+  2403→          substanceName: newStudy.substanceName,
+  2404→          studyType: newStudy.studyType,
+  2405→          temperatureC: newStudy.temperatureC,
+  2406→          humidityPercent: newStudy.humidityPercent,
+  2407→          durationMonths: newStudy.durationMonths,
+  2408→          ph: newStudy.ph,
+  2409→        }),
+  2410→      })
+  2411→      if (res.ok) {
+  2412→        toast({
+  2413→          title: 'Study created',
+  2414→          description: `${newStudy.substanceName} study created successfully (${code})`,
+  2415→        })
+  2416→        setCreateOpen(false)
+  2417→        setNewStudy({ substanceName: '', studyType: 'long_term', temperatureC: 25, humidityPercent: 60, durationMonths: 24, ph: 7.0 })
+  2418→        handleRefresh()
+  2419→      } else {
+  2420→        const errBody = await res.json().catch(() => ({}))
+  2421→        toast({ title: 'Error', description: errBody.error || 'Failed to create study', variant: 'destructive' })
+  2422→      }
+  2423→    } catch {
+  2424→      toast({ title: 'Error', description: 'Network error', variant: 'destructive' })
+  2425→    } finally {
+  2426→      setCreating(false)
+  2427→    }
+  2428→  }
+  2429→
+  2430→  const openDetail = async (study: StudyData) => {
+  2431→    setDetailOpen(true)
+  2432→    setDetailLoading(true)
+  2433→    setDetailStudy(null)
+  2434→    try {
+  2435→      const res = await fetch(`/api/studies/${study.id}`)
+  2436→      if (res.ok) {
+  2437→        const data = await res.json()
+  2438→        if (data.study) {
+  2439→          setDetailStudy(data.study)
+  2440→        } else {
+  2441→          // Fallback: use the row data we already have
+  2442→          setDetailStudy(study)
+  2443→        }
+  2444→      } else {
+  2445→        setDetailStudy(study)
+  2446→      }
+  2447→    } catch {
+  2448→      setDetailStudy(study)
+  2449→    } finally {
+  2450→      setDetailLoading(false)
+  2451→    }
+  2452→  }
+  2453→
+  2454→  const updateStudyStatus = async (newStatus: string) => {
+  2455→    if (!detailStudy) return
+  2456→    setStatusUpdating(true)
+  2457→    try {
+  2458→      const res = await fetch(`/api/studies/${detailStudy.id}`, {
+  2459→        method: 'PUT',
+  2460→        headers: { 'Content-Type': 'application/json' },
+  2461→        body: JSON.stringify({
+  2462→          status: newStatus,
+  2463→          rejectionReason: newStatus === 'rejected' ? 'Rejected during review' : undefined,
+  2464→        }),
+  2465→      })
+  2466→      if (res.ok) {
+  2467→        const data = await res.json()
+  2468→        if (data.study) {
+  2469→          setDetailStudy((prev: any) => prev ? { ...prev, ...data.study } : prev)
+  2470→        }
+  2471→        toast({ title: 'Status updated', description: `Study marked as ${newStatus.replace('_', ' ')}` })
+  2472→        handleRefresh()
+  2473→      } else {
+  2474→        toast({ title: 'Error', description: 'Failed to update status', variant: 'destructive' })
+  2475→      }
+  2476→    } catch {
+  2477→      toast({ title: 'Error', description: 'Network error', variant: 'destructive' })
+  2478→    } finally {
+
+[showing lines 1879-2478 of 5705; use offset=2479 with limit to continue reading]

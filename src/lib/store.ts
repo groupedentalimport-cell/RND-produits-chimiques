@@ -7,19 +7,15 @@ type PageId = 'dashboard' | 'molecules' | 'simulator' | 'studies' | 'reports' | 
 interface AppState {
   currentPage: PageId
   sidebarOpen: boolean
-  darkMode: boolean
   setPage: (page: PageId) => void
   toggleSidebar: () => void
-  toggleDarkMode: () => void
 }
 
 export const useAppStore = create<AppState>((set) => ({
   currentPage: 'dashboard',
   sidebarOpen: true,
-  darkMode: false,
   setPage: (page) => set({ currentPage: page }),
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
-  toggleDarkMode: () => set((s) => ({ darkMode: !s.darkMode })),
 }))
 
 // ── Molecules State ─────────────────────────────────────────────────────

@@ -120,3 +120,25 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: oklch(0.7 0 0 / 30%);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.5 0 0 / 50%);
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: oklch(0.5 0 0 / 40%);
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.7 0 0 / 60%);
+}
