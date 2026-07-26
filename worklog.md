@@ -699,3 +699,461 @@ Added a professional print-friendly report view to the ChemStab platform. Users 
 - `src/components/shared/PrintReportView.tsx` — New file (269 lines)
 - `src/components/pages/ReportsPage.tsx` — Added Print Preview button + Dialog integration
 - `src/app/globals.css` — Added print-specific CSS with @media print rules
+
+---
+
+Task ID: 5
+Agent: full-stack-developer (Stability Calculator)
+Task: Create an Arrhenius-based Stability Prediction Calculator for the ChemStab platform
+
+Work Log:
+- Read project worklog and `SimulatorPage.tsx` to understand existing architecture, store, toast, and shadcn patterns
+- Inspected available shadcn/ui primitives (slider, toggle-group, accordion, card, progress) and recharts LineChart usage in DashboardPage
+- Created `/home/z/my-project/src/app/api/stability-calculator/route.ts`:
+  - POST endpoint accepting `{ activationEnergy, rateConstant25C, temperatureC, durationMonths, kineticOrder }`
+  - Implements Arrhenius equation: k₂ = k₁ · exp((Eₐ/R) · (1/T₁ − 1/T₂)) with R=8.314 J/(mol·K), T₁=298.15 K, T₂=°C+273.15
+  - Ea given in kJ/mol, converted to J/mol internally for unit consistency
+  - Computes degradation % using kinetic-order-specific formulas:
+    - Zero-order:   D = k·t  (capped at 1)
+    - First-order:  D = 1 − exp(−k·t)
+    - Second-order: D = k·t / (1 + k·t)
+  - Predicted shelf life = time to reach 10% degradation threshold (ICH Q1A)
+  - Also returns Q₁₀ (temperature coefficient), Arrhenius factor (k₂/k₁), T(K), and a 51-point degradation curve
+  - Comprehensive input validation: each parameter is type-checked, NaN/Infinity-checked, and range-checked (e.g. Ea ∈ (0, 1000] kJ/mol, T ∈ [-50, 200] °C, k ∈ (0, 10], t ∈ (0, 600] months, kineticOrder ∈ {0,1,2})
+  - Returns 400 with `details` array on validation failure
+  - GET endpoint returns formula reference / defaults documentation
+- Created `/home/z/my-project/src/components/shared/StabilityCalculator.tsx`:
+  - 'use client' component using emerald/teal color scheme (NO indigo/blue, compliant with project rule)
+  - Two-column Card layout (inputs on left, results on right) that collapses to a single column on mobile
+  - Inputs:
+    - Activation Energy (Eₐ) — slider (50–150) + number input, default 100 kJ/mol
+    - Rate Constant at 25°C (k₂₅) — logarithmic slider (0.001–0.1) + number input, default 0.01 1/months
+    - Storage Temperature — slider (4–60°C) + number input, default 25°C
+    - Duration — slider (1–36 months) + number input, default 12 months
+    - Kinetic Order — three-button ToggleGroup (Zero / First / Second-order)
+  - Results panel:
+    - Large gradient headline showing predicted shelf life (in months or years+months, "∞" if stable)
+    - Animated SVG circular gauge for Remaining Potency (color-coded: green→teal→amber→red)
+    - Degradation percentage with animated Progress bar + color-coded legend
+    - Three small stat cards: k at target temperature, Arrhenius factor (k₂/k₁), Q₁₀
+    - LineChart (recharts) showing degradation (red) + potency (emerald) over time, with:
+      - Horizontal red dashed reference line at the 10% shelf-life threshold
+      - Vertical teal dashed reference line at the user-selected duration
+      - CartesianGrid, XAxis (months), YAxis (%), Tooltip with formatted values
+    - "Save as Study" button that shows a toast and calls `useAppStore.setPage('studies')`
+  - Formula Reference expandable Accordion section showing:
+    - The Arrhenius equation in monospace form
+    - Constant definitions (R, T₁, T₂, Eₐ unit conversion note)
+    - All three kinetic-order degradation formulas
+    - Shelf-life definition per ICH Q1A
+  - Auto-computes on parameter change (250 ms debounce) via POST to the new API
+  - All numbers formatted with appropriate significant figures (scientific notation for very small k values)
+- Integrated into `/home/z/my-project/src/components/pages/SimulatorPage.tsx`:
+  - Imported `StabilityCalculator` and added it as a new section below the existing simulator content (substances/conditions input + results)
+  - Wrapped with an "ICH Q1A" Badge + descriptive subtitle for context
+  - Preserved all existing SimulatorPage functionality (substances, environmental conditions, run analysis, radar chart, kinetics predictions, recommendations, empty state, multi-step loading animation)
+- Verification:
+  - API tested via curl with realistic pharmaceutical values:
+    - 25°C / Ea=100 / k=0.01 / 12 mo / first-order → k=0.01, 11.3% degradation, 10.5 mo shelf life ✓ (matches expected 0.10536/0.01 = 10.54 mo)
+    - 40°C (accelerated) → arrheniusFactor 6.9×, k=0.069, 56% degradation, 1.53 mo shelf life, Q₁₀=3.28 ✓ (typical pharma Q₁₀ is 2–4)
+    - 4°C (cold storage) / second-order → k=0.00043, 1.03% degradation after 24 mo, 256 mo (~21 yr) shelf life ✓
+    - Invalid input (Ea=-5) → 400 with `{ error: "Validation failed", details: ["activationEnergy must be a positive number (kJ/mol, ≤ 1000)"] }` ✓
+  - ESLint: 0 errors, 0 warnings on my files (6 pre-existing warnings in unrelated `use-realtime-notifications.ts`)
+  - Dev server log shows: `POST /api/stability-calculator 200 in 9ms` and `GET / 200 in 848ms`
+
+Stage Summary:
+- Production-ready Arrhenius Stability Prediction Calculator added to the ChemStab platform
+- New API route `/api/stability-calculator` (POST + GET) with strict input validation
+- New shared component `StabilityCalculator.tsx` (~750 lines, scientific UI with sliders, gauges, charts)
+- Integrated as a new section at the bottom of the Simulator page without breaking existing functionality
+- Lint clean on all new/modified files
+- All pharmaceutical calculations verified against theoretical values
+
+Files added/modified:
+- `src/app/api/stability-calculator/route.ts` — new API endpoint (230 lines)
+- `src/components/shared/StabilityCalculator.tsx` — new shared component (~750 lines)
+- `src/components/pages/SimulatorPage.tsx` — added import + 12-line section integration
+
+
+---
+
+## Task 4: RAG-Style AI Assistant Enhancement (Agent: Z.ai Code)
+
+**Date**: 2025-03-04
+
+### Summary
+Enhanced the ChemStab AI Assistant with RAG-style molecule database context. The AI now answers questions about specific molecules and studies in the database, with an upgraded chat UI featuring markdown rendering, a "Connected to DB" badge, typing indicator, and contextual follow-up suggestions.
+
+### Implementation Details:
+
+1. **Enhanced `/api/chat/route.ts`** (RAG-style context injection)
+   - Added `import { db } from '@/lib/db'`
+   - New `SYSTEM_PROMPT_BASE` containing the required instruction text (ChemStab AI as pharmaceutical stability assistant with DB access, ICH Q1A guidance, referencing specific molecules)
+   - New `buildDatabaseContext()` async function:
+     - Fetches up to 50 most recent molecules (name, CAS, formula, molar mass, logP, predicted stability score, prediction confidence, risk level, hazard class, description)
+     - Fetches up to 20 most recent stability studies (study code, substance name, type, status, temperature, humidity, duration, predicted shelf life, pH, light exposure)
+     - Builds a structured Markdown "Database Context (Live)" section appended to the system prompt
+     - Returns `{ context, hasData }`; gracefully returns empty context on DB error
+   - Modified `POST` handler to call `buildDatabaseContext()` before LLM invocation, compose final system prompt, and include `hasData` in the JSON response
+   - Kept existing z-ai-web-dev-sdk integration (singleton + chat.completions.create) and all error handling
+
+2. **Enhanced `AIAssistant.tsx`** (chat UI)
+   - **New context-aware quick prompts** (5 prompts): Aspirin stability, critical-risk molecules, Aspirin vs Ibuprofen comparison, studies under review, ICH Q1A guidelines
+   - **Context badge** in header: pill with animated green ping dot showing "Connected to DB" when `hasData=true`, falling back to "DB Offline" (gray) or "Connecting…" (amber). Tooltip explains purpose. Probes endpoint on mount and updates on every response.
+   - **Markdown rendering**: `MarkdownView` splits content by fenced code blocks; `TextBlock` handles unordered lists (emerald markers), ordered lists, paragraphs; `renderInline` handles `**bold**`, `*italic*`, `` `inline code` `` with emerald-tinted code chips; code blocks rendered in dark `<pre>` with monospace font
+   - **Typing indicator**: Three bouncing emerald dots in a chat-bubble-shaped container with "Searching database…" caption, staggered animation delays
+   - **Improved message bubble styling**: asymmetric corner radius (rounded-br-sm for user, rounded-bl-sm for AI), AI messages have a header row ("ChemStab AI" with brain icon) separated by a divider, 13px text with relaxed leading, subtle shadows
+   - **Suggested follow-ups**: 2-3 contextual follow-up questions appear below each AI response as dashed-border chips with chevron icons; `generateFollowUps()` scans AI text for keywords (Aspirin, Ibuprofen, hydrolysis, oxidation, ICH, shelf life, risk, study, temperature, Q10, degradation) and generates targeted follow-ups; falls back to default suggestions when fewer than 2 contextual ones are produced; clicking a chip sends it as a new message
+   - Panel width 400px → 420px; max message width 85% → 88%
+   - Updated placeholder text and empty-state subtext
+
+3. **Lint check**: `bun run lint` passed with zero errors
+4. **Dev server**: `GET /` and `POST /api/chat` both respond **HTTP 200**
+5. Dev log confirms new Prisma queries are running with the expanded select fields for both Molecule and StabilityStudy tables
+6. `z-ai-web-dev-sdk` is only imported in `route.ts` (server-side) — no client-side imports
+
+### Files modified:
+- `src/app/api/chat/route.ts` — Rewrote with RAG-style DB context, system prompt with required instruction text, `hasData` response flag
+- `src/components/layout/AIAssistant.tsx` — Rewrote with context badge, markdown renderer, typing indicator, follow-up suggestions, new quick prompts, improved bubble styling
+
+### Files created:
+- `agent-ctx/4-z-ai-code.md` — This task's work record
+
+
+---
+
+## Task 7: Real-Time Notifications WebSocket Mini-Service
+
+**Date**: 2026-07-26
+**Agent**: realtime-notifications-developer
+**Status**: Completed
+
+### Summary
+Added a real-time notifications WebSocket mini-service that pushes simulated pharmaceutical events to the ChemStab frontend. The frontend connects via the Caddy gateway (`/?XTransformPort=3003`), receives `notification` events, merges them into the existing `useNotificationStore`, and shows a live connection status indicator in the header.
+
+### Architecture
+```
+[Browser]
+  └── useRealtimeNotifications hook
+      └── socket.io-client → io("/?XTransformPort=3003")
+                                ↓
+                              [Caddy :81]
+                                ↓ (forwards to :3003 based on query)
+                              [notifications-service :3003]
+                                └── socket.io server (path: "/")
+                                    ├── tracks connected clients
+                                    ├── broadcasts notification every 30–60s
+                                    └── supports request-notification event for testing
+```
+
+### Files Created / Modified
+
+**1. `/home/z/my-project/mini-services/notifications-service/package.json`** (new)
+- Independent bun project (`"type": "module"`)
+- Scripts: `dev` → `bun --hot index.ts`, `start` → `bun index.ts` (auto-restart on file changes)
+- Dependencies: `socket.io@^4.8.3`, `express@^5.2.1` (express installed per task requirements)
+- DevDeps: `@types/bun`, `@types/express`
+
+**2. `/home/z/my-project/mini-services/notifications-service/index.ts`** (new, ~310 lines)
+- Hardcoded port `3003` (NOT from env)
+- Socket.io server with `path: '/'` (REQUIRED for Caddy forwarding)
+- CORS: `origin: '*'`, methods `['GET', 'POST']`
+- `pingTimeout: 60s`, `pingInterval: 25s`, `connectTimeout: 10s`
+- Tracks connected clients in a `Map<socketId, { id, connectedAt, userAgent }>`
+- Logs `[CONNECT]`, `[DISCONNECT]`, `[SOCKET-ERROR]` events
+- Periodic status logger every 60s (`[STATUS] connectedClients=N | uptime=Xs | port=3003`)
+- **Periodic broadcaster**: every 30–60s (random), builds a realistic notification and `io.emit('notification', n)` to all connected clients. Skips broadcasting when no clients are connected (logs `[NOTIFY-SKIP]` instead).
+- **Realistic pharmaceutical notification templates** covering all required event types:
+  - `study/success` — "Study STB-2024-XXX completed" (6 study codes × 4 completion messages)
+  - `alert/critical` — "Risk alert: Hydrogen Peroxide stability score dropped" (4 molecules × 4 risk messages)
+  - `molecule/info` — "New molecule registered" (8 molecules)
+  - `report/success` — "ICH Q1A report ready for review" (5 report types)
+  - `system/warning` — "System maintenance scheduled" (5 maintenance tasks)
+  - `system/warning` — "Audit log threshold reached" (4 audit threshold messages)
+- Each notification has: `id` (rt-<base36>-<rand>), `title`, `message`, `category`, `severity`, `timestamp` (ISO), `read: false`, optional `actionLabel` + `actionPage`
+- Supports `request-notification` client event for on-demand testing
+- Emits `connected` welcome event on socket connection
+- Graceful shutdown via SIGTERM/SIGINT (clears timer, disconnects sockets, closes HTTP server)
+- UncaughtException / UnhandledRejection handlers
+
+**3. `/home/z/my-project/src/hooks/use-realtime-notifications.ts`** (new, ~165 lines)
+- `'use client'` hook: `useRealtimeNotifications(): ConnectionStatus`
+- Returns `'connecting' | 'connected' | 'disconnected'`
+- Connects via `io('/?XTransformPort=3003', { path: '/', transports: ['websocket', 'polling'], reconnection: true, reconnectionAttempts: Infinity, reconnectionDelay: 1000, reconnectionDelayMax: 15000, timeout: 10000, autoConnect: true })`
+- **CRITICAL**: Uses relative path `/` + `XTransformPort=3003` query — NEVER direct `http://localhost:3003`
+- Listens for `notification` events from the server
+- Respects user preferences from `usePreferencesStore`:
+  - If `notificationsEnabled === false` → drops all incoming notifications
+  - If specific category is disabled (studies/molecules/reports/system/alerts) → drops that category
+  - Category mapping: `study→studies`, `molecule→molecules`, `report→reports`, `system→system`, `alert→alerts`
+- Merges incoming notifications into `useNotificationStore.addNotification()` (auto-increments unread count, prepends to list)
+- Connection status updates:
+  - `connect` event → `'connected'`
+  - `disconnect` event → `'disconnected'`
+  - `reconnect_attempt` event → `'connecting'`
+  - `connect_error` event → `'disconnected'`
+- Console logging for debugging (connect/disconnect/reconnect/error)
+- Cleanup: `socket.removeAllListeners()` + `socket.disconnect()` on unmount
+
+**4. `/home/z/my-project/src/app/page.tsx`** (modified)
+- Added imports: `Tooltip, TooltipTrigger, TooltipContent` from `@/components/ui/tooltip`, `useRealtimeNotifications` from `@/hooks/use-realtime-notifications`
+- Added `const connectionStatus = useRealtimeNotifications()` at the top of `Home()`
+- Added `rtIndicator` derived object mapping status → `{ dotClass, pingClass, label, description }`
+  - `connected` → green (`bg-emerald-500` + `bg-emerald-400` ping), "Real-time: Live"
+  - `connecting` → amber (`bg-amber-500` + `bg-amber-400` ping), "Real-time: Connecting…"
+  - `disconnected` → red (`bg-red-500`), "Real-time: Disconnected"
+- Added a real-time connection indicator button in the header (between "All systems operational" pill and the Search button):
+  - `hidden lg:flex` — only visible on desktop
+  - Pulse animation (`animate-ping`) when connected or connecting (suppressed when disconnected)
+  - Tooltip showing label + description (uses shadcn Tooltip component)
+  - `aria-label` for accessibility
+
+### Dependencies Installed
+- Main project (`/home/z/my-project`): `socket.io@4.8.3`, `socket.io-client@4.8.3`
+- Mini-service: `socket.io@4.8.3`, `express@5.2.1`, `@types/express@5.0.6` (dev)
+
+### Verification
+- `bun run lint` — 0 errors, 0 warnings ✓
+- Next.js dev server on port 3000 — `GET / 200` ✓
+- Notifications service on port 3003 — listening, socket.io handshake returns 200 with valid SID ✓
+- Caddy gateway forwarding works — `GET http://localhost:81/?XTransformPort=3003&EIO=4&transport=polling` returns 200 ✓
+- End-to-end integration confirmed — service log shows `[NOTIFY-BROADCAST] "Study STB-2024-007 completed" | study/success | recipients=1` (real browser client connected and received a broadcast) ✓
+- Auto-restart verified — editing `index.ts` triggered `bun --hot` to reload the service cleanly ✓
+
+### Service Management
+- Started in background: `cd /home/z/my-project/mini-services/notifications-service && nohup bun --hot index.ts > service.log 2>&1 &`
+- PID: 4075
+- Log file: `/home/z/my-project/mini-services/notifications-service/service.log`
+
+### Gateway Rules Compliance
+✓ Frontend connects using `io("/?XTransformPort=3003")` — NEVER `io("http://localhost:3003")`
+✓ Path is always `/` so Caddy can forward correctly
+✓ All API requests use relative paths only
+✓ Mini-service uses hardcoded port 3003 (not from env)
+
+### Notes
+- The mini-service does not expose separate HTTP `/health` endpoints because socket.io's `path: '/'` config causes engine.io to intercept ALL HTTP requests on port 3003. Service health is verified via the socket.io polling handshake (`GET /?EIO=4&transport=polling` returns 200 with `{"sid":"...","upgrades":["websocket"],...}`) and the periodic `[STATUS]` log line.
+- Express is installed in the mini-service per task requirements but is not actively used for routing — the service is a pure socket.io server.
+- The hook reads `usePreferencesStore.getState()` *inside* the `notification` handler (rather than subscribing reactively) so the socket lifecycle is decoupled from preference changes — preferences take effect immediately on the next incoming notification without re-creating the socket.
+
+
+---
+
+Task ID: 7
+Agent: frontend-styling-expert
+Task: Enhance styling and visual polish across the ChemStab platform (micro-interactions, animations, premium visual details)
+
+Work Log:
+- Read all 5 target files (globals.css, DashboardPage, AnalyticsPage, AdminPage, DegradationPage) plus Sidebar and AnimatedNumber for full context before making any changes
+- **globals.css**: Refined existing scrollbar (thinner 6px, emerald-themed linear-gradient thumb for both webkit + firefox via `scrollbar-width`/`scrollbar-color`). Added new premium utility classes: `.glass-card` (backdrop-blur + saturate + semi-transparent bg + border + soft emerald shadow), `.shimmer-text` (animated emerald→teal→cyan gradient text clip, 4s linear loop), `.grid-pattern` + `.grid-pattern-fade` (subtle emerald grid lines with radial mask), `.gradient-border` (1px emerald→teal→cyan ring via mask-composite), `.glow-emerald-strong` (heavier glow variant of existing `.glow-emerald`), `*:focus-visible` smooth emerald ring (with input/radix exclusions to preserve native ring styles), `.nav-active-pulse` (2.6s pulsing emerald glow keyframe), `.slide-in-left` (audit timeline entrance), `.critical-pulse` (red pulsing scale for critical hazard badges), `.fade-in-up` (staggered grid entrance)
+- **Sidebar.tsx**: Wired `.nav-active-pulse` class to active nav button so the active route has a subtle pulsing emerald glow
+- **DashboardPage.tsx**: Added `.grid-pattern .grid-pattern-fade` background to main content area (absolute, -z-10, pointer-events-none, opacity-60). Risk Alerts stat card now receives `ring-2 ring-amber-400/60` + an inner `animate-pulse` ring overlay when `statsData.riskDistribution.critical > 0`. Animated counters already present via `<AnimatedNumber>`. System Status card upgraded to `.gradient-border` + `backdrop-blur-sm`. Recent Studies table rows now have `hover:-translate-y-0.5` + combined inset-emerald-shadow + outer emerald lift shadow via single `hover:shadow-[inset_3px_0_0_0_rgb(16,185,129),0_4px_12px_-4px_rgba(16,185,129,0.25)]` (merged into one box-shadow to avoid Tailwind class collision)
+- **AnalyticsPage.tsx**: Wrapped page title with a 40px-wide emerald→teal→cyan gradient underline bar. QSPR section upgraded to `.glass-card`. Each QSPR model card now has a per-card linear-gradient tinted background `linear-gradient(135deg, ${model.fill}10, transparent 70%)`, a staggered fade-in-up entrance (delay = idx * 0.08s), and a `whileHover` lift + scale 1.01 with emerald shadow. All chart cards across the page got `transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-8px_rgba(16,185,129,0.18)]` (via `replace_all`). Loading skeletons already present (kept as-is). Scatter plot tooltips already present (kept as-is)
+- **AdminPage.tsx**: User avatar divs gained `ring-2 ring-white dark:ring-slate-900 ring-offset-1 ring-offset-emerald-500/20` for a bordered premium look. User table rows upgraded to `transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[inset_3px_0_0_0_rgb(16,185,129),0_4px_12px_-4px_rgba(16,185,129,0.2)]`. Audit timeline entries converted from `<div>` to `<motion.div>` with `initial={{opacity:0, x:-12}} animate={{opacity:1, x:0}}` and staggered `delay: Math.min(i*0.05, 0.5)`. System Health Dashboard card upgraded to `.gradient-border`. Each health metric now has an inline SVG circular progress ring (radius 18, stroke 4, color-coded emerald/teal/cyan/amber) with the percentage rendered in the center, alongside the existing linear Progress bar (kept for accessibility). ML model training sub-card received a gradient background (`from-emerald-50 to-teal-50 dark:from-emerald-950/40 dark:to-teal-950/30`), a top gradient bar (`from-emerald-500 via-teal-500 to-cyan-500`), an emerald border, and gradient-clip-text on the "QSPR Stability Model" title
+- **DegradationPage.tsx**: KPI stat cards now each have a per-color gradient background overlay (`from-emerald-50/80 to-teal-50/40` etc.) plus `transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-8px_rgba(16,185,129,0.18)]`. Filter pills section wrapped in a `.gradient-border rounded-full inline-flex p-1.5 bg-card/40 backdrop-blur-sm` container. Product cards now wrapped in `<motion.div>` with staggered entrance (`delay: Math.min(groupIdx*0.08, 0.6)`) and `hover:-translate-y-1 hover:shadow-[0_12px_32px_-8px_rgba(16,185,129,0.22)]`. Individual degradation product rows gained `hover:-translate-y-0.5` + emerald lift shadow. Hazard badges for `high` and `critical` levels now receive the `.critical-pulse` class (1.8s pulsing red glow + slight scale). Bar fill animations smoothed with `transition-all duration-500`
+
+Verification:
+- ESLint: `bun run lint` → 0 errors, 0 warnings
+- Dev server: `curl http://localhost:3000` → HTTP 200, `✓ Compiled in 459ms`, no compile/runtime errors in dev.log
+- Color audit: grep for `indigo|blue-*` across all 5 modified files → 0 matches. All colors restricted to emerald/teal/cyan/amber/red/rose as required
+- No existing functionality removed — only additive CSS classes, gradient overlays, motion wrappers, and SVG ring additions
+
+Stage Summary:
+- Global premium UI utility layer added to globals.css (glass-card, shimmer-text, grid-pattern, gradient-border, nav-active-pulse, critical-pulse, focus-visible rings, slide-in-left, fade-in-up, refined emerald scrollbar for webkit+firefox)
+- All 4 target pages received their requested micro-interactions: pulsing risk alert, gradient borders, staggered entrances, hover lifts, circular progress ring, slide-in audit timeline, gradient ML header, pulsing critical badges, gradient stat card backgrounds
+- Active sidebar nav item now has a pulsing emerald glow animation
+- Lint clean, dev server 200 OK, color palette compliant
+
+---
+
+## Task 6: Interactive Degradation Pathway Visualization (Agent: Z.ai Code)
+
+**Date**: 2025-03-04
+**Status**: Completed
+
+### Summary
+
+Added an interactive degradation pathway visualization feature to the ChemStab platform. The new `DegradationPathway` shared component renders a tree/flowchart showing a parent molecule at the top, SVG connector arrows branching down to degradation products (color-coded by stress condition: Hydrolysis=teal, Oxidation=amber, Photolysis=cyan, Thermal=red), and product cards with 2D structures, percentage-yield badges, and color-coded hazard-level badges. Integrated into both the Degradation page (with a molecule selector dropdown) and the Molecules page detail dialog (Degradation tab).
+
+### Implementation Details
+
+1. **Added `DEGRADATION_PATHWAYS` data to `src/lib/sample-data.ts`** (~210 lines added at end of file)
+   - New types: `DegradationCondition` ('Hydrolysis' | 'Oxidation' | 'Photolysis' | 'Thermal'), `HazardLevel` ('low' | 'moderate' | 'high'), `DegradationPathwayProduct`, `DegradationPathway`
+   - 5 predefined pathways with full SMILES, CAS, formula, and per-product condition + description:
+     - **Aspirin** → hydrolysis → Salicylic Acid (65%) + Acetic Acid (35%)
+     - **Ibuprofen** → oxidation → Hydroxyibuprofen (42%), thermal → Isobutylphenol (18%)
+     - **Acetaminophen** → oxidation → NAPQI (12%, high hazard), hydrolysis → p-Aminophenol (28%)
+     - **Hydrogen Peroxide** → photolysis → Water + Oxygen (50% each), thermal → Water + Oxygen (50% each)
+     - **Caffeine** → photolysis → Dimethylparabanic Acid (22%)
+   - `DEGRADATION_CONDITION_STYLES` map: 4 conditions × {badge, dot, stroke, label} using teal/amber/cyan/red (NO indigo/blue)
+   - `HAZARD_BADGE_STYLES` map: low=emerald, moderate=amber, high=red
+   - `findPathwayForMolecule(name)` helper for case-insensitive lookup
+
+2. **Created `src/components/shared/DegradationPathway.tsx`** (new, ~415 lines)
+   - `'use client'` component with props: `moleculeName`, `smiles?`, `casNumber?`, `formula?`, `degradationProducts?`, `compact?`, `className?`
+   - **Parent molecule card** (centered, max-w-md, emerald gradient) with Atom icon, "Parent" badge, formula/CAS line, and `MoleculeStructure` 2D rendering
+   - **SVG connector area** (64px tall, ResizeObserver-driven):
+     - Vertical stem from parent center → horizontal bus at y=22
+     - Horizontal bus line spanning first-row product centers
+     - Per-product vertical drops color-coded by condition, ending in arrowheads at y=50
+     - HTML condition-label pills overlaid on each drop line (`bg-background/95` pill with colored dot + condition name)
+   - **Product cards grid** with responsive columns computed from container width (1 col < 480px, 2 cols < 768px, 3 cols < 1280px, up to 4 on XL). Each card has:
+     - Top color bar matching condition color
+     - Name + condition badge
+     - `MoleculeStructure` 2D rendering (compact: 200×90, normal: 240×110)
+     - Percentage badge (emerald) + hazard-level badge (color-coded: emerald/amber/red)
+     - Optional description (hidden in compact mode)
+   - **Framer-motion animations**: staggered fade-in + slide-down (parent delay=0, products delay=0.15+i*0.08s, legend last)
+   - **Empty state**: dashed-border card with floating circles animation, large FlaskConical icon, friendly message naming the molecule
+   - **Legend** (non-compact): row showing all 4 condition color dots + ChevronDown direction indicator
+   - Robust normalization helpers handle missing/unknown condition or hazard strings
+
+3. **Integrated into `src/components/pages/DegradationPage.tsx`**
+   - Added imports: `Network`, `ChevronDown` icons; `DEGRADATION_PATHWAYS`; `DegradationPathway` component
+   - Added `selectedPathwayIdx` state (default 0) and `selectedPathway` derived value
+   - Inserted new Card section at the top (between page header and KPI cards):
+     - Gradient top bar (emerald → teal → cyan)
+     - Header with "Interactive Degradation Pathway Map" title + Network icon
+     - shadcn `Select` dropdown listing all 5 predefined molecules with degradant count
+     - `DegradationPathway` component renders selected pathway (keyed by molecule name so animations re-run on switch)
+     - Footer note with degradant count, condition count, and "literature values" disclaimer
+   - All existing functionality preserved (KPI cards, charts, hazard filter pills, search, molecule filter, grouped cards, add product dialog)
+
+4. **Integrated into `src/components/pages/MoleculesPage.tsx` detail dialog Degradation tab**
+   - Added imports: `Network` icon; `findPathwayForMolecule`; `DegradationPathway` component
+   - Added inline IIFE block above the existing product list:
+     - Calls `findPathwayForMolecule(selectedMolecule.name)` to look up predefined pathway
+     - Builds `pathwayProducts` from API-fetched degradation products (preferred) — enriching each with `condition` matched from predefined pathway by product name — or falls back to predefined pathway products
+     - Derives `pathwaySmiles` / `pathwayCas` / `pathwayFormula` from selected molecule OR predefined pathway
+     - Shows "Reference pathway" badge when using predefined data (no API products)
+     - Renders `DegradationPathway` in `compact` mode inside emerald-tinted bordered container
+     - Loading state shows Skeleton placeholders; returns `null` when no data and not loading
+   - Preserved existing detailed product list UI and "Add degradation product" form below the pathway map
+
+5. **Verification**:
+   - `bun run lint` → 0 errors, 0 warnings ✓
+   - Dev server: `GET /` → HTTP 200 ✓, `GET /api/degradation-products` → HTTP 200 ✓
+   - No compile errors in `dev.log`
+   - All SMILES strings verified as valid smiles-drawer input (canonical SMILES from PubChem/Wikipedia)
+   - Color scheme strictly emerald/teal/cyan/amber/red (NO indigo/blue)
+
+### Files modified:
+- `src/lib/sample-data.ts` — added `DEGRADATION_PATHWAYS` constant + types + style maps + `findPathwayForMolecule` helper (~210 lines appended)
+- `src/components/shared/DegradationPathway.tsx` — new shared component (~415 lines)
+- `src/components/pages/DegradationPage.tsx` — added top visualization section with molecule selector dropdown
+- `src/components/pages/MoleculesPage.tsx` — added pathway visualization to Degradation tab in detail dialog
+
+### Files created:
+- `src/components/shared/DegradationPathway.tsx` — new shared component
+- `agent-ctx/6-z-ai-code-degradation-pathway.md` — this task's work record
+
+### Architecture Notes
+
+- The `DegradationPathway` component is purely presentational — no API calls, no global state. It takes `moleculeName` + `smiles?` + `degradationProducts?` props and renders the tree.
+- Layout uses a `ResizeObserver` to track container width and compute pixel-accurate SVG coordinates for the bus + drop arrows, ensuring the connector arrows line up perfectly with product card centers across all responsive breakpoints (avoids the distortion of `preserveAspectRatio="none"`).
+- Handles 3 layout modes: empty state (friendly message), single product (single drop, no bus), multiple products (full tree).
+- The `compact` prop renders a smaller variant for narrow dialog containers.
+- The Degradation-page molecule selector uses shadcn `Select` keyed by numeric index into `DEGRADATION_PATHWAYS` — keeps dropdown stateless and avoids name-collision issues.
+- In MoleculesPage, the inline IIFE pattern keeps pathway logic local to the Degradation tab without polluting parent state.
+
+---
+
+## Session 4: Cron-Triggered Development Round (Final Summary)
+
+**Date**: 2026-03-04
+**Agent**: Main orchestrator (Z.ai Code)
+
+### Current Project Status Assessment
+
+ChemStab (Chemical Stability Assessment Platform) is a production-ready Next.js 16 pharmaceutical application. At session start, the app was stable with all 8 pages working, 4 major features from the previous session (MoleculeStructure, Batch Operations, SettingsDialog, PrintReportView), and no runtime errors.
+
+### QA Testing Results
+
+- **agent-browser testing**: All 8 pages verified at 1440x900 viewport through Caddy gateway (port 81) — no console errors, no page errors
+- **VLM analysis**: Screenshots analyzed for visual quality across Dashboard, Molecules, Studies, Reports, Degradation, Analytics, Admin pages
+- **Bug found and fixed**: MoleculeStructure component was showing "No structure available" placeholder despite valid SMILES strings. Root cause: canvas DPR scaling interfered with smiles-drawer's internal context management. Fix: rewrote to use SVG rendering via SvgDrawer.draw() with SmilesDrawer.parse() — confirmed working by VLM (Ibuprofen skeletal formula correctly rendered)
+- **WebSocket connection**: Initially failed due to gateway WebSocket upgrade issues. Fixed by using polling-only transport (upgrade: false). Real-time notifications now flow correctly through Caddy gateway
+
+### Completed Modifications This Session
+
+1. **MoleculeStructure Bug Fix** (Critical)
+   - Rewrote from canvas-based to SVG-based rendering using SmilesDrawer.parse() + SvgDrawer.draw()
+   - Added loading spinner state with "Rendering..." indicator
+   - Added proper error handling with fallback placeholder
+   - Verified: Ibuprofen, Aspirin, and other molecules now render correct 2D skeletal formulas
+
+2. **Real-Time Notifications WebSocket Service** (New Feature)
+   - Created mini-service at `mini-services/notifications-service/` (port 3003, bun --hot)
+   - Socket.io server broadcasting realistic pharmaceutical events every 30-60s
+   - Frontend hook `use-realtime-notifications.ts` connects via `io("/?XTransformPort=3003")`
+   - Connection status indicator in header (green/amber/red dot with tooltip)
+   - Notifications merge into existing `useNotificationStore` with category filtering
+   - Verified: real-time notifications appear in bell dropdown (Study completed, New molecule, Risk alert, etc.)
+
+3. **AI Assistant Database Context (RAG-style)** (New Feature)
+   - Enhanced `/api/chat/route.ts` to fetch molecule + study data from Prisma before LLM call
+   - System prompt now includes actual database context (50 molecules, 20 studies)
+   - "Connected to DB" badge with green pulse indicator
+   - 5 new context-aware quick prompts (Aspirin stability, critical risk molecules, etc.)
+   - Typing indicator with bouncing dots
+   - Markdown rendering (bold, italic, code blocks, lists)
+   - Suggested follow-up questions after each AI response
+   - Verified: AI correctly references Aspirin (C9H8O4), STB-2024-001 study, ICH Q1A guidelines
+
+4. **Stability Prediction Calculator** (New Feature)
+   - New API endpoint `/api/stability-calculator/route.ts` implementing Arrhenius equation
+   - New component `StabilityCalculator.tsx` with:
+     - Sliders for Activation Energy, Rate Constant, Temperature, Duration
+     - Kinetic order toggle (Zero/First/Second)
+     - Results: predicted shelf life, degradation %, remaining potency gauge
+     - Degradation curve LineChart with 10% threshold reference line
+     - Expandable formula reference section
+     - "Save as Study" button
+   - Integrated into SimulatorPage below existing content
+   - Verified: API returns correct calculations (25°C, first-order, k=0.01 → 10.5 months shelf life)
+
+5. **Degradation Pathway Visualization** (New Feature)
+   - New component `DegradationPathway.tsx` (~415 lines)
+   - Interactive tree/flowchart: parent molecule → SVG connectors → product cards
+   - 5 predefined pathways (Aspirin, Ibuprofen, Acetaminophen, H2O2, Caffeine)
+   - Color-coded conditions (Hydrolysis=teal, Oxidation=amber, Photolysis=cyan, Thermal=red)
+   - 2D structures for parent + all products via MoleculeStructure
+   - Integrated into DegradationPage (with molecule selector) and MoleculesPage detail dialog
+   - Verified by VLM: correct tree rendering, structures, condition labels, hazard colors
+
+6. **Global Styling Enhancements** (Visual Polish)
+   - New CSS utilities: `.glass-card`, `.shimmer-text`, `.grid-pattern`, `.gradient-border`, `.glow-emerald-strong`, `.nav-active-pulse`, `.critical-pulse`, `.slide-in-left`, `.fade-in-up`
+   - Enhanced scrollbar (thinner, emerald-themed, Firefox support)
+   - Focus-visible rings for all interactive elements
+   - Dashboard: grid pattern bg, pulsing risk alert card, gradient system status border, hover-lift table rows
+   - Analytics: gradient title underline, glass-card QSPR section, hover scale on charts, staggered fade-in
+   - Admin: avatar ring borders, slide-in audit timeline, circular progress rings for health metrics, gradient ML header
+   - Degradation: gradient KPI cards, hover-lift product cards, pulsing critical badges, gradient filter pills
+   - Sidebar: active nav item pulsing emerald glow
+
+### Verification Results
+
+- **ESLint**: 0 errors, 0 warnings
+- **Dev server**: HTTP 200 stable across all pages
+- **WebSocket service**: Running on port 3003, notifications flowing through gateway
+- **VLM analysis**: All new features visually confirmed working
+- **Color compliance**: Strictly emerald/teal/cyan/amber/red/rose — NO indigo or blue
+- **No breaking changes**: All existing functionality preserved
+
+### Unresolved Issues / Risks
+
+1. **WebSocket transport**: Using polling-only (no WebSocket upgrade) due to Caddy gateway limitations. This is slightly less efficient but fully functional. For production, consider adding WebSocket support to the Caddy config or using a dedicated WebSocket port.
+
+2. **SmilesDrawer SSR**: The dynamic import pattern works but adds a small delay (~50ms) on first render. The loading spinner mitigates this visually.
+
+3. **AI Assistant context size**: Fetching 50 molecules + 20 studies on every chat request adds ~20ms latency. For scale, consider caching the context or implementing a smarter retrieval strategy.
+
+4. **Degradation pathways**: Currently uses predefined data for 5 common molecules. For other molecules, it falls back to API-fetched degradation products (which may be sparse). Could be enhanced with a degradation pathway prediction model.
+
+### Priority Recommendations for Next Phase
+
+1. **User authentication**: Implement NextAuth.js with role-based access control (already available in the stack)
+2. **Data export to PDF**: Use jspdf or pdf-lib for true PDF generation (not just print)
+3. **Performance optimization**: React.lazy + dynamic imports for heavy components (StabilityCalculator, DegradationPathway, PrintReportView)
+4. **Mobile optimization**: Test and enhance floating action bars and dialogs for small screens
+5. **Real-time collaboration**: Extend the WebSocket service to support multi-user editing of studies/reports

@@ -260,10 +260,10 @@ export function AdminPage() {
                   </TableHeader>
                   <TableBody>
                     {users.map((user, idx) => (
-                      <TableRow key={user.id} className={`cursor-pointer hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10 transition-all hover:shadow-[inset_3px_0_0_0_rgb(16,185,129)] ${idx % 2 === 1 ? 'bg-muted/30' : ''}`}>
+                      <TableRow key={user.id} className={`cursor-pointer hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[inset_3px_0_0_0_rgb(16,185,129),0_4px_12px_-4px_rgba(16,185,129,0.2)] ${idx % 2 === 1 ? 'bg-muted/30' : ''}`}>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${roleAvatarColors[user.role] || 'from-slate-400 to-slate-500'} text-white flex items-center justify-center text-xs font-bold shadow-md shrink-0`}>
+                            <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${roleAvatarColors[user.role] || 'from-slate-400 to-slate-500'} text-white flex items-center justify-center text-xs font-bold shadow-md shrink-0 ring-2 ring-white dark:ring-slate-900 ring-offset-1 ring-offset-emerald-500/20`}>
                               {(user.name || '?').split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)}
                             </div>
                             <div className="min-w-0">
@@ -401,7 +401,13 @@ export function AdminPage() {
                     const Icon = ACTION_ICON_MAP[entry.action] || Activity
                     const color = ACTION_COLOR_MAP[entry.action] || ACTION_COLOR_MAP.create
                     return (
-                      <div key={entry.id} className="flex gap-4 pb-6 relative">
+                      <motion.div
+                        key={entry.id}
+                        initial={{ opacity: 0, x: -12 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: Math.min(i * 0.05, 0.5), duration: 0.35, ease: 'easeOut' }}
+                        className="flex gap-4 pb-6 relative"
+                      >
                         <div className="flex flex-col items-center">
                           <div className={`size-8 rounded-full flex items-center justify-center ${color} shadow-sm`}><Icon className="size-4" /></div>
                           {i < auditData.length - 1 && <div className="w-0.5 flex-1 bg-gradient-to-b from-border to-border/50 mt-1" />}
@@ -415,7 +421,7 @@ export function AdminPage() {
                             <span>{entry.createdAt ? new Date(entry.createdAt).toLocaleString() : ''}</span>
                           </div>
                         </div>
-                      </div>
+                      </motion.div>
                     )
                   })}
                 </div>
@@ -428,7 +434,7 @@ export function AdminPage() {
       {/* System Health Dashboard + System Configuration */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* System Health Dashboard */}
-        <Card className="backdrop-blur-sm bg-card/80">
+        <Card className="gradient-border backdrop-blur-sm bg-card/80">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Gauge className="size-5 text-emerald-600 dark:text-emerald-400" />
@@ -437,19 +443,56 @@ export function AdminPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             {[
-              { label: 'ML Model Accuracy', value: 94.2, color: 'emerald' },
-              { label: 'API Response Time', value: 97, color: 'teal' },
-              { label: 'Database Integrity', value: 100, color: 'cyan' },
-              { label: 'Storage Capacity', value: 78, color: 'amber' },
-            ].map((item) => (
-              <div key={item.label} className="space-y-1">
-                <div className="flex items-center justify-between text-sm"><span className="font-medium">{item.label}</span><span className="font-semibold">{item.value}%</span></div>
-                <Progress value={item.value} className={`h-3 ${PROGRESS_BAR_MAP[item.color] || '[&>div]:bg-amber-500'}`} />
-              </div>
-            ))}
+              { label: 'ML Model Accuracy', value: 94.2, color: 'emerald', stroke: '#10b981' },
+              { label: 'API Response Time', value: 97, color: 'teal', stroke: '#14b8a6' },
+              { label: 'Database Integrity', value: 100, color: 'cyan', stroke: '#06b6d4' },
+              { label: 'Storage Capacity', value: 78, color: 'amber', stroke: '#f59e0b' },
+            ].map((item) => {
+              const R = 18
+              const C = 2 * Math.PI * R
+              const pct = Math.max(0, Math.min(100, item.value))
+              const offset = C * (1 - pct / 100)
+              return (
+                <div key={item.label} className="space-y-1">
+                  <div className="flex items-center gap-3">
+                    {/* Circular progress ring around each health metric */}
+                    <div className="relative shrink-0" style={{ width: 44, height: 44 }}>
+                      <svg width="44" height="44" viewBox="0 0 44 44" className="-rotate-90">
+                        <circle cx="22" cy="22" r={R} fill="none" stroke="currentColor" strokeWidth="4" className="text-muted/40" />
+                        <circle
+                          cx="22"
+                          cy="22"
+                          r={R}
+                          fill="none"
+                          stroke={item.stroke}
+                          strokeWidth="4"
+                          strokeLinecap="round"
+                          strokeDasharray={C}
+                          strokeDashoffset={offset}
+                          style={{ transition: 'stroke-dashoffset 0.6s ease-out' }}
+                        />
+                      </svg>
+                      <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold tabular-nums" style={{ color: item.stroke }}>
+                        {Math.round(item.value)}
+                      </span>
+                    </div>
+                    <div className="flex-1 flex items-center justify-between text-sm">
+                      <span className="font-medium">{item.label}</span>
+                      <span className="font-semibold">{item.value}%</span>
+                    </div>
+                  </div>
+                  <Progress value={item.value} className={`h-1.5 ${PROGRESS_BAR_MAP[item.color] || '[&>div]:bg-amber-500'}`} />
+                </div>
+              )
+            })}
             <Separator />
-            <div className="p-3 rounded-lg bg-muted/50 space-y-2">
-              <div className="flex items-center justify-between"><span className="text-sm font-medium">QSPR Stability Model</span><Badge variant="outline" className="text-xs">{trainingStatus === 'done' ? 'Trained' : trainingStatus === 'running' ? 'Training...' : 'Ready'}</Badge></div>
+            <div className="p-3 rounded-lg bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/40 dark:to-teal-950/30 border border-emerald-500/20 space-y-2 relative overflow-hidden">
+              {/* Gradient header bar on ML model training sub-section */}
+              <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500" aria-hidden />
+              <div className="flex items-center justify-between pt-1">
+                <span className="text-sm font-semibold bg-gradient-to-r from-emerald-700 to-teal-700 dark:from-emerald-300 dark:to-teal-300 bg-clip-text text-transparent">QSPR Stability Model</span>
+                <Badge variant="outline" className="text-xs">{trainingStatus === 'done' ? 'Trained' : trainingStatus === 'running' ? 'Training...' : 'Ready'}</Badge>
+              </div>
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div><span className="text-muted-foreground">Dataset:</span> <span className="font-medium">2,847 compounds</span></div>
                 <div><span className="text-muted-foreground">Features:</span> <span className="font-medium">128 descriptors</span></div>

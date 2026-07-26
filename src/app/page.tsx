@@ -3,6 +3,7 @@
 import { Menu, ChevronRight, Search, Activity, BookOpen, FileText, LifeBuoy, Database, Server, Cpu } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { useAppStore } from '@/lib/store'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { NotificationsButton } from '@/components/layout/NotificationsButton'
@@ -11,10 +12,35 @@ import { CommandPalette, useOpenCommandPalette } from '@/components/layout/Comma
 import { LiveClock } from '@/components/layout/LiveClock'
 import { PageRouter } from '@/components/PageRouter'
 import { SettingsDialog } from '@/components/shared/SettingsDialog'
+import { useRealtimeNotifications } from '@/hooks/use-realtime-notifications'
 
 export default function Home() {
   const { currentPage } = useAppStore()
   const openCommandPalette = useOpenCommandPalette()
+  const connectionStatus = useRealtimeNotifications()
+
+  // Real-time connection indicator metadata
+  const rtIndicator =
+    connectionStatus === 'connected'
+      ? {
+          dotClass: 'bg-emerald-500',
+          pingClass: 'bg-emerald-400',
+          label: 'Real-time: Live',
+          description: 'Connected to ChemStab notifications service',
+        }
+      : connectionStatus === 'connecting'
+      ? {
+          dotClass: 'bg-amber-500',
+          pingClass: 'bg-amber-400',
+          label: 'Real-time: Connecting…',
+          description: 'Establishing WebSocket connection to notifications service',
+        }
+      : {
+          dotClass: 'bg-red-500',
+          pingClass: 'bg-red-400',
+          label: 'Real-time: Disconnected',
+          description: 'Live notifications are paused — will retry automatically',
+        }
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-background via-background to-emerald-50/30 dark:from-background dark:via-background dark:to-emerald-950/20 text-foreground">
@@ -49,6 +75,35 @@ export default function Home() {
             </span>
             <span className="font-medium">All systems operational</span>
           </div>
+
+          {/* Real-time connection indicator — desktop only */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className="hidden lg:flex items-center gap-1.5 px-2 py-1 rounded-full border bg-muted/40 hover:bg-muted transition-colors text-[11px] text-muted-foreground aria-label={rtIndicator.label}"
+                aria-label={rtIndicator.label}
+              >
+                <span className="relative flex size-2">
+                  {connectionStatus !== 'disconnected' && (
+                    <span
+                      className={`animate-ping absolute inline-flex h-full w-full rounded-full ${rtIndicator.pingClass} opacity-75`}
+                    />
+                  )}
+                  <span
+                    className={`relative inline-flex rounded-full size-2 ${rtIndicator.dotClass}`}
+                  />
+                </span>
+                <span className="font-medium">{rtIndicator.label}</span>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" align="center">
+              <div className="space-y-0.5 text-center">
+                <p className="font-semibold">{rtIndicator.label}</p>
+                <p className="text-[10px] opacity-90 max-w-[220px]">{rtIndicator.description}</p>
+              </div>
+            </TooltipContent>
+          </Tooltip>
 
           {/* Command Palette Search button — subtle hover scale + shadow */}
           <Button

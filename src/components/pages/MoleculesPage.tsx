@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus, Download, RefreshCw, Search, BarChart3, LayoutGrid,
   Microscope, AlertTriangle, GitCompareArrows, X, CheckSquare, Atom, Database,
+  Network,
 } from 'lucide-react'
 import {
   Card, CardContent, CardFooter,
@@ -38,10 +39,12 @@ import {
   HAZARD_OUTLINE_MAP, HAZARD_CLASS_MAP, RISK_BG_MAP,
   RISK_PILL_ACTIVE, RISK_PILL_OUTLINE,
   formatFormula, exportCSV,
+  findPathwayForMolecule,
 } from '@/lib/sample-data'
 import type { MoleculeData } from '@/lib/types'
 import { Formula } from '@/components/shared/Formula'
 import { MoleculeStructure } from '@/components/shared/MoleculeStructure'
+import { DegradationPathway } from '@/components/shared/DegradationPathway'
 import { MoleculeComparison } from '@/components/pages/MoleculeComparison'
 
 export function MoleculesPage() {
@@ -827,7 +830,7 @@ export function MoleculesPage() {
                 </TabsContent>
 
                 {/* Degradation Tab */}
-                <TabsContent value="degradation" className="space-y-2 mt-4">
+                <TabsContent value="degradation" className="space-y-3 mt-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400" />
@@ -837,6 +840,68 @@ export function MoleculesPage() {
                       )}
                     </div>
                   </div>
+
+                  {/* Interactive Degradation Pathway Visualization */}
+                  {(() => {
+                    const predefined = findPathwayForMolecule(selectedMolecule.name)
+                    const pathwayProducts = degradationProducts.length > 0
+                      ? degradationProducts.map((dp: any) => {
+                          // Enrich with condition by matching product name to predefined pathway
+                          const matched = predefined?.products.find(
+                            (pp) => pp.name.toLowerCase() === (dp.name || '').toLowerCase()
+                          )
+                          return {
+                            name: dp.name,
+                            smiles: dp.smiles || undefined,
+                            percentage: dp.percentage ?? null,
+                            hazardLevel: (dp.hazardLevel || 'low') as any,
+                            condition: matched?.condition as any,
+                          }
+                        })
+                      : predefined?.products || []
+
+                    const pathwaySmiles = selectedMolecule.smiles || predefined?.smiles
+                    const pathwayCas = selectedMolecule.casNumber || predefined?.casNumber
+                    const pathwayFormula = selectedMolecule.formula || predefined?.formula
+                    const isUsingPredefined = degradationProducts.length === 0 && !!predefined
+
+                    if (pathwayProducts.length === 0 && !degradationLoading) {
+                      return null
+                    }
+
+                    return (
+                      <div className="rounded-lg border border-emerald-200/60 dark:border-emerald-800/40 bg-gradient-to-br from-emerald-50/40 to-teal-50/20 dark:from-emerald-900/10 dark:to-teal-900/5 p-3">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Network className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                          <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                            Degradation Pathway Map
+                          </p>
+                          {isUsingPredefined && (
+                            <Badge variant="outline" className="text-[9px] py-0 h-3.5 border-emerald-400/60 text-emerald-700 dark:text-emerald-300">
+                              Reference pathway
+                            </Badge>
+                          )}
+                        </div>
+                        {degradationLoading ? (
+                          <div className="space-y-2">
+                            <Skeleton className="h-32 w-full" />
+                            <Skeleton className="h-24 w-full" />
+                          </div>
+                        ) : (
+                          <DegradationPathway
+                            moleculeName={selectedMolecule.name}
+                            smiles={pathwaySmiles}
+                            casNumber={pathwayCas}
+                            formula={pathwayFormula}
+                            degradationProducts={pathwayProducts}
+                            compact
+                          />
+                        )}
+                      </div>
+                    )
+                  })()}
+
+                  {/* Detailed list of degradation products (existing UI) */}
                   {degradationLoading ? (
                     <div className="p-3 space-y-2">
                       <Skeleton className="h-8 w-full" />

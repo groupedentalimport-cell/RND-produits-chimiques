@@ -24,6 +24,7 @@ import {
 import { useAnalysisStore } from '@/lib/store'
 import { getScoreColor, riskColors } from '@/lib/sample-data'
 import { useToast } from '@/hooks/use-toast'
+import { StabilityCalculator } from '@/components/shared/StabilityCalculator'
 
 const SIM_STEPS = ['Analyzing substances...', 'Computing kinetics...', 'Evaluating risk factors...', 'Generating recommendations...']
 
@@ -434,6 +435,19 @@ export function SimulatorPage() {
             )}
           </AnimatePresence>
         </div>
+      </div>
+
+      {/* ── Arrhenius Stability Calculator ────────────────────────────── */}
+      <div className="pt-2">
+        <div className="flex items-center gap-2 mb-3">
+          <Badge variant="outline" className="bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-500/30">
+            ICH Q1A
+          </Badge>
+          <p className="text-xs text-muted-foreground">
+            Quantitative shelf-life prediction based on the Arrhenius equation
+          </p>
+        </div>
+        <StabilityCalculator />
       </div>
     </motion.div>
   )

@@ -90,7 +90,7 @@ export function Sidebar() {
                   variant={isActive ? 'secondary' : 'ghost'}
                   className={`group w-full justify-start gap-3 h-10 transition-all relative overflow-hidden
                     ${isActive
-                      ? 'bg-gradient-to-r from-emerald-100 to-teal-50 dark:from-emerald-900/40 dark:to-teal-900/20 text-emerald-700 dark:text-emerald-300 font-medium'
+                      ? 'bg-gradient-to-r from-emerald-100 to-teal-50 dark:from-emerald-900/40 dark:to-teal-900/20 text-emerald-700 dark:text-emerald-300 font-medium nav-active-pulse'
                       : 'border-l-4 border-transparent'
                     }
                     ${!sidebarOpen ? 'px-0 justify-center' : ''}

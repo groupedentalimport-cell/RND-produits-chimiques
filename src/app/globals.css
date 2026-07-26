@@ -121,27 +121,36 @@
   }
 }
 
-/* Custom scrollbar */
+/* Custom scrollbar — thin, emerald-themed (webkit) */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: oklch(0.7 0 0 / 40%);
+  background: linear-gradient(to bottom, rgba(16, 185, 129, 0.35), rgba(20, 184, 166, 0.35));
   border-radius: 999px;
   transition: background 0.2s ease;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: oklch(0.55 0.13 162 / 60%);
+  background: linear-gradient(to bottom, rgba(16, 185, 129, 0.6), rgba(20, 184, 166, 0.6));
 }
 .dark ::-webkit-scrollbar-thumb {
-  background: oklch(0.5 0 0 / 45%);
+  background: linear-gradient(to bottom, rgba(16, 185, 129, 0.3), rgba(20, 184, 166, 0.3));
 }
 .dark ::-webkit-scrollbar-thumb:hover {
-  background: oklch(0.7 0.13 162 / 70%);
+  background: linear-gradient(to bottom, rgba(16, 185, 129, 0.6), rgba(20, 184, 166, 0.6));
+}
+
+/* Firefox scrollbar styling — thin emerald */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(16, 185, 129, 0.4) transparent;
+}
+.dark * {
+  scrollbar-color: rgba(20, 184, 166, 0.4) transparent;
 }
 
 /* Smooth scrolling */
@@ -241,6 +250,179 @@ html {
 }
 .pulse-glow {
   animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* ── Premium UI utilities ─────────────────────────────────────────────────── */
+
+/* Glassmorphism card — backdrop blur + semi-transparent bg + border */
+.glass-card {
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 4px 24px -8px rgba(16, 185, 129, 0.12);
+}
+.dark .glass-card {
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 24px -8px rgba(16, 185, 129, 0.18);
+}
+
+/* Shimmer text — animated gradient text (emerald → teal → cyan) */
+@keyframes shimmer-text {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+.shimmer-text {
+  background-image: linear-gradient(
+    90deg,
+    #059669 0%,
+    #14b8a6 25%,
+    #06b6d4 50%,
+    #14b8a6 75%,
+    #059669 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer-text 4s linear infinite;
+}
+.dark .shimmer-text {
+  background-image: linear-gradient(
+    90deg,
+    #34d399 0%,
+    #2dd4bf 25%,
+    #22d3ee 50%,
+    #2dd4bf 75%,
+    #34d399 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer-text 4s linear infinite;
+}
+
+/* Grid pattern background — subtle emerald-tinted grid */
+.grid-pattern {
+  background-image:
+    linear-gradient(to right, rgba(16, 185, 129, 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(16, 185, 129, 0.06) 1px, transparent 1px);
+  background-size: 32px 32px;
+  background-position: -1px -1px;
+}
+.dark .grid-pattern {
+  background-image:
+    linear-gradient(to right, rgba(20, 184, 166, 0.08) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(20, 184, 166, 0.08) 1px, transparent 1px);
+  background-size: 32px 32px;
+  background-position: -1px -1px;
+}
+/* Radial mask so the grid fades toward edges */
+.grid-pattern-fade {
+  -webkit-mask-image: radial-gradient(ellipse at center, black 35%, transparent 78%);
+  mask-image: radial-gradient(ellipse at center, black 35%, transparent 78%);
+}
+
+/* Active nav pulsing emerald glow */
+@keyframes nav-pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.0), inset 2px 0 0 0 rgba(16, 185, 129, 0.0);
+  }
+  50% {
+    box-shadow: 0 0 12px 1px rgba(16, 185, 129, 0.35), inset 2px 0 0 0 rgba(16, 185, 129, 0.6);
+  }
+}
+.nav-active-pulse {
+  animation: nav-pulse-glow 2.6s ease-in-out infinite;
+}
+
+/* Gradient border — emerald → teal → cyan (used via padding-1 wrapper) */
+.gradient-border {
+  position: relative;
+  background-clip: padding-box;
+  border: 1px solid transparent;
+}
+.gradient-border::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.7), rgba(20, 184, 166, 0.5), rgba(6, 182, 212, 0.4));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* Glow emerald — extended box-shadow utility */
+.glow-emerald {
+  box-shadow:
+    0 0 20px rgba(16, 185, 129, 0.3),
+    0 0 1px rgba(16, 185, 129, 0.4);
+}
+.glow-emerald-strong {
+  box-shadow:
+    0 0 28px rgba(16, 185, 129, 0.45),
+    0 0 8px rgba(20, 184, 166, 0.35);
+}
+
+/* Smooth focus-visible rings for all interactive elements */
+*:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px var(--background, #ffffff),
+    0 0 0 4px rgba(16, 185, 129, 0.6);
+  transition: box-shadow 0.15s ease;
+  border-radius: 6px;
+}
+.dark *:focus-visible {
+  box-shadow:
+    0 0 0 2px var(--background, #0f172a),
+    0 0 0 4px rgba(20, 184, 166, 0.65);
+}
+/* Don't override the focus ring for inputs that already provide a ring */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[data-radix-popper-content-wrapper] *:focus-visible {
+  box-shadow: none;
+}
+
+/* Slide-in from left animation (used for audit timeline entries) */
+@keyframes slide-in-left {
+  from { opacity: 0; transform: translateX(-12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.slide-in-left {
+  animation: slide-in-left 0.4s ease-out both;
+}
+
+/* Subtle pulse for critical badges */
+@keyframes critical-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.55);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(220, 38, 38, 0);
+    transform: scale(1.04);
+  }
+}
+.critical-pulse {
+  animation: critical-pulse 1.8s ease-in-out infinite;
+}
+
+/* Staggered fade-in-up entrance for grids */
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.fade-in-up {
+  animation: fade-in-up 0.45s ease-out both;
 }
 
 /* ── Print-specific styles ─────────────────────────────────────────────────── */

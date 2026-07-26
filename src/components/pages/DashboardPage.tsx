@@ -128,8 +128,10 @@ export function DashboardPage() {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
-      className="space-y-6"
+      className="space-y-6 relative"
     >
+      {/* Subtle grid pattern background with radial fade */}
+      <div className="pointer-events-none absolute inset-0 grid-pattern grid-pattern-fade opacity-60 -z-10" aria-hidden />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-400 dark:to-teal-400 bg-clip-text text-transparent">Dashboard</h1>
@@ -154,9 +156,16 @@ export function DashboardPage() {
           const Icon = stat.icon
           const sparkColor = sparklineColors[stat.color] || '#10b981'
           const sparkData = sparkVariations[statIdx] || sparkVariations[0]
+          // Pulse the Risk Alerts card when there are critical alerts
+          const criticalCount = statsData?.riskDistribution?.critical || 0
+          const isRiskAlertWithCritical = stat.label === 'Risk Alerts' && criticalCount > 0
           return (
             <motion.div key={stat.label} whileHover={{ y: -4, boxShadow: '0 12px 32px rgba(0,0,0,0.15)' }} transition={{ type: 'spring', stiffness: 400 }}>
-              <Card className="cursor-pointer backdrop-blur-sm bg-card/80 transition-transform hover:-translate-y-1 overflow-hidden relative group">
+              <Card className={`cursor-pointer backdrop-blur-sm bg-card/80 transition-transform hover:-translate-y-1 overflow-hidden relative group ${isRiskAlertWithCritical ? 'ring-2 ring-amber-400/60 dark:ring-amber-500/40' : ''}`}>
+                {/* Pulsing amber glow border for Risk Alerts with critical count */}
+                {isRiskAlertWithCritical && (
+                  <span className="pointer-events-none absolute -inset-px rounded-xl ring-1 ring-amber-400/40 dark:ring-amber-500/30 animate-pulse" aria-hidden />
+                )}
                 <div className={`absolute inset-x-0 top-0 h-1 ${GRADIENT_TOP_BAR[stat.color] || GRADIENT_TOP_BAR.emerald}`} />
                 {/* Hover gradient overlay */}
                 <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/0 via-transparent to-teal-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
@@ -310,7 +319,7 @@ export function DashboardPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="gradient-border backdrop-blur-sm bg-card/80">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <span className="relative flex h-2 w-2">
@@ -391,7 +400,7 @@ export function DashboardPage() {
                   </TableHeader>
                   <TableBody>
                     {recentStudies.map((s, idx) => (
-                      <TableRow key={s.id} className={`cursor-pointer hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10 transition-all hover:shadow-[inset_3px_0_0_0_rgb(16,185,129)] ${idx % 2 === 1 ? 'bg-muted/30' : ''}`} onClick={() => setPage('studies')}>
+                      <TableRow key={s.id} className={`cursor-pointer hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[inset_3px_0_0_0_rgb(16,185,129),0_4px_12px_-4px_rgba(16,185,129,0.25)] ${idx % 2 === 1 ? 'bg-muted/30' : ''}`} onClick={() => setPage('studies')}>
                         <TableCell className="font-mono text-xs font-medium">{s.studyCode}</TableCell>
                         <TableCell className="text-sm">{s.substanceName}</TableCell>
                         <TableCell className="text-xs text-muted-foreground">{studyTypeLabels[s.studyType] || s.studyType}</TableCell>

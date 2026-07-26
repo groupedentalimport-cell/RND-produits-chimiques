@@ -457,3 +457,212 @@ export const SAMPLE_NOTIFICATIONS: AppNotification[] = [
   },
 ]
 
+// ── Degradation Pathways (interactive pathway tree) ────────────────────────
+
+export type DegradationCondition = 'Hydrolysis' | 'Oxidation' | 'Photolysis' | 'Thermal'
+export type HazardLevel = 'low' | 'moderate' | 'high'
+
+export interface DegradationPathwayProduct {
+  name: string
+  smiles: string
+  percentage: number
+  hazardLevel: HazardLevel
+  condition: DegradationCondition
+  description?: string
+}
+
+export interface DegradationPathway {
+  moleculeName: string
+  smiles: string
+  casNumber?: string
+  formula?: string
+  products: DegradationPathwayProduct[]
+}
+
+/**
+ * Predefined degradation pathways for common pharmaceutical / chemical molecules.
+ *
+ * Each entry pairs a parent molecule (name + SMILES) with the degradation products
+ * it tends to form under a specific stress condition (hydrolysis, oxidation,
+ * photolysis, or thermal stress). Percentages are approximate literature values
+ * used for didactic visualization; hazardLevel reflects the relative safety
+ * concern of each degradant.
+ */
+export const DEGRADATION_PATHWAYS: DegradationPathway[] = [
+  {
+    moleculeName: 'Aspirin',
+    smiles: 'CC(=O)OC1=CC=CC=C1C(=O)O',
+    casNumber: '50-78-2',
+    formula: 'C₉H₈O₄',
+    products: [
+      {
+        name: 'Salicylic Acid',
+        smiles: 'OC1=CC=CC=C1C(=O)O',
+        percentage: 65,
+        hazardLevel: 'moderate',
+        condition: 'Hydrolysis',
+        description: 'Primary hydrolysis degradant of acetylsalicylic acid. Causes gastric irritation; controlled under ICH Q1A.',
+      },
+      {
+        name: 'Acetic Acid',
+        smiles: 'CC(=O)O',
+        percentage: 35,
+        hazardLevel: 'low',
+        condition: 'Hydrolysis',
+        description: 'Co-product of ester hydrolysis. Readily volatilized; characteristic vinegar odor.',
+      },
+    ],
+  },
+  {
+    moleculeName: 'Ibuprofen',
+    smiles: 'CC(C)CC1=CC=C(C=C1)C(C)C(=O)O',
+    casNumber: '15687-27-1',
+    formula: 'C₁₃H₁₈O₂',
+    products: [
+      {
+        name: 'Hydroxyibuprofen',
+        smiles: 'CC(C)CC1=CC=C(C=C1)C(O)(C)C(=O)O',
+        percentage: 42,
+        hazardLevel: 'low',
+        condition: 'Oxidation',
+        description: 'Major oxidative metabolite; pharmacologically active and monitored under ICH Q3B.',
+      },
+      {
+        name: 'Isobutylphenol',
+        smiles: 'CC(C)CC1=CC=C(O)C=C1',
+        percentage: 18,
+        hazardLevel: 'moderate',
+        condition: 'Thermal',
+        description: 'Thermal decarboxylation product; can form at elevated temperatures during processing.',
+      },
+    ],
+  },
+  {
+    moleculeName: 'Acetaminophen',
+    smiles: 'CC(=O)NC1=CC=C(O)C=C1',
+    casNumber: '103-90-2',
+    formula: 'C₈H₉NO₂',
+    products: [
+      {
+        name: 'NAPQI',
+        smiles: 'CC(=O)N=C1C=CC(=O)C=C1',
+        percentage: 12,
+        hazardLevel: 'high',
+        condition: 'Oxidation',
+        description: 'N-acetyl-p-benzoquinone imine — highly reactive hepatotoxin formed via CYP450 oxidation.',
+      },
+      {
+        name: 'p-Aminophenol',
+        smiles: 'NC1=CC=C(O)C=C1',
+        percentage: 28,
+        hazardLevel: 'moderate',
+        condition: 'Hydrolysis',
+        description: 'Hydrolytic degradant; monitored as a related substance under pharmacopeial limits.',
+      },
+    ],
+  },
+  {
+    moleculeName: 'Hydrogen Peroxide',
+    smiles: 'OO',
+    casNumber: '7722-84-1',
+    formula: 'H₂O₂',
+    products: [
+      {
+        name: 'Water',
+        smiles: 'O',
+        percentage: 50,
+        hazardLevel: 'low',
+        condition: 'Photolysis',
+        description: 'Photolytic decomposition product; light-catalyzed O–O bond homolysis.',
+      },
+      {
+        name: 'Oxygen',
+        smiles: 'O=O',
+        percentage: 50,
+        hazardLevel: 'low',
+        condition: 'Photolysis',
+        description: 'Co-product of photolytic disproportionation; pressure-buildup hazard in sealed containers.',
+      },
+      {
+        name: 'Water',
+        smiles: 'O',
+        percentage: 50,
+        hazardLevel: 'low',
+        condition: 'Thermal',
+        description: 'Thermal disproportionation product; favored above 60 °C or in presence of catalysts.',
+      },
+      {
+        name: 'Oxygen',
+        smiles: 'O=O',
+        percentage: 50,
+        hazardLevel: 'low',
+        condition: 'Thermal',
+        description: 'Co-product of thermal disproportionation; oxygen evolution drives rapid pressure rise.',
+      },
+    ],
+  },
+  {
+    moleculeName: 'Caffeine',
+    smiles: 'CN1C=NC2=C1C(=O)N(C(=O)N2C)C',
+    casNumber: '58-08-2',
+    formula: 'C₈H₁₀N₄O₂',
+    products: [
+      {
+        name: 'Dimethylparabanic Acid',
+        smiles: 'CN1C(=O)N(C)C(=O)C1=O',
+        percentage: 22,
+        hazardLevel: 'moderate',
+        condition: 'Photolysis',
+        description: 'Major photodegradant of caffeine; formed by oxidative ring opening under UV exposure.',
+      },
+    ],
+  },
+]
+
+/** Color tokens for each degradation condition (used by the pathway tree). */
+export const DEGRADATION_CONDITION_STYLES: Record<DegradationCondition, {
+  badge: string
+  dot: string
+  stroke: string
+  label: string
+}> = {
+  Hydrolysis: {
+    badge: 'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300',
+    dot: 'bg-teal-500',
+    stroke: '#14b8a6',
+    label: 'Hydrolysis',
+  },
+  Oxidation: {
+    badge: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+    dot: 'bg-amber-500',
+    stroke: '#f59e0b',
+    label: 'Oxidation',
+  },
+  Photolysis: {
+    badge: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300',
+    dot: 'bg-cyan-500',
+    stroke: '#06b6d4',
+    label: 'Photolysis',
+  },
+  Thermal: {
+    badge: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+    dot: 'bg-red-500',
+    stroke: '#ef4444',
+    label: 'Thermal',
+  },
+}
+
+/** Color tokens for each hazard level (used by product cards). */
+export const HAZARD_BADGE_STYLES: Record<HazardLevel, string> = {
+  low: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 border-emerald-300/60 dark:border-emerald-700/60',
+  moderate: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 border-amber-300/60 dark:border-amber-700/60',
+  high: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 border-red-300/60 dark:border-red-700/60',
+}
+
+/** Helper: find a predefined pathway for a molecule name (case-insensitive). */
+export function findPathwayForMolecule(name: string): DegradationPathway | undefined {
+  if (!name) return undefined
+  const q = name.trim().toLowerCase()
+  return DEGRADATION_PATHWAYS.find((p) => p.moleculeName.toLowerCase() === q)
+}
+

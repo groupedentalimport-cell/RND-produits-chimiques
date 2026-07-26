@@ -190,9 +190,11 @@ export function AnalyticsPage() {
       className="space-y-6"
     >
       <div className="flex items-center justify-between">
-        <div>
+        <div className="relative">
           <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-400 dark:to-teal-400 bg-clip-text text-transparent">Analytics &amp; Insights</h1>
           <p className="text-muted-foreground">QSPR model performance and platform-wide chemical stability analytics</p>
+          {/* Gradient underline beneath the page title */}
+          <div className="mt-2 h-0.5 w-40 rounded-full bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 opacity-70" aria-hidden />
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={exportAnalyticsCSV} className="gap-2">
@@ -205,15 +207,23 @@ export function AnalyticsPage() {
       </div>
 
       {/* QSPR Model Performance */}
-      <Card className="backdrop-blur-sm bg-card/80">
+      <Card className="glass-card">
         <CardHeader><CardTitle className="flex items-center gap-2"><Cpu className="size-5 text-emerald-600 dark:text-emerald-400" /> QSPR Model Performance</CardTitle><CardDescription>Prediction accuracy metrics for active QSPR models</CardDescription></CardHeader>
         <CardContent>
           {loading ? (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-32 w-full" />)}</div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {QSPR_MODEL_PERFORMANCE.map((model) => (
-                <motion.div key={model.model} whileHover={{ y: -2 }} className="p-4 rounded-xl border bg-card relative overflow-hidden">
+              {QSPR_MODEL_PERFORMANCE.map((model, idx) => (
+                <motion.div
+                  key={model.model}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: idx * 0.08, duration: 0.35 }}
+                  whileHover={{ y: -4, scale: 1.01 }}
+                  className="p-4 rounded-xl border bg-card relative overflow-hidden transition-shadow hover:shadow-[0_10px_28px_-8px_rgba(16,185,129,0.25)]"
+                  style={{ background: `linear-gradient(135deg, ${model.fill}10, transparent 70%)` }}
+                >
                   <div className="absolute inset-x-0 top-0 h-1" style={{ background: model.fill }} />
                   <div className="flex items-center gap-2 mb-3"><Brain className="size-4" style={{ color: model.fill }} /><p className="font-semibold">{model.model}</p></div>
                   <div className="space-y-1.5 text-sm">
@@ -231,7 +241,7 @@ export function AnalyticsPage() {
 
       {/* Property Distribution Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card className="backdrop-blur-sm bg-card/80">
+        <Card className="backdrop-blur-sm bg-card/80 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-8px_rgba(16,185,129,0.18)]">
           <CardHeader><CardTitle>Risk Level Distribution</CardTitle><CardDescription>Molecule count by risk classification</CardDescription></CardHeader>
           <CardContent>
             {loading ? <Skeleton className="h-[280px] w-full" /> : riskPieData.length === 0 ? <p className="text-sm text-muted-foreground py-20 text-center">No data available</p> : (
@@ -241,7 +251,7 @@ export function AnalyticsPage() {
             )}
           </CardContent>
         </Card>
-        <Card className="backdrop-blur-sm bg-card/80">
+        <Card className="backdrop-blur-sm bg-card/80 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-8px_rgba(16,185,129,0.18)]">
           <CardHeader><CardTitle>Molecules by Data Source</CardTitle><CardDescription>Origin of molecule records</CardDescription></CardHeader>
           <CardContent>
             {loading ? <Skeleton className="h-[280px] w-full" /> : sourceBarData.length === 0 ? <p className="text-sm text-muted-foreground py-20 text-center">No data available</p> : (
@@ -255,7 +265,7 @@ export function AnalyticsPage() {
 
       {/* Stability Score Distribution + Study Status */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card className="backdrop-blur-sm bg-card/80">
+        <Card className="backdrop-blur-sm bg-card/80 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-8px_rgba(16,185,129,0.18)]">
           <CardHeader><CardTitle>Stability Score Distribution</CardTitle><CardDescription>Histogram of molecule predicted stability scores</CardDescription></CardHeader>
           <CardContent>
             {loading ? <Skeleton className="h-[280px] w-full" /> : (
@@ -265,7 +275,7 @@ export function AnalyticsPage() {
             )}
           </CardContent>
         </Card>
-        <Card className="backdrop-blur-sm bg-card/80">
+        <Card className="backdrop-blur-sm bg-card/80 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-8px_rgba(16,185,129,0.18)]">
           <CardHeader><CardTitle>Study Status Distribution</CardTitle><CardDescription>Current state of stability studies</CardDescription></CardHeader>
           <CardContent>
             {loading ? <Skeleton className="h-[280px] w-full" /> : statusDonutData.length === 0 ? <p className="text-sm text-muted-foreground py-20 text-center">No data available</p> : (
@@ -291,7 +301,7 @@ export function AnalyticsPage() {
 
       {/* Top 5 Most / Least Stable Tables */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card className="backdrop-blur-sm bg-card/80">
+        <Card className="backdrop-blur-sm bg-card/80 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-8px_rgba(16,185,129,0.18)]">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <ArrowUpRight className="size-5 text-emerald-600 dark:text-emerald-400" />
@@ -332,7 +342,7 @@ export function AnalyticsPage() {
           </CardContent>
         </Card>
 
-        <Card className="backdrop-blur-sm bg-card/80">
+        <Card className="backdrop-blur-sm bg-card/80 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-8px_rgba(16,185,129,0.18)]">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <ArrowDownRight className="size-5 text-amber-600 dark:text-amber-400" />

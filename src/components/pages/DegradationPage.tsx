@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import {
   RefreshCw, Plus, AlertTriangle, FlaskConical, Gauge,
-  BarChart3, Atom, Search,
+  BarChart3, Atom, Search, Network, ChevronDown,
 } from 'lucide-react'
 import {
   Card, CardContent, CardHeader, CardTitle, CardDescription,
@@ -29,9 +29,11 @@ import { useToast } from '@/hooks/use-toast'
 import {
   transformMolecule, HAZARD_OUTLINE_MAP, HAZARD_BORDER_MAP, HAZARD_BAR_MAP,
   GRADIENT_TOP_BAR, COLOR_MAP, RISK_PILL_ACTIVE, formatFormula,
+  DEGRADATION_PATHWAYS,
 } from '@/lib/sample-data'
 import type { MoleculeData } from '@/lib/types'
 import { Formula } from '@/components/shared/Formula'
+import { DegradationPathway } from '@/components/shared/DegradationPathway'
 
 export function DegradationPage() {
   const { toast } = useToast()
@@ -53,6 +55,10 @@ export function DegradationPage() {
     moleculeId: '',
     description: '',
   })
+
+  // Predefined pathway visualization (top section)
+  const [selectedPathwayIdx, setSelectedPathwayIdx] = useState(0)
+  const selectedPathway = DEGRADATION_PATHWAYS[selectedPathwayIdx]
 
   useEffect(() => {
     let cancelled = false
@@ -147,19 +153,81 @@ export function DegradationPage() {
         </div>
       </div>
 
+      {/* Interactive Degradation Pathway Visualization */}
+      <Card className="relative overflow-hidden backdrop-blur-sm bg-card/80">
+        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500" />
+        <CardHeader className="pb-3">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Network className="size-4 text-emerald-600 dark:text-emerald-400" />
+                Interactive Degradation Pathway Map
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Visualize how a parent molecule breaks down under different stress conditions
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Label htmlFor="pathway-select" className="text-xs text-muted-foreground whitespace-nowrap">
+                <Atom className="size-3 mr-1 inline" /> Molecule
+              </Label>
+              <Select
+                value={String(selectedPathwayIdx)}
+                onValueChange={(v) => setSelectedPathwayIdx(Number(v))}
+              >
+                <SelectTrigger id="pathway-select" className="w-full sm:w-[220px] h-9">
+                  <SelectValue placeholder="Select a molecule" />
+                </SelectTrigger>
+                <SelectContent>
+                  {DEGRADATION_PATHWAYS.map((p, idx) => (
+                    <SelectItem key={p.moleculeName} value={String(idx)}>
+                      <span className="flex items-center gap-2">
+                        <span>{p.moleculeName}</span>
+                        <span className="text-[10px] text-muted-foreground">
+                          ({p.products.length} degradant{p.products.length !== 1 ? 's' : ''})
+                        </span>
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <DegradationPathway
+            key={selectedPathway.moleculeName}
+            moleculeName={selectedPathway.moleculeName}
+            smiles={selectedPathway.smiles}
+            casNumber={selectedPathway.casNumber}
+            formula={selectedPathway.formula}
+            degradationProducts={selectedPathway.products}
+          />
+          <div className="mt-4 flex items-center gap-2 text-[11px] text-muted-foreground border-t border-border/40 pt-3">
+            <ChevronDown className="size-3 text-emerald-600 dark:text-emerald-400" />
+            <span>
+              Predefined pathway for <span className="font-semibold text-foreground">{selectedPathway.moleculeName}</span> —
+              demonstrates {selectedPathway.products.length} known degradation product{selectedPathway.products.length !== 1 ? 's' : ''}{' '}
+              across {new Set(selectedPathway.products.map((p) => p.condition)).size} stress condition{new Set(selectedPathway.products.map((p) => p.condition)).size !== 1 ? 's' : ''}.
+              Percentages are approximate literature values.
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* KPI cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          { label: 'Total Products', value: products.length, icon: FlaskConical, color: 'emerald' },
-          { label: 'Avg Degradation %', value: avgDegradation, icon: Gauge, color: 'teal' },
-          { label: 'High Hazard', value: products.filter((p) => p.hazardLevel === 'high').length, icon: AlertTriangle, color: 'red' },
-          { label: 'Most Common', value: mostCommonHazard.charAt(0).toUpperCase() + mostCommonHazard.slice(1), icon: BarChart3, color: 'cyan' },
+          { label: 'Total Products', value: products.length, icon: FlaskConical, color: 'emerald', grad: 'from-emerald-50/80 to-teal-50/40 dark:from-emerald-950/40 dark:to-teal-950/20' },
+          { label: 'Avg Degradation %', value: avgDegradation, icon: Gauge, color: 'teal', grad: 'from-teal-50/80 to-cyan-50/40 dark:from-teal-950/40 dark:to-cyan-950/20' },
+          { label: 'High Hazard', value: products.filter((p) => p.hazardLevel === 'high').length, icon: AlertTriangle, color: 'red', grad: 'from-red-50/80 to-rose-50/40 dark:from-red-950/40 dark:to-rose-950/20' },
+          { label: 'Most Common', value: mostCommonHazard.charAt(0).toUpperCase() + mostCommonHazard.slice(1), icon: BarChart3, color: 'cyan', grad: 'from-cyan-50/80 to-teal-50/40 dark:from-cyan-950/40 dark:to-teal-950/20' },
         ].map((stat) => {
           const Icon = stat.icon
           return (
-            <Card key={stat.label} className="backdrop-blur-sm bg-card/80 overflow-hidden relative">
+            <Card key={stat.label} className={`backdrop-blur-sm bg-card/80 overflow-hidden relative transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-8px_rgba(16,185,129,0.18)] bg-gradient-to-br ${stat.grad}`}>
               <div className={`absolute top-0 left-0 right-0 h-1 ${GRADIENT_TOP_BAR[stat.color] || 'bg-emerald-500'}`} />
-              <CardContent className="p-4 flex items-center gap-3">
+              <CardContent className="p-4 flex items-center gap-3 relative">
                 <div className={`p-2 rounded-lg shrink-0 ${COLOR_MAP[stat.color]}`}><Icon className="size-4" /></div>
                 <div><p className="text-xs text-muted-foreground">{stat.label}</p><p className="text-xl font-bold tabular-nums">{stat.value}</p></div>
               </CardContent>
@@ -227,7 +295,7 @@ export function DegradationPage() {
       </div>
 
       {/* Hazard Level Filter */}
-      <div className="flex flex-wrap gap-2 mb-1">
+      <div className="gradient-border rounded-full inline-flex flex-wrap gap-2 mb-1 p-1.5 bg-card/40 backdrop-blur-sm">
         {['all', 'low', 'moderate', 'high', 'critical'].map((level) => (
           <Button
             key={level}
@@ -320,8 +388,14 @@ export function DegradationPage() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {Object.entries(grouped).map(([molId, group]) => (
-            <Card key={molId} className="backdrop-blur-sm bg-card/80 overflow-hidden">
+          {Object.entries(grouped).map(([molId, group], groupIdx) => (
+            <motion.div
+              key={molId}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: Math.min(groupIdx * 0.08, 0.6), duration: 0.4, ease: 'easeOut' }}
+            >
+            <Card className="backdrop-blur-sm bg-card/80 overflow-hidden transition-all duration-200 hover:-translate-y-1 hover:shadow-[0_12px_32px_-8px_rgba(16,185,129,0.22)]">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <div>
@@ -343,12 +417,13 @@ export function DegradationPage() {
                 {group.products.map((dp) => {
                   const borderColorClass = HAZARD_BORDER_MAP[dp.hazardLevel] || 'border-l-emerald-500'
                   const barColorClass = HAZARD_BAR_MAP[dp.hazardLevel] || 'from-emerald-400 to-teal-500'
+                  const isCritical = dp.hazardLevel === 'high' || dp.hazardLevel === 'critical'
                   return (
-                    <div key={dp.id} className={`flex items-center justify-between p-2 rounded-lg border-l-4 ${borderColorClass} bg-muted/40 hover:bg-muted/60 transition-colors`}>
+                    <div key={dp.id} className={`flex items-center justify-between p-2 rounded-lg border-l-4 ${borderColorClass} bg-muted/40 hover:bg-muted/60 hover:shadow-[0_4px_12px_-4px_rgba(16,185,129,0.18)] transition-all duration-200 hover:-translate-y-0.5`}>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-sm font-medium">{dp.name}</span>
-                          <Badge variant="outline" className={`text-[10px] ${hazardColors[dp.hazardLevel] || hazardColors.low}`}>
+                          <Badge variant="outline" className={`text-[10px] ${hazardColors[dp.hazardLevel] || hazardColors.low} ${isCritical ? 'critical-pulse' : ''}`}>
                             {dp.hazardLevel}
                           </Badge>
                           <Badge variant="secondary" className="text-[10px]">{group.molecule?.name || 'Unknown'}</Badge>
@@ -361,7 +436,7 @@ export function DegradationPage() {
                         <div className="ml-2 flex items-center gap-2 shrink-0">
                           <div className="w-20 h-2 rounded-full bg-muted overflow-hidden">
                             <div
-                              className={`h-full bg-gradient-to-r ${barColorClass}`}
+                              className={`h-full bg-gradient-to-r ${barColorClass} transition-all duration-500`}
                               style={{ width: `${Math.min(100, dp.percentage)}%` }}
                             />
                           </div>
@@ -373,6 +448,7 @@ export function DegradationPage() {
                 })}
               </CardContent>
             </Card>
+            </motion.div>
           ))}
         </div>
       )}
