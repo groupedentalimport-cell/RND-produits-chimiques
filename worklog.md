@@ -277,3 +277,85 @@ Stage Summary:
 ### Files Created (Scripts)
 - `scripts/switch-db-provider.sh` — Database provider switching script (executable)
 - `scripts/seed-prod.ts` — Production PostgreSQL seed script
+
+---
+Task ID: 8
+Agent: Main Agent (Orchestrator)
+Task: Create complete deployment infrastructure and push to GitHub
+
+Work Log:
+- Verified app with agent-browser: Dashboard, Simulator, Analytics, Molecules all working
+- Stability calculator tested: added Aspirin + Ibuprofen, ran analysis → score 89, risk: low
+- All deployment infrastructure created by subagents:
+  - Dockerfile (Next.js standalone, multi-stage, bun runtime)
+  - Dockerfile.notifications (Socket.IO mini-service)
+  - Dockerfile.dev (development container with hot reload)
+  - docker-compose.yml (PostgreSQL + Next.js + notifications + Caddy)
+  - docker-compose.dev.yml (SQLite + dev mode)
+  - Caddyfile.prod (auto-TLS Let's Encrypt, security headers)
+  - prisma/schema.prod.prisma (PostgreSQL provider)
+  - scripts/switch-db-provider.sh (SQLite ↔ PostgreSQL switching)
+  - scripts/seed-prod.ts (PostgreSQL-compatible seed)
+  - deploy.sh (automated deploy/stop/status)
+  - .env.example (environment variables reference)
+  - .dockerignore (optimized build context)
+  - .github/workflows/deploy.yml (CI/CD pipeline)
+- Resolved merge conflicts with remote repo (Python/Django backend coexists)
+- Cleaned GitHub token from git history (filter-branch) for push protection
+- Pushed successfully to GitHub: https://github.com/groupedentalimport-cell/RND-produits-chimiques
+- CI/CD workflow removed from push (token lacks workflow scope) - needs to be added later
+
+Stage Summary:
+- All deployment infrastructure committed and pushed to GitHub
+- Production architecture: PostgreSQL → Next.js (standalone) → Caddy (auto-TLS) + Socket.IO
+- Dev environment: SQLite → Next.js (Turbopack) → Caddy (port 81) + Socket.IO
+- Token needs "workflow" scope to push .github/workflows/deploy.yml
+- App verified working: all features functional including stability calculator and simulator
+
+## Current Project Status — Deployment Ready
+
+### Architecture Overview
+| Environment | Database | Server | Gateway | WebSocket |
+|---|---|---|---|---|
+| Dev (sandbox) | SQLite | Next.js Turbopack:3000 | Caddy:81 | Socket.IO:3003 |
+| Production | PostgreSQL | Next.js standalone:3000 | Caddy:80/443 (auto-TLS) | Socket.IO:3003 |
+
+### Deployment Files
+1. `Dockerfile` — Multi-stage build (bun), PostgreSQL schema, standalone output
+2. `Dockerfile.notifications` — Socket.IO mini-service
+3. `docker-compose.yml` — 4 services: PostgreSQL, app, notifications, Caddy
+4. `Caddyfile.prod` — Auto-TLS, security headers, XTransformPort routing
+5. `prisma/schema.prod.prisma` — PostgreSQL provider variant
+6. `scripts/switch-db-provider.sh` — SQLite ↔ PostgreSQL switching
+7. `scripts/seed-prod.ts` — PostgreSQL-compatible seed
+8. `deploy.sh` — Automated deploy/stop/status commands
+9. `.env.example` — Complete environment reference
+10. `.dockerignore` — Optimized build context
+
+### How to Deploy on a VPS
+```bash
+# 1. Clone the repo
+git clone https://github.com/groupedentalimport-cell/RND-produits-chimiques.git
+cd RND-produits-chimiques
+
+# 2. Configure environment
+cp .env.example .env.production
+# Edit .env.production: set NEXTAUTH_SECRET, NEXTAUTH_URL, POSTGRES_PASSWORD
+
+# 3. Deploy
+./deploy.sh deploy
+
+# 4. Check status
+./deploy.sh status
+```
+
+### Unresolved Issues
+- GitHub token lacks "workflow" scope → cannot push CI/CD pipeline file
+- SQLite write restrictions in sandbox (resolved in production via PostgreSQL)
+- Remote repo has Python/Django backend architecture that coexists with Next.js
+
+### Next Phase Priority
+- Add workflow scope to GitHub token and push CI/CD pipeline
+- Configure actual domain name for Caddyfile.prod
+- Set up monitoring (Prometheus/Grafana) for production
+- Implement NextAuth authentication for production
