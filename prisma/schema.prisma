@@ -205,3 +205,35 @@ model Favorite {
   userId    String   @default("system")
   createdAt DateTime @default(now())
 }
+
+// ── Drug Interactions ─────────────────────────────────────────────────
+
+model DrugInteraction {
+  id              String   @id @default(cuid())
+  substanceA      String
+  substanceB      String
+  severity        String   // contraindicated, major, moderate, minor, none
+  mechanism       String
+  clinicalEffect  String
+  onset           String   @default("not_specified") // rapid, delayed, not_specified
+  management      String
+  evidenceLevel   String   @default("suspected") // established, probable, suspected, theoretical
+  literatureRef   String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// ── Notifications ────────────────────────────────────────────────────
+
+model Notification {
+  id          String   @id @default(cuid())
+  title       String
+  message     String
+  category    String   @default("system") // study, molecule, report, system, alert
+  severity    String   @default("info")   // info, success, warning, critical
+  read        Boolean  @default(false)
+  actionLabel String?  // e.g. "View Study"
+  actionPage  String?  // page to navigate to when action clicked
+  userId      String   @default("system")
+  createdAt   DateTime @default(now())
+}

@@ -53,15 +53,23 @@ export function AdminPage() {
   const [savingUser, setSavingUser] = useState(false)
   const [userForm, setUserForm] = useState({ name: '', email: '', role: 'viewer', isActive: true })
   const [statsInfo, setStatsInfo] = useState<{ totalMolecules: number; activeStudies: number; totalReports: number; auditCount: number }>({ totalMolecules: 10, activeStudies: 3, totalReports: 5, auditCount: 6 })
+  const [healthMetrics, setHealthMetrics] = useState<any[]>([
+    { label: 'ML Model Accuracy', value: 94.2, color: 'emerald', stroke: '#10b981', description: '' },
+    { label: 'API Response Time', value: 97, color: 'teal', stroke: '#14b8a6', description: '' },
+    { label: 'Database Integrity', value: 100, color: 'cyan', stroke: '#06b6d4', description: '' },
+    { label: 'Storage Capacity', value: 78, color: 'amber', stroke: '#f59e0b', description: '' },
+  ])
+  const [qsprModel, setQsprModel] = useState<{ datasetSize: number; features: number; lastTrainedDate: string; status: string; accuracy: number }>({ datasetSize: 2847, features: 128, lastTrainedDate: '2024-03-10', status: 'Operational', accuracy: 94.2 })
 
-  // Load stats + users
+  // Load stats + users + system health
   useEffect(() => {
     let cancelled = false
     const loadData = async () => {
       try {
-        const [statsRes, usersRes] = await Promise.all([
+        const [statsRes, usersRes, healthRes] = await Promise.all([
           fetch('/api/stats'),
           fetch('/api/users'),
+          fetch('/api/system-health'),
         ])
         if (!cancelled && statsRes.ok) {
           const data = await statsRes.json()
@@ -75,6 +83,11 @@ export function AdminPage() {
         if (!cancelled && usersRes.ok) {
           const data = await usersRes.json()
           setUsers(data.users || [])
+        }
+        if (!cancelled && healthRes.ok) {
+          const data = await healthRes.json()
+          setHealthMetrics(data.metrics || healthMetrics)
+          if (data.qsprModel) setQsprModel(data.qsprModel)
         }
       } catch { /* fallback */ }
       if (!cancelled) { setLoading(false); setUsersLoading(false) }
@@ -442,12 +455,7 @@ export function AdminPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {[
-              { label: 'ML Model Accuracy', value: 94.2, color: 'emerald', stroke: '#10b981' },
-              { label: 'API Response Time', value: 97, color: 'teal', stroke: '#14b8a6' },
-              { label: 'Database Integrity', value: 100, color: 'cyan', stroke: '#06b6d4' },
-              { label: 'Storage Capacity', value: 78, color: 'amber', stroke: '#f59e0b' },
-            ].map((item) => {
+            {healthMetrics.map((item: any) => {
               const R = 18
               const C = 2 * Math.PI * R
               const pct = Math.max(0, Math.min(100, item.value))
@@ -494,10 +502,10 @@ export function AdminPage() {
                 <Badge variant="outline" className="text-xs">{trainingStatus === 'done' ? 'Trained' : trainingStatus === 'running' ? 'Training...' : 'Ready'}</Badge>
               </div>
               <div className="grid grid-cols-2 gap-2 text-xs">
-                <div><span className="text-muted-foreground">Dataset:</span> <span className="font-medium">2,847 compounds</span></div>
-                <div><span className="text-muted-foreground">Features:</span> <span className="font-medium">128 descriptors</span></div>
-                <div><span className="text-muted-foreground">Last trained:</span> <span className="font-medium">2024-03-10</span></div>
-                <div><span className="text-muted-foreground">Status:</span> <span className="font-medium text-emerald-600 dark:text-emerald-400">Operational</span></div>
+                <div><span className="text-muted-foreground">Dataset:</span> <span className="font-medium">{qsprModel.datasetSize} compounds</span></div>
+                <div><span className="text-muted-foreground">Features:</span> <span className="font-medium">{qsprModel.features} descriptors</span></div>
+                <div><span className="text-muted-foreground">Last trained:</span> <span className="font-medium">{qsprModel.lastTrainedDate}</span></div>
+                <div><span className="text-muted-foreground">Status:</span> <span className="font-medium text-emerald-600 dark:text-emerald-400">{qsprModel.status}</span></div>
               </div>
               {trainingStatus === 'running' && <Progress value={66} className="h-2" />}
               {trainingStatus === 'done' && <div className="flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-400"><CheckCircle2 className="size-4" /> Training completed successfully</div>}

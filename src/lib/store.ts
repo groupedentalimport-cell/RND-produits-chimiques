@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { SAMPLE_NOTIFICATIONS, type AppNotification } from '@/lib/sample-data'
+import { type AppNotification } from '@/lib/sample-data'
 
 // ── Navigation State ────────────────────────────────────────────────────
 
@@ -154,45 +154,63 @@ export const useCompareStore = create<CompareState>((set, get) => ({
 }))
 
 // ── Notifications State ─────────────────────────────────────────────────
+// NOW: Notifications are loaded from the database via /api/notifications
+// instead of the old SAMPLE_NOTIFICATIONS hardcoded array.
 
 interface NotificationState {
   notifications: AppNotification[]
   unreadCount: number
+  loading: boolean
   markAsRead: (id: string) => void
   markAllAsRead: () => void
   removeNotification: (id: string) => void
   addNotification: (n: AppNotification) => void
+  refreshNotifications: () => Promise<void>
 }
-
-// Initialize from SAMPLE_NOTIFICATIONS (first 5 are already marked unread in
-// the sample data) and compute the initial unread count once.
-const _initialNotifications: AppNotification[] = SAMPLE_NOTIFICATIONS.map((n) => ({ ...n }))
-const _initialUnread = _initialNotifications.reduce((acc, n) => acc + (n.read ? 0 : 1), 0)
 
 function _recount(list: AppNotification[]): number {
   return list.reduce((acc, n) => acc + (n.read ? 0 : 1), 0)
 }
 
 export const useNotificationStore = create<NotificationState>((set, get) => ({
-  notifications: _initialNotifications,
-  unreadCount: _initialUnread,
-  markAsRead: (id) =>
+  notifications: [],
+  unreadCount: 0,
+  loading: false,
+  markAsRead: (id) => {
+    // Update locally + send to API
     set((s) => {
       const next = s.notifications.map((n) =>
         n.id === id ? { ...n, read: true } : n
       )
       return { notifications: next, unreadCount: _recount(next) }
-    }),
-  markAllAsRead: () =>
+    })
+    // Also update in DB
+    fetch('/api/notifications', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    }).catch(() => {})
+  },
+  markAllAsRead: () => {
     set((s) => {
       const next = s.notifications.map((n) => ({ ...n, read: true }))
       return { notifications: next, unreadCount: 0 }
-    }),
-  removeNotification: (id) =>
+    })
+    // Also update in DB
+    fetch('/api/notifications', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ markAll: true }),
+    }).catch(() => {})
+  },
+  removeNotification: (id) => {
     set((s) => {
       const next = s.notifications.filter((n) => n.id !== id)
       return { notifications: next, unreadCount: _recount(next) }
-    }),
+    })
+    // Also delete from DB
+    fetch(`/api/notifications?id=${id}`, { method: 'DELETE' }).catch(() => {})
+  },
   addNotification: (n) =>
     set((s) => {
       const next = [n, ...s.notifications]
@@ -201,6 +219,32 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
         unreadCount: _recount(next),
       }
     }),
+  refreshNotifications: async () => {
+    set({ loading: true })
+    try {
+      const res = await fetch('/api/notifications')
+      if (res.ok) {
+        const data = await res.json()
+        // Map DB records to AppNotification format
+        const mapped: AppNotification[] = (data.notifications || []).map((n: any) => ({
+          id: n.id,
+          title: n.title,
+          message: n.message,
+          category: n.category as any,
+          severity: n.severity as any,
+          timestamp: new Date(n.createdAt).toISOString(),
+          read: n.read,
+          actionLabel: n.actionLabel || undefined,
+          actionPage: n.actionPage as any || undefined,
+        }))
+        set({ notifications: mapped, unreadCount: data.unreadCount || _recount(mapped) })
+      }
+    } catch (err) {
+      console.error('[notifications] refresh error:', err)
+    } finally {
+      set({ loading: false })
+    }
+  },
 }))
 
 // ── Preferences State (persisted to localStorage) ───────────────────────

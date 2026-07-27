@@ -4,7 +4,7 @@ import { Menu, ChevronRight, Search, Activity, BookOpen, FileText, LifeBuoy, Dat
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { useAppStore } from '@/lib/store'
+import { useAppStore, useNotificationStore } from '@/lib/store'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { NotificationsButton } from '@/components/layout/NotificationsButton'
 import { AIAssistant } from '@/components/layout/AIAssistant'
@@ -14,11 +14,18 @@ import { PageRouter } from '@/components/PageRouter'
 import { SettingsDialog } from '@/components/shared/SettingsDialog'
 import { WhatsNewBanner } from '@/components/shared/WhatsNewBanner'
 import { useRealtimeNotifications } from '@/hooks/use-realtime-notifications'
+import { useEffect } from 'react'
 
 export default function Home() {
   const { currentPage } = useAppStore()
   const openCommandPalette = useOpenCommandPalette()
   const connectionStatus = useRealtimeNotifications()
+  const refreshNotifications = useNotificationStore((s) => s.refreshNotifications)
+
+  // Load notifications from DB on mount (replaces old SAMPLE_NOTIFICATIONS)
+  useEffect(() => {
+    refreshNotifications()
+  }, [refreshNotifications])
 
   // Real-time connection indicator metadata
   const rtIndicator =

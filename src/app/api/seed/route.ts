@@ -479,6 +479,318 @@ export async function POST() {
       }),
     ]);
 
+    // ── Create degradation products (with percentage + hazardLevel) ───────
+    const degradationProducts = await Promise.all([
+      // Aspirin → Salicylic Acid (Hydrolysis) + Acetic Acid (Hydrolysis)
+      db.degradationProduct.create({
+        data: {
+          name: 'Salicylic Acid',
+          smiles: 'OC1=CC=CC=C1C(=O)O',
+          percentage: 65,
+          hazardLevel: 'moderate',
+          moleculeId: molecules[0].id, // Aspirin
+        },
+      }),
+      db.degradationProduct.create({
+        data: {
+          name: 'Acetic Acid',
+          smiles: 'CC(=O)O',
+          percentage: 35,
+          hazardLevel: 'low',
+          moleculeId: molecules[0].id, // Aspirin
+        },
+      }),
+      // Ibuprofen → Hydroxyibuprofen (Oxidation) + Isobutylphenol (Thermal)
+      db.degradationProduct.create({
+        data: {
+          name: 'Hydroxyibuprofen',
+          smiles: 'CC(C)CC1=CC=C(C=C1)C(O)(C)C(=O)O',
+          percentage: 42,
+          hazardLevel: 'low',
+          moleculeId: molecules[4].id, // Ibuprofen
+        },
+      }),
+      db.degradationProduct.create({
+        data: {
+          name: 'Isobutylphenol',
+          smiles: 'CC(C)CC1=CC=C(O)C=C1',
+          percentage: 18,
+          hazardLevel: 'moderate',
+          moleculeId: molecules[4].id, // Ibuprofen
+        },
+      }),
+      // Acetaminophen → NAPQI (Oxidation) + p-Aminophenol (Hydrolysis)
+      db.degradationProduct.create({
+        data: {
+          name: 'NAPQI',
+          smiles: 'CC(=O)N=C1C=CC(=O)C=C1',
+          percentage: 12,
+          hazardLevel: 'high',
+          moleculeId: molecules[3].id, // Acetaminophen
+        },
+      }),
+      db.degradationProduct.create({
+        data: {
+          name: 'p-Aminophenol',
+          smiles: 'NC1=CC=C(O)C=C1',
+          percentage: 28,
+          hazardLevel: 'moderate',
+          moleculeId: molecules[3].id, // Acetaminophen
+        },
+      }),
+      // H₂O₂ → Water (Photolysis) + Oxygen (Photolysis)
+      db.degradationProduct.create({
+        data: {
+          name: 'Water',
+          smiles: 'O',
+          percentage: 50,
+          hazardLevel: 'low',
+          moleculeId: molecules[9].id, // Hydrogen Peroxide
+        },
+      }),
+      db.degradationProduct.create({
+        data: {
+          name: 'Oxygen',
+          smiles: 'O=O',
+          percentage: 50,
+          hazardLevel: 'low',
+          moleculeId: molecules[9].id, // Hydrogen Peroxide
+        },
+      }),
+      // Caffeine → Dimethylparabanic Acid (Photolysis)
+      db.degradationProduct.create({
+        data: {
+          name: 'Dimethylparabanic Acid',
+          smiles: 'CN1C(=O)N(C)C(=O)C1=O',
+          percentage: 22,
+          hazardLevel: 'moderate',
+          moleculeId: molecules[2].id, // Caffeine
+        },
+      }),
+    ]);
+
+    // ── Create drug interactions (10 curated interactions) ────────────────
+    const drugInteractions = await Promise.all([
+      db.drugInteraction.create({
+        data: {
+          substanceA: 'Aspirin',
+          substanceB: 'Ibuprofen',
+          severity: 'major',
+          mechanism: 'Ibuprofen competitively inhibits aspirin binding to platelet COX-1, reducing aspirin\'s antiplatelet cardioprotective effect.',
+          clinicalEffect: 'Reduced antiplatelet efficacy of aspirin; increased cardiovascular risk in patients taking aspirin for secondary prevention.',
+          onset: 'rapid',
+          management: 'Take aspirin at least 30 minutes before ibuprofen, or use an alternative NSAID (e.g., naproxen). Consider paracetamol for analgesia.',
+          evidenceLevel: 'established',
+          literatureRef: 'FDA Drug Safety Communication (2014)',
+        },
+      }),
+      db.drugInteraction.create({
+        data: {
+          substanceA: 'Aspirin',
+          substanceB: 'Acetaminophen',
+          severity: 'minor',
+          mechanism: 'No significant pharmacokinetic interaction. Both can be used together for synergistic analgesic/antipyretic effects.',
+          clinicalEffect: 'Generally safe combination; additive antipyretic effect.',
+          onset: 'not_specified',
+          management: 'No dose adjustment required. Monitor for gastric irritation with prolonged use.',
+          evidenceLevel: 'established',
+        },
+      }),
+      db.drugInteraction.create({
+        data: {
+          substanceA: 'Ibuprofen',
+          substanceB: 'Caffeine',
+          severity: 'moderate',
+          mechanism: 'Caffeine may enhance the analgesic effect of ibuprofen but can also increase GI irritation risk.',
+          clinicalEffect: 'Enhanced analgesia; potential for increased gastric acid secretion.',
+          onset: 'rapid',
+          management: 'Generally safe at standard OTC doses. Take with food to reduce GI irritation.',
+          evidenceLevel: 'probable',
+        },
+      }),
+      db.drugInteraction.create({
+        data: {
+          substanceA: 'Aspirin',
+          substanceB: 'Hydrogen Peroxide',
+          severity: 'contraindicated',
+          mechanism: 'Aspirin (acetylsalicylic acid) undergoes oxidative degradation in the presence of strong oxidizers like H₂O₂, producing toxic salicylic acid derivatives and oxygen gas.',
+          clinicalEffect: 'Chemical incompatibility — formulation instability, potential for container rupture from gas evolution.',
+          onset: 'rapid',
+          management: 'Never co-formulate or co-administer. Store separately. Use antioxidant packaging if both must be in the same facility.',
+          evidenceLevel: 'established',
+          literatureRef: 'USP <1074> Stability Considerations',
+        },
+      }),
+      db.drugInteraction.create({
+        data: {
+          substanceA: 'Caffeine',
+          substanceB: 'Acetaminophen',
+          severity: 'minor',
+          mechanism: 'Caffeine enhances absorption rate of acetaminophen; common fixed-dose combination products exist.',
+          clinicalEffect: 'Faster onset of analgesia; no clinically significant safety concern at therapeutic doses.',
+          onset: 'rapid',
+          management: 'Safe combination. Many OTC products combine these. Monitor total daily caffeine intake.',
+          evidenceLevel: 'established',
+        },
+      }),
+      db.drugInteraction.create({
+        data: {
+          substanceA: 'Acetaminophen',
+          substanceB: 'Hydrogen Peroxide',
+          severity: 'major',
+          mechanism: 'H₂O₂ oxidizes the amide bond in acetaminophen, producing N-acetyl-p-benzoquinone imine (NAPQI) — a hepatotoxic metabolite.',
+          clinicalEffect: 'Increased risk of hepatotoxicity; chemical incompatibility in formulation.',
+          onset: 'delayed',
+          management: 'Avoid co-formulation. Ensure no oxidizing residue in manufacturing equipment. Monitor liver enzymes if co-administered.',
+          evidenceLevel: 'established',
+          literatureRef: 'Mitchell et al., J Pharmacol Exp Ther (1973)',
+        },
+      }),
+      db.drugInteraction.create({
+        data: {
+          substanceA: 'Ibuprofen',
+          substanceB: 'Acetaminophen',
+          severity: 'minor',
+          mechanism: 'No significant pharmacokinetic interaction. Different mechanisms of action (COX inhibition vs. central COX/serotonin).',
+          clinicalEffect: 'Additive or synergistic analgesia; commonly alternated in pediatric fever management.',
+          onset: 'not_specified',
+          management: 'Safe combination at therapeutic doses. Useful for multimodal analgesia.',
+          evidenceLevel: 'established',
+        },
+      }),
+      db.drugInteraction.create({
+        data: {
+          substanceA: 'Aspirin',
+          substanceB: 'Caffeine',
+          severity: 'moderate',
+          mechanism: 'Caffeine may increase aspirin absorption rate and enhance analgesic effect; can increase gastric irritation.',
+          clinicalEffect: 'Enhanced analgesia; potential increased GI side effects.',
+          onset: 'rapid',
+          management: 'Common in OTC combination products. Take with food. Monitor for GI symptoms.',
+          evidenceLevel: 'established',
+        },
+      }),
+      db.drugInteraction.create({
+        data: {
+          substanceA: 'Formaldehyde',
+          substanceB: 'Aspirin',
+          severity: 'major',
+          mechanism: 'Formaldehyde can react with aspirin\'s carboxyl group, forming unstable adducts and accelerating hydrolysis.',
+          clinicalEffect: 'Formulation instability; potential for toxic byproduct formation.',
+          onset: 'delayed',
+          management: 'Avoid co-formulation. Ensure formaldehyde-free manufacturing environments. Test for residual formaldehyde in excipients.',
+          evidenceLevel: 'probable',
+        },
+      }),
+      db.drugInteraction.create({
+        data: {
+          substanceA: 'Ethanol',
+          substanceB: 'Acetaminophen',
+          severity: 'major',
+          mechanism: 'Ethanol induces CYP2E1, increasing conversion of acetaminophen to NAPQI hepatotoxic metabolite.',
+          clinicalEffect: 'Increased risk of severe hepatotoxicity, especially with chronic alcohol use or overdose.',
+          onset: 'delayed',
+          management: 'Patients consuming ≥3 alcoholic drinks daily should avoid acetaminophen or limit to ≤2 g/day. Warn patients about OTC products containing acetaminophen.',
+          evidenceLevel: 'established',
+          literatureRef: 'FDA Hepatotoxicity Warning Label (2011)',
+        },
+      }),
+    ]);
+
+    // ── Create notifications (real DB-driven) ────────────────────────────────
+    const notificationsData = [
+      {
+        title: 'Critical stability risk detected',
+        message: 'Hydrogen Peroxide (H₂O₂) accelerated study shows 38% degradation at day 30 — exceeds OOS threshold. Immediate review required.',
+        category: 'alert',
+        severity: 'critical',
+        read: false,
+        actionLabel: 'View Study',
+        actionPage: 'studies',
+      },
+      {
+        title: 'Study STB-2024-001 completed',
+        message: 'Aspirin long-term stability study (24 months) has finished data collection. Predicted shelf life: 36 months.',
+        category: 'study',
+        severity: 'success',
+        read: false,
+        actionLabel: 'View Study',
+        actionPage: 'studies',
+      },
+      {
+        title: 'New molecule added to library',
+        message: 'Formaldehyde (CH₂O) was added by Dr. Sarah Chen. Risk level set to High — review recommended.',
+        category: 'molecule',
+        severity: 'info',
+        read: false,
+        actionLabel: 'View Molecules',
+        actionPage: 'molecules',
+      },
+      {
+        title: 'Report ready for review',
+        message: 'ICH Q1A — Aspirin Long-Term Stability report has been generated and is awaiting your review before submission.',
+        category: 'report',
+        severity: 'info',
+        read: false,
+        actionLabel: 'Open Reports',
+        actionPage: 'reports',
+      },
+      {
+        title: 'Low disk space warning',
+        message: 'Stability chamber data partition is at 87% capacity. Consider archiving completed studies older than 12 months.',
+        category: 'system',
+        severity: 'warning',
+        read: false,
+        actionLabel: 'System Admin',
+        actionPage: 'admin',
+      },
+      {
+        title: 'Study signed electronically',
+        message: 'Dr. Elena Volkov signed STB-2024-005 (H₂O₂ accelerated study). Signature hash recorded per FDA 21 CFR Part 11.',
+        category: 'study',
+        severity: 'success',
+        read: true,
+      },
+      {
+        title: 'FMEA report approved',
+        message: 'FMEA Risk Assessment for H₂O₂ has been approved and is now ready for regulatory submission.',
+        category: 'report',
+        severity: 'success',
+        read: true,
+        actionLabel: 'Open Reports',
+        actionPage: 'reports',
+      },
+      {
+        title: 'Audit log threshold reached',
+        message: '5000+ audit log entries recorded this quarter. Consider exporting the audit trail for long-term archival.',
+        category: 'system',
+        severity: 'info',
+        read: true,
+        actionLabel: 'View Audit',
+        actionPage: 'admin',
+      },
+      {
+        title: 'Caffeine shelf life extended',
+        message: 'Intermediate study confirmed Caffeine stability at 30°C — predicted shelf life extended from 48 to 60 months.',
+        category: 'study',
+        severity: 'success',
+        read: true,
+      },
+      {
+        title: 'Scheduled maintenance tonight',
+        message: 'Stability Chamber SC-04 will undergo IQ/OQ/PQ re-validation tonight 02:00–04:00 UTC. Plan study readings accordingly.',
+        category: 'system',
+        severity: 'warning',
+        read: true,
+      },
+    ];
+
+    const notifications = await Promise.all(
+      notificationsData.map((n) =>
+        db.notification.create({ data: { ...n, userId: 'system' } })
+      )
+    );
+
     return NextResponse.json({
       message: 'Database seeded successfully',
       data: {
@@ -491,6 +803,9 @@ export async function POST() {
         timePoints: timePoints.length,
         signatures: 1,
         complianceReports: complianceReports.length,
+        degradationProducts: degradationProducts.length,
+        drugInteractions: drugInteractions.length,
+        notifications: notifications.length,
       },
     }, { status: 201 });
   } catch (error) {
