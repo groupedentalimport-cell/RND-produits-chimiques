@@ -1,0 +1,17 @@
+{
+  "apiVersion": 1,
+  "providers": [
+    {
+      "name": "ChemStab",
+      "orgId": 1,
+      "folder": "ChemStab",
+      "type": "file",
+      "disableDeletion": false,
+      "updateIntervalSeconds": 30,
+      "options": {
+        "path": "/etc/grafana/provisioning/dashboards",
+        "foldersFromFilesStructure": true
+      }
+    }
+  ]
+}

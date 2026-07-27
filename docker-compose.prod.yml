@@ -1,0 +1,219 @@
+# ══════════════════════════════════════════════════════════════════════
+# ChemStab Industrial v5.2 — Production Docker Compose
+# ══════════════════════════════════════════════════════════════════════
+
+version: "3.9"
+
+x-common: &common
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  # ── PostgreSQL ─────────────────────────────────────────────────────
+  db:
+    <<: *common
+    image: postgres:16-alpine
+    container_name: chemstab-db
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-chemstab_industrial}
+      POSTGRES_USER: ${POSTGRES_USER:-chemstab}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-chemstab} -d ${POSTGRES_DB:-chemstab_industrial}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.0"
+
+  # ── Redis ──────────────────────────────────────────────────────────
+  redis:
+    <<: *common
+    image: redis:7-alpine
+    container_name: chemstab-redis
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 300M
+          cpus: "0.5"
+
+  # ── Backend API ────────────────────────────────────────────────────
+  backend:
+    <<: *common
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    container_name: chemstab-backend
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-chemstab}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-chemstab_industrial}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in .env}
+      DEBUG: "false"
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-["https://app.chemstab.com"]}
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - uploads:/app/uploads
+      - exports:/app/exports
+      - ml_models:/app/ml_models
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "2.0"
+      replicas: ${BACKEND_REPLICAS:-2}
+
+  # ── Celery Worker ──────────────────────────────────────────────────
+  celery:
+    <<: *common
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    container_name: chemstab-celery
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-chemstab}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-chemstab_industrial}
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      SECRET_KEY: ${SECRET_KEY}
+    depends_on:
+      - backend
+      - redis
+    volumes:
+      - uploads:/app/uploads
+      - exports:/app/exports
+      - ml_models:/app/ml_models
+    command: celery -A app.core.celery_app worker --loglevel=info --concurrency=${CELERY_CONCURRENCY:-4} --max-tasks-per-child=100
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "2.0"
+
+  # ── Celery Beat (scheduled tasks) ──────────────────────────────────
+  celery-beat:
+    <<: *common
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    container_name: chemstab-celery-beat
+    environment:
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    depends_on:
+      - redis
+    command: celery -A app.core.celery_app beat --loglevel=info
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.25"
+
+  # ── Frontend ───────────────────────────────────────────────────────
+  frontend:
+    <<: *common
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: chemstab-frontend
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      - backend
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: "0.25"
+
+  # ── Nginx reverse proxy ────────────────────────────────────────────
+  nginx:
+    <<: *common
+    image: nginx:1.25-alpine
+    container_name: chemstab-nginx
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - backend
+      - frontend
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: "0.25"
+
+  # ── Prometheus (monitoring) ────────────────────────────────────────
+  prometheus:
+    <<: *common
+    image: prom/prometheus:v2.48.0
+    container_name: chemstab-prometheus
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheusdata:/prometheus
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+
+  # ── Grafana (dashboards) ──────────────────────────────────────────
+  grafana:
+    <<: *common
+    image: grafana/grafana:10.2.0
+    container_name: chemstab-grafana
+    ports:
+      - "${GRAFANA_PORT:-3001}:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+    volumes:
+      - grafanadata:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
+
+volumes:
+  pgdata:
+  redisdata:
+  uploads:
+  exports:
+  ml_models:
+  prometheusdata:
+  grafanadata:

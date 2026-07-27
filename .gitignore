@@ -22,7 +22,12 @@ node_modules
 
 # misc
 .DS_Store
+Thumbs.db
 *.pem
+*.so
+*.egg-info/
+*.egg
+.eggs/
 
 # debug
 npm-debug.log*
@@ -37,7 +42,6 @@ yarn-error.log*
 # vercel
 .vercel
 
-
 # typescript
 *.tsbuildinfo
 next-env.d.ts
@@ -47,10 +51,9 @@ local-*
 *.log
 dev.log
 dev.out.log
-test
-prompt
-
 server.log
+logs/
+
 # Skills directory
 /skills/
 
@@ -62,6 +65,8 @@ server.log
 
 # Database file (regenerated locally)
 /db/
+*.db
+*.sqlite3
 
 # Agent context files (internal)
 /agent-ctx/
@@ -77,3 +82,38 @@ server.log
 postgres_data/
 caddy_data/
 caddy_config/
+docker-compose.override.yml
+
+# Virtual environments
+venv/
+.venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ML Models
+ml_models/*.joblib
+ml_models/*.pkl
+ml_models/*.h5
+!ml_models/.gitkeep
+
+# Data cache
+data_cache/
+
+# Coverage
+htmlcov/
+.coverage
+coverage.xml
+.pytest_cache/
+.tox/
+.mypy_cache/
+
+# Python
+__pycache__/
+*.py[cod]

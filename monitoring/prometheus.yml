@@ -1,0 +1,34 @@
+# Prometheus Configuration for ChemStab Industrial
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  scrape_timeout: 10s
+
+rule_files:
+  - "alert_rules.yml"
+
+scrape_configs:
+  # ── ChemStab Backend ────────────────────────────────────────────────
+  - job_name: "chemstab-backend"
+    metrics_path: "/metrics"
+    static_configs:
+      - targets: ["backend:8000"]
+        labels:
+          service: "chemstab-api"
+          environment: "production"
+
+  # ── Node Exporter (system metrics) ──────────────────────────────────
+  - job_name: "node"
+    static_configs:
+      - targets: ["node-exporter:9100"]
+
+  # ── Redis Exporter ──────────────────────────────────────────────────
+  - job_name: "redis"
+    static_configs:
+      - targets: ["redis-exporter:9121"]
+
+  # ── Postgres Exporter ───────────────────────────────────────────────
+  - job_name: "postgres"
+    static_configs:
+      - targets: ["postgres-exporter:9187"]
