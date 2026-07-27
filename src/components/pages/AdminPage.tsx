@@ -121,9 +121,40 @@ export function AdminPage() {
 
   const handleRefresh = () => setRefreshKey(k => k + 1)
 
-  const startTraining = () => {
+  const startTraining = async () => {
     setTrainingStatus('running')
-    setTimeout(() => setTrainingStatus('done'), 3000)
+    try {
+      const res = await fetch('/api/model-training', { method: 'POST' })
+      if (res.ok) {
+        const data = await res.json()
+        if (data.success) {
+          setTrainingStatus('done')
+          // Update QSPR model info from training results
+          if (data.qsprModel) setQsprModel(data.qsprModel)
+          // Refresh system health metrics separately (training endpoint doesn't return them)
+          try {
+            const healthRes = await fetch('/api/system-health')
+            if (healthRes.ok) {
+              const healthData = await healthRes.json()
+              if (healthData.metrics) setHealthMetrics(healthData.metrics)
+              if (healthData.qsprModel) setQsprModel(healthData.qsprModel)
+            }
+          } catch { /* health refresh failure is non-critical */ }
+          toast({ title: 'Model Training Complete', description: `Updated ${data.trainingResult.moleculesUpdated} molecules. Accuracy: ${data.trainingResult.modelAccuracy}%` })
+          // Refresh audit logs to include the training event
+          setRefreshKey(k => k + 1)
+        } else {
+          setTrainingStatus('idle')
+          toast({ title: 'Training Failed', description: data.error || 'Unknown error', variant: 'destructive' })
+        }
+      } else {
+        setTrainingStatus('idle')
+        toast({ title: 'Training Failed', description: 'Server error during model training', variant: 'destructive' })
+      }
+    } catch (err) {
+      setTrainingStatus('idle')
+      toast({ title: 'Training Error', description: String(err), variant: 'destructive' })
+    }
   }
 
   const openCreateUser = () => {

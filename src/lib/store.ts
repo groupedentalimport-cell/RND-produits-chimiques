@@ -154,8 +154,7 @@ export const useCompareStore = create<CompareState>((set, get) => ({
 }))
 
 // ── Notifications State ─────────────────────────────────────────────────
-// NOW: Notifications are loaded from the database via /api/notifications
-// instead of the old SAMPLE_NOTIFICATIONS hardcoded array.
+// Notifications are loaded from the database via /api/notifications.
 
 interface NotificationState {
   notifications: AppNotification[]

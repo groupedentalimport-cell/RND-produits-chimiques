@@ -22,7 +22,7 @@ export default function Home() {
   const connectionStatus = useRealtimeNotifications()
   const refreshNotifications = useNotificationStore((s) => s.refreshNotifications)
 
-  // Load notifications from DB on mount (replaces old SAMPLE_NOTIFICATIONS)
+  // Load notifications from DB on mount
   useEffect(() => {
     refreshNotifications()
   }, [refreshNotifications])
