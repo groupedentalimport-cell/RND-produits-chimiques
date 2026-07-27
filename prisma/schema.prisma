@@ -1,0 +1,239 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ── Users & Organizations ──────────────────────────────────────────────
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  users     User[]
+  molecules Molecule[]
+  studies   StabilityStudy[]
+}
+
+model User {
+  id             String       @id @default(cuid())
+  email          String       @unique
+  name           String?
+  role           String       @default("viewer") // viewer, analyst, project_manager, org_admin, super_admin
+  isActive       Boolean      @default(true)
+  hashedPassword String?
+  orgId          String?
+  org            Organization? @relation(fields: [orgId], references: [id])
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  auditLogs      AuditLog[]
+}
+
+// ── Molecules ──────────────────────────────────────────────────────────
+
+model Molecule {
+  id                   String        @id @default(cuid())
+  name                 String
+  casNumber            String?
+  smiles               String?
+  formula              String?
+  molarMass            Float?
+  logP                 Float?
+  meltingPoint          Float?
+  boilingPoint          Float?
+  density              Float?
+  solubility           String?
+  predictedStabilityScore Float?
+  predictionConfidence Float?
+  dataSource           String        @default("manual")
+  hazardClass          String?
+  riskLevel            String        @default("low")
+  description          String?
+  orgId                String?
+  org                  Organization? @relation(fields: [orgId], references: [id])
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  studies              StabilityStudy[]
+  degradationProducts  DegradationProduct[]
+  batches              Batch[]
+}
+
+model DegradationProduct {
+  id          String   @id @default(cuid())
+  name        String
+  smiles      String?
+  percentage  Float?
+  hazardLevel String?
+  moleculeId  String
+  molecule    Molecule  @relation(fields: [moleculeId], references: [id])
+  createdAt   DateTime @default(now())
+}
+
+// ── Stability Studies ──────────────────────────────────────────────────
+
+model StabilityStudy {
+  id                   String        @id @default(cuid())
+  studyCode            String        @unique
+  substanceName        String
+  studyType            String        @default("long_term") // long_term, accelerated, intermediate, stress
+  status               String        @default("draft") // draft, in_progress, completed, under_review, approved, rejected
+  temperatureC         Float         @default(25)
+  humidityPercent      Float?
+  durationMonths       Int           @default(24)
+  predictedShelfLifeMonths Float?
+  kineticOrder         Int           @default(1)
+  activationEnergy     Float?
+  rateConstant         Float?
+  ph                   Float?
+  lightExposure        String        @default("protected")
+  storageCondition     String?
+  climateZone          String?
+  rejectionReason      String?
+  moleculeId           String?
+  molecule             Molecule?      @relation(fields: [moleculeId], references: [id])
+  orgId                String?
+  org                  Organization?  @relation(fields: [orgId], references: [id])
+  timePoints           TimePoint[]
+  signatures           ElectronicSignature[]
+  batches              Batch[]
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+}
+
+model TimePoint {
+  id                String          @id @default(cuid())
+  timeDays          Int
+  timeMonths        Float
+  concentration     Float?
+  percentRemaining  Float?
+  degradationPercent Float?
+  isOOS             Boolean         @default(false)
+  isOOT             Boolean         @default(false)
+  studyId           String
+  study             StabilityStudy  @relation(fields: [studyId], references: [id])
+  createdAt         DateTime        @default(now())
+}
+
+model ElectronicSignature {
+  id           String         @id @default(cuid())
+  signerName   String
+  signerRole   String
+  meaning      String         @default("Reviewed and Approved")
+  signatureHash String
+  signedAt     DateTime       @default(now())
+  studyId      String
+  study        StabilityStudy @relation(fields: [studyId], references: [id])
+}
+
+// ── Batches (for ICH Q1A primary batch requirements) ───────────────────
+
+model Batch {
+  id             String   @id @default(cuid())
+  batchNumber    String   @unique
+  scale          String   @default("pilot") // lab, pilot, commercial
+  manufactureDate DateTime @default(now())
+  expiryDate     DateTime?
+  containerClosure String? // e.g., "HDPE bottle", "Blister pack"
+  batchSize      String?  // e.g., "100 kg", "100000 tablets"
+  status         String   @default("active") // active, quarantined, rejected, expired
+  studyId        String?
+  study          StabilityStudy? @relation(fields: [studyId], references: [id])
+  moleculeId     String?
+  molecule       Molecule?       @relation(fields: [moleculeId], references: [id])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+// ── Audit Trail ────────────────────────────────────────────────────────
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  action     String   // create, update, delete, sign, approve, reject
+  tableName  String
+  recordId   String
+  details    String?
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  createdAt  DateTime @default(now())
+}
+
+// ── Reports ────────────────────────────────────────────────────────────
+
+model Report {
+  id          String   @id @default(cuid())
+  title       String
+  reportType  String   // ich_q1a, ctd_module, fmea, doe, validation_protocol
+  status      String   @default("draft")
+  content     String?
+  studyId     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ── Compliance Reports (history of compliance checks) ──────────────────
+
+model ComplianceReport {
+  id                String   @id @default(cuid())
+  studyId           String?
+  studyCode         String?
+  substanceName     String?
+  overallScore      Float
+  passCount         Int
+  warningCount      Int
+  failCount         Int
+  notApplicableCount Int
+  readyForSubmission Boolean @default(false)
+  categoryScores    String   // JSON string of category score breakdowns
+  blockingIssues    String?  // JSON string of blocking issues
+  checkedBy         String   @default("system")
+  createdAt         DateTime @default(now())
+}
+
+// ── Favorites/Bookmarks ────────────────────────────────────────────────
+
+model Favorite {
+  id        String   @id @default(cuid())
+  itemType  String   // molecule, study, report
+  itemId    String   // id of the favorited item
+  itemLabel String   // name/label for quick display
+  userId    String   @default("system")
+  createdAt DateTime @default(now())
+}
+
+// ── Drug Interactions ─────────────────────────────────────────────────
+
+model DrugInteraction {
+  id              String   @id @default(cuid())
+  substanceA      String
+  substanceB      String
+  severity        String   // contraindicated, major, moderate, minor, none
+  mechanism       String
+  clinicalEffect  String
+  onset           String   @default("not_specified") // rapid, delayed, not_specified
+  management      String
+  evidenceLevel   String   @default("suspected") // established, probable, suspected, theoretical
+  literatureRef   String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// ── Notifications ────────────────────────────────────────────────────
+
+model Notification {
+  id          String   @id @default(cuid())
+  title       String
+  message     String
+  category    String   @default("system") // study, molecule, report, system, alert
+  severity    String   @default("info")   // info, success, warning, critical
+  read        Boolean  @default(false)
+  actionLabel String?  // e.g. "View Study"
+  actionPage  String?  // page to navigate to when action clicked
+  userId      String   @default("system")
+  createdAt   DateTime @default(now())
+}

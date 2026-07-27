@@ -1,0 +1,755 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Custom scrollbar — thin, emerald-themed (webkit) */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(to bottom, rgba(16, 185, 129, 0.35), rgba(20, 184, 166, 0.35));
+  border-radius: 999px;
+  transition: background 0.2s ease;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(to bottom, rgba(16, 185, 129, 0.6), rgba(20, 184, 166, 0.6));
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: linear-gradient(to bottom, rgba(16, 185, 129, 0.3), rgba(20, 184, 166, 0.3));
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(to bottom, rgba(16, 185, 129, 0.6), rgba(20, 184, 166, 0.6));
+}
+
+/* Firefox scrollbar styling — thin emerald */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(16, 185, 129, 0.4) transparent;
+}
+.dark * {
+  scrollbar-color: rgba(20, 184, 166, 0.4) transparent;
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Emerald selection color */
+::selection {
+  background: rgba(16, 185, 129, 0.2);
+  color: inherit;
+}
+::-moz-selection {
+  background: rgba(16, 185, 129, 0.2);
+}
+
+/* ── Reusable utility classes ────────────────────────────────────────────── */
+
+/* Emerald gradient text */
+.text-gradient-emerald {
+  background-image: linear-gradient(to right, #059669, #0d9488);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.dark .text-gradient-emerald {
+  background-image: linear-gradient(to right, #34d399, #2dd4bf);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Glassmorphism panel */
+.glass {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+.dark .glass {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Card hover lift effect */
+.card-hover {
+  transition: all 0.3s ease;
+}
+.card-hover:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px -8px rgba(16, 185, 129, 0.18);
+}
+
+/* Emerald glow pulse */
+.glow-emerald {
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
+}
+
+/* Shimmer animation for loading skeletons */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(229, 231, 235, 0.4) 25%,
+    rgba(229, 231, 235, 0.8) 37%,
+    rgba(229, 231, 235, 0.4) 63%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+.dark .shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(51, 65, 85, 0.4) 25%,
+    rgba(51, 65, 85, 0.8) 37%,
+    rgba(51, 65, 85, 0.4) 63%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+/* Subtle pulse glow for live indicators */
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(16, 185, 129, 0);
+  }
+}
+.pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* ── Premium UI utilities ─────────────────────────────────────────────────── */
+
+/* Glassmorphism card — backdrop blur + semi-transparent bg + border */
+.glass-card {
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 4px 24px -8px rgba(16, 185, 129, 0.12);
+}
+.dark .glass-card {
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 24px -8px rgba(16, 185, 129, 0.18);
+}
+
+/* Shimmer text — animated gradient text (emerald → teal → cyan) */
+@keyframes shimmer-text {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+.shimmer-text {
+  background-image: linear-gradient(
+    90deg,
+    #059669 0%,
+    #14b8a6 25%,
+    #06b6d4 50%,
+    #14b8a6 75%,
+    #059669 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer-text 4s linear infinite;
+}
+.dark .shimmer-text {
+  background-image: linear-gradient(
+    90deg,
+    #34d399 0%,
+    #2dd4bf 25%,
+    #22d3ee 50%,
+    #2dd4bf 75%,
+    #34d399 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer-text 4s linear infinite;
+}
+
+/* Grid pattern background — subtle emerald-tinted grid */
+.grid-pattern {
+  background-image:
+    linear-gradient(to right, rgba(16, 185, 129, 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(16, 185, 129, 0.06) 1px, transparent 1px);
+  background-size: 32px 32px;
+  background-position: -1px -1px;
+}
+.dark .grid-pattern {
+  background-image:
+    linear-gradient(to right, rgba(20, 184, 166, 0.08) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(20, 184, 166, 0.08) 1px, transparent 1px);
+  background-size: 32px 32px;
+  background-position: -1px -1px;
+}
+/* Radial mask so the grid fades toward edges */
+.grid-pattern-fade {
+  -webkit-mask-image: radial-gradient(ellipse at center, black 35%, transparent 78%);
+  mask-image: radial-gradient(ellipse at center, black 35%, transparent 78%);
+}
+
+/* Active nav pulsing emerald glow */
+@keyframes nav-pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.0), inset 2px 0 0 0 rgba(16, 185, 129, 0.0);
+  }
+  50% {
+    box-shadow: 0 0 12px 1px rgba(16, 185, 129, 0.35), inset 2px 0 0 0 rgba(16, 185, 129, 0.6);
+  }
+}
+.nav-active-pulse {
+  animation: nav-pulse-glow 2.6s ease-in-out infinite;
+}
+
+/* Gradient border — emerald → teal → cyan (used via padding-1 wrapper) */
+.gradient-border {
+  position: relative;
+  background-clip: padding-box;
+  border: 1px solid transparent;
+}
+.gradient-border::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.7), rgba(20, 184, 166, 0.5), rgba(6, 182, 212, 0.4));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* Glow emerald — extended box-shadow utility */
+.glow-emerald {
+  box-shadow:
+    0 0 20px rgba(16, 185, 129, 0.3),
+    0 0 1px rgba(16, 185, 129, 0.4);
+}
+.glow-emerald-strong {
+  box-shadow:
+    0 0 28px rgba(16, 185, 129, 0.45),
+    0 0 8px rgba(20, 184, 166, 0.35);
+}
+
+/* Smooth focus-visible rings for all interactive elements */
+*:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px var(--background, #ffffff),
+    0 0 0 4px rgba(16, 185, 129, 0.6);
+  transition: box-shadow 0.15s ease;
+  border-radius: 6px;
+}
+.dark *:focus-visible {
+  box-shadow:
+    0 0 0 2px var(--background, #0f172a),
+    0 0 0 4px rgba(20, 184, 166, 0.65);
+}
+/* Don't override the focus ring for inputs that already provide a ring */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[data-radix-popper-content-wrapper] *:focus-visible {
+  box-shadow: none;
+}
+
+/* Slide-in from left animation (used for audit timeline entries) */
+@keyframes slide-in-left {
+  from { opacity: 0; transform: translateX(-12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.slide-in-left {
+  animation: slide-in-left 0.4s ease-out both;
+}
+
+/* Subtle pulse for critical badges */
+@keyframes critical-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.55);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(220, 38, 38, 0);
+    transform: scale(1.04);
+  }
+}
+.critical-pulse {
+  animation: critical-pulse 1.8s ease-in-out infinite;
+}
+
+/* Staggered fade-in-up entrance for grids */
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.fade-in-up {
+  animation: fade-in-up 0.45s ease-out both;
+}
+
+/* ── Mobile-first responsive utilities ────────────────────────────────────── */
+
+/* Touch-friendly tap targets — minimum 44px for mobile */
+@media (max-width: 640px) {
+  button, a, [role="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  /* Reduce padding on mobile for better space usage */
+  .card-mobile-compact {
+    padding: 12px !important;
+  }
+  /* Smaller text on mobile for stat cards */
+  .stat-mobile-sm {
+    font-size: 1rem !important;
+  }
+  /* Horizontal scroll for tables on mobile */
+  .table-mobile-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  /* Hide desktop-only decorative elements on mobile */
+  .mobile-hide {
+    display: none !important;
+  }
+}
+
+/* ── Enhanced animation utilities ─────────────────────────────────────────── */
+
+/* Float animation — gentle up/down motion for decorative elements */
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+.float {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Scale bounce — for interactive button feedback */
+@keyframes scale-bounce {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+.scale-bounce {
+  animation: scale-bounce 0.3s ease-out;
+}
+
+/* Rotate slowly — for decorative icon elements */
+@keyframes rotate-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.rotate-slow {
+  animation: rotate-slow 20s linear infinite;
+}
+
+/* Gradient sweep animation for card accent bars */
+@keyframes gradient-sweep {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+.gradient-sweep {
+  background-size: 200% 100%;
+  animation: gradient-sweep 3s ease-in-out infinite;
+}
+
+/* ── Hover lift utility (applied via motion.div in React, but also available as CSS) ── */
+.hover-lift {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.hover-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 28px -8px rgba(16, 185, 129, 0.16);
+}
+.dark .hover-lift:hover {
+  box-shadow: 0 12px 28px -8px rgba(20, 184, 166, 0.22);
+}
+
+/* ── Tooltip shimmer for premium feel ──────────────────────────────────────── */
+@keyframes tooltip-shimmer {
+  0% { opacity: 0.85; }
+  50% { opacity: 1; }
+  100% { opacity: 0.85; }
+}
+.tooltip-shimmer {
+  animation: tooltip-shimmer 2.5s ease-in-out infinite;
+}
+
+/* ── Background shimmer sweep (for cards with live data) ─────────────────── */
+@keyframes shimmer-bg-sweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+.shimmer-bg {
+  animation: shimmer-bg-sweep 3.5s ease-in-out infinite;
+}
+
+/* ── Button ripple effect ───────────────────────────────────────────────── */
+@keyframes ripple {
+  0% { transform: scale(0); opacity: 0.6; }
+  100% { transform: scale(4); opacity: 0; }
+}
+.ripple-effect {
+  position: relative;
+  overflow: hidden;
+}
+.ripple-effect::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(16, 185, 129, 0.4);
+  transform: translate(-50%, -50%) scale(0);
+  pointer-events: none;
+}
+.ripple-effect:active::after {
+  animation: ripple 0.6s ease-out;
+}
+
+/* ── Number counter glow (for AnimatedNumber emphasis) ──────────────────── */
+@keyframes number-glow {
+  0%, 100% { text-shadow: 0 0 0 transparent; }
+  50% { text-shadow: 0 0 8px rgba(16, 185, 129, 0.4); }
+}
+.number-glow {
+  animation: number-glow 2s ease-in-out infinite;
+}
+
+/* ── Card border glow on hover (for premium cards) ──────────────────────── */
+.card-glow-hover {
+  transition: box-shadow 0.3s ease, transform 0.3s ease, border-color 0.3s ease;
+}
+.card-glow-hover:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 8px 24px -8px rgba(16, 185, 129, 0.18),
+    0 0 0 1px rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.3);
+}
+.dark .card-glow-hover:hover {
+  box-shadow:
+    0 8px 24px -8px rgba(20, 184, 166, 0.25),
+    0 0 0 1px rgba(20, 184, 166, 0.2);
+  border-color: rgba(20, 184, 166, 0.35);
+}
+
+/* ── Stagger reveal animation for list items ────────────────────────────── */
+@keyframes stagger-reveal {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.stagger-reveal {
+  animation: stagger-reveal 0.4s ease-out both;
+}
+
+/* ── Print-specific styles ─────────────────────────────────────────────────── */
+
+/* Print page breaks for report sections */
+.print-page-break {
+  page-break-before: auto;
+}
+
+/* Hide non-printable elements by default */
+.no-print {
+  display: block;
+}
+
+/* ── @media print ──────────────────────────────────────────────────────────── */
+@media print {
+  /* Reset body for printing */
+  body {
+    background: white !important;
+    color: black !important;
+    font-size: 12pt;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Hide sidebar */
+  aside,
+  nav,
+  [class*="sidebar"],
+  [class*="Sidebar"] {
+    display: none !important;
+  }
+
+  /* Hide header */
+  header,
+  [class*="sticky"][class*="top"] {
+    display: none !important;
+  }
+
+  /* Hide footer */
+  footer {
+    display: none !important;
+  }
+
+  /* Hide AI Assistant */
+  [class*="AIAssistant"],
+  [class*="ai-assistant"],
+  [class*="floating-panel"] {
+    display: none !important;
+  }
+
+  /* Hide command palette */
+  [class*="CommandPalette"],
+  [class*="command-palette"] {
+    display: none !important;
+  }
+
+  /* Hide notifications button */
+  [class*="NotificationsButton"] {
+    display: none !important;
+  }
+
+  /* Hide dialog overlays that aren't the print content */
+  [data-radix-overlay],
+  [class*="overlay"] {
+    display: none !important;
+  }
+
+  /* Hide all other dialogs except print dialog */
+  [role="dialog"]:not(.print-dialog-content) {
+    display: none !important;
+  }
+
+  /* Hide no-print elements */
+  .no-print {
+    display: none !important;
+  }
+
+  /* Hide buttons that aren't needed in print */
+  button:not(.print-keep) {
+    display: none !important;
+  }
+
+  /* Show only the print dialog content */
+  .print-dialog-content {
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: none !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    background: white !important;
+    box-shadow: none !important;
+  }
+
+  /* Make the print report container fill the page */
+  .print-report-container {
+    color: black !important;
+    background: white !important;
+    width: 100% !important;
+  }
+
+  /* Force black/white scheme for printing */
+  .print-report-container * {
+    color: black !important;
+    background-color: white !important;
+    border-color: #333 !important;
+  }
+
+  /* Keep specific emerald highlights as gray for print readability */
+  .print-report-container .bg-gradient-to-br,
+  .print-report-container .bg-gradient-to-r,
+  .print-report-container [class*="gradient"] {
+    background: #333 !important;
+    color: white !important;
+  }
+
+  /* Print-friendly table styling */
+  .print-report-container table {
+    border-collapse: collapse !important;
+    width: 100% !important;
+  }
+
+  .print-report-container th,
+  .print-report-container td {
+    border: 1px solid #333 !important;
+    padding: 6px 8px !important;
+    color: black !important;
+  }
+
+  .print-report-container th {
+    background-color: #eee !important;
+    font-weight: bold !important;
+  }
+
+  /* Page margins */
+  @page {
+    margin: 1.5cm 2cm;
+    size: A4;
+  }
+
+  /* Page break controls */
+  .print-page-break {
+    page-break-before: always;
+  }
+
+  /* Avoid breaking inside these elements */
+  .print-report-container h3,
+  .print-report-container table,
+  .print-report-container .signature-block {
+    page-break-inside: avoid;
+  }
+
+  /* Remove shadows, animations, and decorative elements */
+  * {
+    box-shadow: none !important;
+    animation: none !important;
+    transition: none !important;
+  }
+
+  /* Remove backdrop-blur effects */
+  [class*="backdrop-blur"],
+  [class*="glass"] {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: white !important;
+  }
+}
