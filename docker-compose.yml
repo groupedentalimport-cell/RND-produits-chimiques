@@ -1,0 +1,113 @@
+# ============================================================
+# ChemStab — Docker Compose Production Configuration
+# ============================================================
+#
+# Services:
+#   1. app        — Next.js standalone server (port 3000)
+#   2. notifications — Socket.IO mini-service (port 3003)
+#   3. caddy      — Reverse proxy / gateway (port 81 → external)
+#   4. postgres   — PostgreSQL database (optional, for production)
+#
+# Usage:
+#   docker-compose up -d --build          # Start all services
+#   docker-compose down                   # Stop all services
+#   docker-compose ps                     # Check service status
+#
+# Environment:
+#   Production values are loaded from .env.production.
+#   Copy .env.production to .env.production and edit before deploying.
+#
+# ============================================================
+
+version: "3.9"
+
+services:
+  # ── PostgreSQL Database ──────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: chemstab-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-chemstab}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB: ${POSTGRES_DB:-chemstab}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-chemstab}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ── Next.js Application ─────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: chemstab-app
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      # Override DATABASE_URL to point at the postgres container
+      DATABASE_URL: "postgresql://${POSTGRES_USER:-chemstab}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-chemstab}?schema=public"
+      NODE_ENV: production
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ── Notifications Service ───────────────────────────────────
+  notifications:
+    build:
+      context: ./mini-services/notifications-service
+      dockerfile: ../../Dockerfile.notifications
+    container_name: chemstab-notifications
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+    ports:
+      - "3003:3003"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3003/?EIO=4&transport=polling"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # ── Caddy Gateway ───────────────────────────────────────────
+  caddy:
+    image: caddy:2-alpine
+    container_name: chemstab-caddy
+    restart: unless-stopped
+    ports:
+      - "81:81"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+      notifications:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+    driver: local
+  caddy_data:
+    driver: local
+  caddy_config:
+    driver: local

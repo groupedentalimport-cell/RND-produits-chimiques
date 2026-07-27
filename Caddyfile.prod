@@ -1,0 +1,72 @@
+# ============================================================
+# ChemStab — Production Caddyfile
+# ============================================================
+#
+# Replace {YOUR_DOMAIN} with your actual domain (e.g., chemstab.example.com)
+# Caddy will automatically obtain TLS certificates via Let's Encrypt.
+#
+# Routing:
+#   - / → app:3000 (Next.js)
+#   - requests with XTransformPort query → corresponding internal service
+#     (e.g., XTransformPort=3003 → notifications:3003)
+#
+# ============================================================
+
+{YOUR_DOMAIN} {
+    # ── Auto HTTPS (Caddy handles Let's Encrypt automatically) ──
+    # No explicit TLS config needed — Caddy provisions certs by default
+    # when a domain name (not IP/localhost) is used as the site address.
+
+    # ── XTransformPort routing (notifications & future services) ──
+    @transform_port_query query XTransformPort=*
+
+    handle @transform_port_query {
+        reverse_proxy notifications:{query.XTransformPort} {
+            header_up Host {host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+            header_up X-Real-IP {remote_host}
+        }
+    }
+
+    # ── Default route → Next.js app ──────────────────────────────
+    handle {
+        reverse_proxy app:3000 {
+            header_up Host {host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+            header_up X-Real-IP {remote_host}
+        }
+    }
+
+    # ── Security & performance headers ───────────────────────────
+    header {
+        # Enable HSTS (6 months)
+        Strict-Transport-Security "max-age=15768000; includeSubDomains; preload"
+        # Prevent MIME-type sniffing
+        X-Content-Type-Options "nosniff"
+        # XSS protection
+        X-XSS-Protection "1; mode=block"
+        # Referrer policy
+        Referrer-Policy "strict-origin-when-cross-origin"
+        # Frame options (deny embedding from other sites)
+        X-Frame-Options "DENY"
+    }
+
+    # ── Logging ──────────────────────────────────────────────────
+    log {
+        output file /var/log/caddy/chemstab.log {
+            roll_size 10mb
+            roll_keep 10
+        }
+        format json
+    }
+}
+
+# ── HTTP → HTTPS redirect (catch-all for bare IP / localhost) ────
+# This block ensures that requests on port 80 without a matching
+# domain are redirected. In production, replace {YOUR_DOMAIN} above
+# and remove this block or keep it as a fallback.
+:80 {
+    redir https://{YOUR_DOMAIN}{uri} permanent
+}

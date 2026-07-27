@@ -1,0 +1,24 @@
+# ============================================================
+# ChemStab — Docker Build Ignore
+# ============================================================
+# Exclude unnecessary files from Docker context to reduce
+# build time and image size.
+# ============================================================
+
+node_modules
+.next
+.git
+.gitignore
+*.md
+!README.md
+upload/
+download/
+agent-ctx/
+mini-services/notifications-service/node_modules/
+tests/
+examples/
+dev.log
+server.log
+*.bak
+.env.local
+.env.development

@@ -1,0 +1,105 @@
+# ============================================================
+# ChemStab — Development Docker Compose
+# ============================================================
+#
+# Lightweight local development setup using SQLite (no PostgreSQL).
+# Matches the existing sandbox Caddyfile configuration on port 81.
+#
+# Services:
+#   - app:            Next.js dev server (bun run dev with hot reload)
+#   - notifications:  Socket.IO real-time notifications service
+#   - caddy:          Reverse proxy matching sandbox config (port 81)
+#
+# Usage:
+#   docker compose -f docker-compose.dev.yml up -d
+#
+# Notes:
+#   - No PostgreSQL — uses existing SQLite database
+#   - Source code is mounted for hot reload via bun --hot
+#   - Caddy runs on port 81 (avoiding conflicts with existing dev server)
+# ============================================================
+
+version: "3.9"
+
+services:
+  # ── Next.js Application (dev mode) ──────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: chemstab-app-dev
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: "file:/app/db/custom.db"
+      NODE_ENV: development
+      NEXTAUTH_URL: "http://localhost:81"
+      NEXTAUTH_SECRET: "dev-secret-not-for-production"
+    volumes:
+      # Mount source code for hot reload
+      - ./src:/app/src:ro
+      - ./public:/app/public:ro
+      - ./prisma:/app/prisma:ro
+      # Persist the SQLite database
+      - ./db:/app/db
+    expose:
+      - "3000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 5
+    networks:
+      - chemstab-dev-net
+
+  # ── Notifications Service (Socket.IO) ───────────────────────
+  notifications:
+    build:
+      context: ./mini-services/notifications-service
+      dockerfile: Dockerfile.dev
+    container_name: chemstab-notifications-dev
+    restart: unless-stopped
+    depends_on:
+      - app
+    expose:
+      - "3003"
+    volumes:
+      # Mount source for hot reload
+      - ./mini-services/notifications-service/index.ts:/app/index.ts:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3003/?EIO=4&transport=polling"]
+      interval: 30s
+      timeout: 10s
+      start_period: 15s
+      retries: 3
+    networks:
+      - chemstab-dev-net
+
+  # ── Caddy Reverse Proxy (dev config) ─────────────────────────
+  caddy:
+    image: caddy:2-alpine
+    container_name: chemstab-caddy-dev
+    restart: unless-stopped
+    depends_on:
+      - app
+      - notifications
+    ports:
+      - "81:81"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_dev_data:/data
+      - caddy_dev_config:/config
+    networks:
+      - chemstab-dev-net
+
+# ── Named Volumes ──────────────────────────────────────────────
+volumes:
+  caddy_dev_data:
+    driver: local
+  caddy_dev_config:
+    driver: local
+
+# ── Network ────────────────────────────────────────────────────
+networks:
+  chemstab-dev-net:
+    driver: bridge
